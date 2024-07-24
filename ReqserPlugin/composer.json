@@ -1,7 +1,7 @@
 {
     "name": "reqser/plugin",
     "description": "Reqser.com Snippet Plugin",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "type": "shopware-platform-plugin",
     "license": "MIT",
     "require": {
@@ -22,6 +22,7 @@
         "description": {
             "de-DE": "Plugin zum externe Module in Shopware in der Fremdsprache aktuell zu halten.",
             "en-GB": "Plugin to keep external modules up to date in the foreign language in Shopware."
-        }
+        },
+        "icon": "Resources/icon.png"
     }
 }
