@@ -55,7 +55,7 @@ class ReqserPlugin extends Plugin
             'INSERT INTO scheduled_task (id, name, scheduled_task_class, run_interval, default_run_interval, status, next_execution_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE scheduled_task_class = VALUES(scheduled_task_class), run_interval = VALUES(run_interval), status = VALUES(status), next_execution_time = VALUES(next_execution_time), updated_at = VALUES(updated_at)',
             [
-                Uuid::randomHex(),
+                Uuid::randomBytes(),  // Correctly generate a binary UUID
                 ReqserSnippetCrawler::getTaskName(),
                 ReqserSnippetCrawler::class,
                 ReqserSnippetCrawler::getDefaultInterval(),

@@ -1,17 +1,18 @@
 <?xml version="1.0" ?>
+
 <container xmlns="http://symfony.com/schema/dic/services"
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-           xsi:schemaLocation="http://symfony.com/schema/dic/services
-           http://symfony.com/schema/dic/services/services-1.0.xsd">
+           xsi:schemaLocation="http://symfony.com/schema/dic/services http://symfony.com/schema/dic/services/services-1.0.xsd">
 
     <services>
-        <service id="ReqserPlugin\Service\ScheduleTask\ReqserSnippetCrawler" public="true">
-            <tag name="scheduled.task" />
+        <service id="Reqser\Plugin\Service\ScheduleTask\ReqserSnippetCrawlerHandler" public="true">
+            <argument type="service" id="Psr\Log\LoggerInterface" />
+            <argument type="service" id="Doctrine\DBAL\Connection" />
+            <tag name="messenger.message_handler" />
         </service>
 
-        <service id="ReqserPlugin\Service\ScheduleTask\ReqserSnippetCrawlerHandler" public="true">
-            <argument type="service" id="Psr\Log\LoggerInterface" />
-            <tag name="message_handler" />
+        <service id="Reqser\Plugin\Service\ScheduleTask\ReqserSnippetCrawler" public="true">
+            <tag name="shopware.scheduled_task" />
         </service>
     </services>
 </container>
