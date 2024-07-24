@@ -27,6 +27,14 @@
       "description": {
         "de-DE": "Ein Plugin zum Crawlen von Snippets",
         "en-GB": "A plugin for crawling snippets"
+      },
+      "manufacturerLink": {
+        "en-GB": "https://reqser.com",
+        "de-DE": "https://reqser.com"
+      },
+      "supportLink": {
+        "en-GB": "https://reqser.com",
+        "de-DE": "https://reqser.com"
       }
     }
   }
