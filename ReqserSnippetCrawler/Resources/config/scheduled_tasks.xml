@@ -1,0 +1,10 @@
+<?xml version="1.0" ?>
+<container xmlns="http://symfony.com/schema/dic/services"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://www.symfony.com/schema/dic/services http://www.symfony.com/schema/dic/services/services-1.0.xsd">
+    <services>
+        <service id="Reqser\SnippetCrawler\ScheduledTask\SnippetCrawlerTask" public="true">
+            <tag name="shopware.scheduled_task" />
+        </service>
+    </services>
+</container>

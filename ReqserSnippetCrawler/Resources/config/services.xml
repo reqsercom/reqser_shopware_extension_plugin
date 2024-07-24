@@ -1,0 +1,15 @@
+<?xml version="1.0" ?>
+<container xmlns="http://symfony.com/schema/dic/services"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://www.symfony.com/schema/dic/services http://www.symfony.com/schema/dic/services/services-1.0.xsd">
+    <services>
+        <service id="Reqser\SnippetCrawler\Service\SnippetCrawlerService" public="true">
+            <argument type="service" id="Doctrine\DBAL\Connection" />
+        </service>
+
+        <service id="Reqser\SnippetCrawler\ScheduledTask\SnippetCrawlerTaskHandler" public="true">
+            <argument type="service" id="Reqser\SnippetCrawler\Service\SnippetCrawlerService" />
+            <tag name="messenger.message_handler" />
+        </service>
+    </services>
+</container>
