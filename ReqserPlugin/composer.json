@@ -1,0 +1,33 @@
+{
+    "name": "reqser/plugin",
+    "description": "Reqser Snippet Crawler Plugin",
+    "type": "shopware-plugin",
+    "version": "1.0.0",
+    "license": "MIT",
+    "authors": [
+      {
+        "name": "Your Name",
+        "email": "your.email@example.com"
+      }
+    ],
+    "require": {
+      "shopware/core": ">=6.4.0"
+    },
+    "autoload": {
+      "psr-4": {
+        "ReqserPlugin\\": "src/"
+      }
+    },
+    "extra": {
+      "shopware-plugin-class": "ReqserPlugin\\ReqserPlugin",
+      "label": {
+        "de-DE": "Reqser Snippet Crawler",
+        "en-GB": "Reqser Snippet Crawler"
+      },
+      "description": {
+        "de-DE": "Ein Plugin zum Crawlen von Snippets",
+        "en-GB": "A plugin for crawling snippets"
+      }
+    }
+  }
+  

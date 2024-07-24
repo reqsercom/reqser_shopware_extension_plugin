@@ -1,14 +1,14 @@
 <?php declare(strict_types=1);
 
-namespace Reqser\SnippetCrawler\ScheduledTask;
+namespace ReqserPlugin\Service\ScheduleTask;
 
 use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTask;
 
-class SnippetCrawlerTask extends ScheduledTask
+class ReqserSnippetCrawler extends ScheduledTask
 {
     public static function getTaskName(): string
     {
-        return 'reqser.snippet_crawler_task';
+        return 'reqser_plugin.reqser_snippet_crawler';
     }
 
     public static function getDefaultInterval(): int
