@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-namespace ReqserPlugin\Service\ScheduleTask;
+namespace Reqser\Plugin\Service\ScheduleTask;
 
 use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTask;
 
