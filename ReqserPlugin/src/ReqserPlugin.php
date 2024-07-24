@@ -1,11 +1,11 @@
 <?php declare(strict_types=1);
 
-namespace ReqserPlugin;
+namespace Reqser\Plugin;
 
 use Shopware\Core\Framework\Plugin;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Shopware\Core\Framework\Plugin\Context\ActivateContext;
 use Shopware\Core\Framework\Plugin\Context\DeactivateContext;
-use Symfony\Component\DependencyInjection\ContainerBuilder;
 
 class ReqserPlugin extends Plugin
 {

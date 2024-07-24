@@ -1,41 +1,27 @@
 {
     "name": "reqser/plugin",
-    "description": "Reqser Snippet Crawler Plugin",
-    "type": "shopware-plugin",
+    "description": "Reqser.com Snippet Plugin",
     "version": "1.0.0",
+    "type": "shopware-platform-plugin",
     "license": "MIT",
-    "authors": [
-      {
-        "name": "Your Name",
-        "email": "your.email@example.com"
-      }
-    ],
     "require": {
-      "shopware/core": ">=6.4.0"
+        "shopware/core": "*",
+        "guzzlehttp/guzzle": "^7.0"
     },
     "autoload": {
-      "psr-4": {
-        "ReqserPlugin\\": "src/"
-      }
+        "psr-4": {
+            "Reqser\\Plugin\\": "src/"
+        }
     },
     "extra": {
-      "shopware-plugin-class": "ReqserPlugin\\ReqserPlugin",
-      "label": {
-        "de-DE": "Reqser Snippet Crawler",
-        "en-GB": "Reqser Snippet Crawler"
-      },
-      "description": {
-        "de-DE": "Ein Plugin zum Crawlen von Snippets",
-        "en-GB": "A plugin for crawling snippets"
-      },
-      "manufacturerLink": {
-        "en-GB": "https://reqser.com",
-        "de-DE": "https://reqser.com"
-      },
-      "supportLink": {
-        "en-GB": "https://reqser.com",
-        "de-DE": "https://reqser.com"
-      }
+        "shopware-plugin-class": "Reqser\\Plugin\\ReqserPlugin",
+        "label": {
+            "de-DE": "Reqser.com Snippet Plugin",
+            "en-GB": "Reqser.com Snippet Plugin"
+        },
+        "description": {
+            "de-DE": "Plugin zum externe Module in Shopware in der Fremdsprache aktuell zu halten.",
+            "en-GB": "Plugin to keep external modules up to date in the foreign language in Shopware."
+        }
     }
-  }
-  
+}

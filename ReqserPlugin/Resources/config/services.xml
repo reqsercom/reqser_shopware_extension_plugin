@@ -1,0 +1,18 @@
+<?xml version="1.0" ?>
+<container xmlns="http://symfony.com/schema/dic/services"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://www.symfony.com/schema/dic/services http://www.symfony.com/schema/dic/services/services-1.0.xsd">
+    <services>
+        <service id="GuzzleHttp\Client" class="GuzzleHttp\Client" public="true"/>
+
+        <service id="Reqser\Plugin\Service\ApiService" public="true">
+            <argument type="service" id="GuzzleHttp\Client" />
+        </service>
+
+        <service id="Reqser\Plugin\Controller\ReqserPluginController" public="true">
+            <argument type="service" id="Reqser\Plugin\Service\ApiService" />
+            <argument type="service" id="Psr\Log\LoggerInterface" />
+            <tag name="controller.service_arguments" />
+        </service>
+    </services>
+</container>
