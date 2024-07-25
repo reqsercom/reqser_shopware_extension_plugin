@@ -82,6 +82,6 @@ class ReqserPlugin extends Plugin
     {
         /** @var ReqserSnippetCrawlerHandler $handler */
         $handler = $this->container->get(ReqserSnippetCrawlerHandler::class);
-        $handler->handle(new ReqserSnippetCrawler());
+        $handler->run();
     }
 }
