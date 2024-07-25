@@ -122,21 +122,29 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 
     private function addSnippetIfNotExists(string $key, string $value, string $snippetSetId): void
     {
-        $existingSnippet = $this->connection->fetchOne('SELECT id FROM snippet WHERE `translation_key` = ? AND `snippet_set_id` = ?', [$key, $snippetSetId]);
+        $existingSnippet = $this->connection->fetchOne('SELECT id, author, value FROM snippet WHERE `translation_key` = ? AND `snippet_set_id` = ?', [$key, $snippetSetId]);
 
         if (!$existingSnippet) {
             $this->connection->insert('snippet', [
-                'id' => Uuid::randomHex(),
+                'id' => Uuid::fromHexToBytes(Uuid::randomHex()),
                 'translation_key' => $key,
                 'value' => $value,
-                'author' => 'system', // or appropriate author value
+                'author' => 'reqser_plugin_crawler', // or appropriate author value
                 'snippet_set_id' => $snippetSetId,
                 'custom_fields' => null, // or appropriate custom fields
                 'created_at' => (new \DateTime())->format('Y-m-d H:i:s'),
+                'updated_at' => (new \DateTime())->format('Y-m-d H:i:s'),
             ]);
-            $this->logger->info(sprintf('Snippet added: %s, text: %s', $key, $value));
-        } else {
-            $this->logger->info(sprintf('Snippet already exists: %s', $key));
+        } elseif ($existingSnippet->author == 'reqser_plugin_crawler') {
+            //check if the value is changed and the author is the plugin itself, so it can be overwritten then in case a module is updated
+            if ($existingSnippet->value != $value) {
+                $this->connection->update('snippet', [
+                    'value' => $value,
+                    'updated_at' => (new \DateTime())->format('Y-m-d H:i:s'),
+                ], [
+                    'id' => $existingSnippet->id,
+                ]);
+            }
         }
     }
 
