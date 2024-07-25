@@ -11,11 +11,13 @@ use Shopware\Core\Framework\Plugin\Context\UninstallContext;
 use Shopware\Core\Framework\Plugin\Context\UpdateContext;
 use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTaskDefinition;
 use Shopware\Core\Framework\Uuid\Uuid;
-use Reqser\Plugin\Service\ScheduleTask\ReqserSnippetCrawler;
-use Reqser\Plugin\Service\ScheduleTask\ReqserSnippetCrawlerHandler;
+use Reqser\Plugin\Service\ScheduledTask\ExampleTask;
+use Reqser\Plugin\Service\ScheduledTask\ExampleTaskHandler;
 
 class ReqserPlugin extends Plugin
 {
+
+
     public function install(InstallContext $installContext): void
     {
         parent::install($installContext);
@@ -56,10 +58,10 @@ class ReqserPlugin extends Plugin
             ON DUPLICATE KEY UPDATE scheduled_task_class = VALUES(scheduled_task_class), run_interval = VALUES(run_interval), status = VALUES(status), next_execution_time = VALUES(next_execution_time), updated_at = VALUES(updated_at)',
             [
                 Uuid::randomBytes(),  // Correctly generate a binary UUID
-                ReqserSnippetCrawler::getTaskName(),
-                ReqserSnippetCrawler::class,
-                ReqserSnippetCrawler::getDefaultInterval(),
-                ReqserSnippetCrawler::getDefaultInterval(),
+                ExampleTask::getTaskName(),
+                ExampleTask::class,
+                ExampleTask::getDefaultInterval(),
+                ExampleTask::getDefaultInterval(),
                 ScheduledTaskDefinition::STATUS_SCHEDULED,
                 $currentTime,
                 $currentTime,
@@ -72,14 +74,14 @@ class ReqserPlugin extends Plugin
     {
         $this->container->get(Connection::class)->executeStatement(
             'DELETE FROM scheduled_task WHERE name = ?',
-            [ReqserSnippetCrawler::getTaskName()]
+            [ExampleTask::getTaskName()]
         );
     }
 
     private function runTask(): void
     {
-        /** @var ReqserSnippetCrawlerHandler $handler */
-        $handler = $this->container->get(ReqserSnippetCrawlerHandler::class);
+        /** @var ExampleTaskHandler $handler */
+        $handler = $this->container->get(ExampleTaskHandler::class);
         $handler->handle(new \Shopware\Core\Framework\MessageQueue\Message\ScheduledTask\ScheduledTask());
     }
 }
