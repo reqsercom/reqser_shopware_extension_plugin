@@ -8,7 +8,7 @@ class ReqserSnippetCrawler extends ScheduledTask
 {
     public static function getTaskName(): string
     {
-        return 'reqser_plugin.reqser_snippet_crawler';
+        return 'reqsern.snippet_crawler';
     }
 
     public static function getDefaultInterval(): int

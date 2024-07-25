@@ -9,7 +9,7 @@
             <tag name="shopware.scheduled.task" />
         </service>
         <service id="ReqserPlugin\Service\ScheduleTask\ReqserSnippetCrawlerHandler">
-            <argument type="service" id="reqser_plugin.reqser_snippet_crawler" />
+            <argument type="service" id="reqser.snippet_crawler" />
             <tag name="messenger.message_handler" />
         </service>
     </services>
