@@ -33,7 +33,7 @@ class ReqserPlugin extends Plugin
     public function activate(ActivateContext $activateContext): void
     {
         parent::activate($activateContext);
-        $this->runTask();
+        $this->scheduleTask();
     }
 
     public function deactivate(DeactivateContext $deactivateContext): void
