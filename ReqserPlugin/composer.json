@@ -5,8 +5,7 @@
     "type": "shopware-platform-plugin",
     "license": "MIT",
     "require": {
-        "shopware/core": "*",
-        "guzzlehttp/guzzle": "^7.0"
+        "shopware/core": "^6.0"
     },
     "autoload": {
         "psr-4": {
@@ -24,5 +23,10 @@
             "en-GB": "Plugin to keep external modules up to date in the foreign language in Shopware."
         },
         "icon": "Resources/icon.png"
+    },
+    "config": {
+        "allow-plugins": {
+            "symfony/runtime": true
+        }
     }
 }

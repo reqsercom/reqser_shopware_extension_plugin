@@ -5,14 +5,12 @@
            xsi:schemaLocation="http://symfony.com/schema/dic/services http://symfony.com/schema/dic/services/services-1.0.xsd">
 
     <services>
-        <service id="Reqser\Plugin\Service\ScheduleTask\ReqserSnippetCrawlerHandler" public="true">
-            <argument type="service" id="Psr\Log\LoggerInterface" />
-            <argument type="service" id="Doctrine\DBAL\Connection" />
-            <tag name="messenger.message_handler" />
+        <service id="ReqserPlugin\Service\ScheduleTask\ReqserSnippetCrawler">
+            <tag name="shopware.scheduled.task" />
         </service>
-
-        <service id="Reqser\Plugin\Service\ScheduleTask\ReqserSnippetCrawler" public="true">
-            <tag name="shopware.scheduled_task" />
+        <service id="ReqserPlugin\Service\ScheduleTask\ReqserSnippetCrawlerHandler">
+            <argument type="service" id="reqser_plugin.reqser_snippet_crawler" />
+            <tag name="messenger.message_handler" />
         </service>
     </services>
 </container>
