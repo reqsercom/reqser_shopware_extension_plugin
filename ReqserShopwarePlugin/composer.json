@@ -1,6 +1,6 @@
 {
     "name": "reqser/plugin",
-    "description": "Reqser.com Snippet Plugin",
+    "description": "AI Reqser.com Snippet Plugin",
     "version": "1.0.0",
     "type": "shopware-platform-plugin",
     "license": "MIT",
@@ -15,8 +15,8 @@
     "extra": {
         "shopware-plugin-class": "Reqser\\Plugin\\ReqserPlugin",
         "label": {
-            "de-DE": "Reqser.com Snippet Plugin",
-            "en-GB": "Reqser.com Snippet Plugin"
+            "de-DE": "AI Reqser.com Snippet Plugin",
+            "en-GB": "AI Reqser.com Snippet Plugin"
         },
         "description": {
             "de-DE": "Plugin zum externe Module in Shopware in der Fremdsprache aktuell zu halten.",

@@ -51,13 +51,28 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 
     private function searchAndProcessSnippetDirectories(string $baseDirectory): void
     {
-        $directoryIterator = new \RecursiveDirectoryIterator($baseDirectory, \RecursiveDirectoryIterator::FOLLOW_SYMLINKS);
-        $iterator = new \RecursiveIteratorIterator($directoryIterator);
+        try {
+            $directoryIterator = new \RecursiveDirectoryIterator($baseDirectory, \RecursiveDirectoryIterator::FOLLOW_SYMLINKS);
+            $iterator = new \RecursiveIteratorIterator($directoryIterator);
 
-        foreach ($iterator as $file) {
-            if ($file->isDir() && strpos($file->getPathname(), 'Resources/snippet') !== false) {
-                $this->processSnippetFilesInDirectory($file->getPathname());
+            foreach ($iterator as $file) {
+                try {
+                    if ($file->isDir() && strpos($file->getPathname(), 'Resources/snippet') !== false) {
+                        $this->processSnippetFilesInDirectory($file->getPathname());
+                    }
+                } catch (\Exception $e) {
+                    // Log the error message and continue with the next file
+                    $this->logger->error('Error accessing file or directory', [
+                        'path' => $file->getPathname(),
+                        'message' => $e->getMessage(),
+                    ]);
+                }
             }
+        } catch (\Exception $e) {
+            // Log the error message
+            $this->logger->error('Error initializing directory iterator', [
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 
@@ -122,8 +137,8 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 
     private function addSnippetIfNotExists(string $key, string $value, string $snippetSetId): void
     {
-        $existingSnippet = $this->connection->fetchOne('SELECT id, author, value FROM snippet WHERE `translation_key` = ? AND `snippet_set_id` = ?', [$key, $snippetSetId]);
-
+        $existingSnippet = $this->connection->fetchAssociative('SELECT id, author, value FROM snippet WHERE `translation_key` = ? AND `snippet_set_id` = ?', [$key, $snippetSetId]);
+    
         if (!$existingSnippet) {
             $this->connection->insert('snippet', [
                 'id' => Uuid::fromHexToBytes(Uuid::randomHex()),
@@ -135,14 +150,14 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                 'created_at' => (new \DateTime())->format('Y-m-d H:i:s'),
                 'updated_at' => (new \DateTime())->format('Y-m-d H:i:s'),
             ]);
-        } elseif ($existingSnippet->author == 'reqser_plugin_crawler') {
-            //check if the value is changed and the author is the plugin itself, so it can be overwritten then in case a module is updated
-            if ($existingSnippet->value != $value) {
+        } elseif ($existingSnippet['author'] == 'reqser_plugin_crawler') {
+            // Check if the value is changed and the author is the plugin itself, so it can be overwritten in case a module is updated
+            if ($existingSnippet['value'] != $value) {
                 $this->connection->update('snippet', [
                     'value' => $value,
                     'updated_at' => (new \DateTime())->format('Y-m-d H:i:s'),
                 ], [
-                    'id' => $existingSnippet->id,
+                    'id' => $existingSnippet['id'],
                 ]);
             }
         }
