@@ -11,8 +11,8 @@ use Shopware\Core\Framework\Plugin\Context\UninstallContext;
 use Shopware\Core\Framework\Plugin\Context\UpdateContext;
 use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTaskDefinition;
 use Shopware\Core\Framework\Uuid\Uuid;
-use Reqser\Plugin\Service\ScheduledTask\ExampleTask;
-use Reqser\Plugin\Service\ScheduledTask\ExampleTaskHandler;
+use Reqser\Plugin\Service\ScheduledTask\ReqserSnippetCrawler;
+use Reqser\Plugin\Service\ScheduledTask\ReqserSnippetCrawlerHandler;
 
 class ReqserPlugin extends Plugin
 {
@@ -58,10 +58,10 @@ class ReqserPlugin extends Plugin
             ON DUPLICATE KEY UPDATE scheduled_task_class = VALUES(scheduled_task_class), run_interval = VALUES(run_interval), status = VALUES(status), next_execution_time = VALUES(next_execution_time), updated_at = VALUES(updated_at)',
             [
                 Uuid::randomBytes(),  // Correctly generate a binary UUID
-                ExampleTask::getTaskName(),
-                ExampleTask::class,
-                ExampleTask::getDefaultInterval(),
-                ExampleTask::getDefaultInterval(),
+                ReqserSnippetCrawler::getTaskName(),
+                ReqserSnippetCrawler::class,
+                ReqserSnippetCrawler::getDefaultInterval(),
+                ReqserSnippetCrawler::getDefaultInterval(),
                 ScheduledTaskDefinition::STATUS_SCHEDULED,
                 $currentTime,
                 $currentTime,
@@ -74,14 +74,14 @@ class ReqserPlugin extends Plugin
     {
         $this->container->get(Connection::class)->executeStatement(
             'DELETE FROM scheduled_task WHERE name = ?',
-            [ExampleTask::getTaskName()]
+            [ReqserSnippetCrawler::getTaskName()]
         );
     }
 
     private function runTask(): void
     {
-        /** @var ExampleTaskHandler $handler */
-        $handler = $this->container->get(ExampleTaskHandler::class);
-        $handler->handle(new ExampleTask());
+        /** @var ReqserSnippetCrawlerHandler $handler */
+        $handler = $this->container->get(ReqserSnippetCrawlerHandler::class);
+        $handler->handle(new ReqserSnippetCrawler());
     }
 }

@@ -5,10 +5,10 @@
            xsi:schemaLocation="http://symfony.com/schema/dic/services http://symfony.com/schema/dic/services/services-1.0.xsd">
 
     <services>
-        <service id="Reqser\Plugin\Service\ScheduledTask\ExampleTask">
+        <service id="Reqser\Plugin\Service\ScheduledTask\ReqserSnippetCrawler">
             <tag name="shopware.scheduled.task" />
         </service>
-        <service id="Reqser\Plugin\Service\ScheduledTask\ExampleTaskHandler" public="true">
+        <service id="Reqser\Plugin\Service\ScheduledTask\ReqserSnippetCrawlerHandler" public="true">
             <argument type="service" id="scheduled_task.repository" />
             <tag name="messenger.message_handler" />
         </service>
