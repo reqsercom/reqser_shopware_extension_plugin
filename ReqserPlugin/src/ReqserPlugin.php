@@ -82,6 +82,6 @@ class ReqserPlugin extends Plugin
     {
         /** @var ExampleTaskHandler $handler */
         $handler = $this->container->get(ExampleTaskHandler::class);
-        $handler->handle(new \Shopware\Core\Framework\MessageQueue\Message\ScheduledTask\ScheduledTask());
+        $handler->handle(new ExampleTask());
     }
 }
