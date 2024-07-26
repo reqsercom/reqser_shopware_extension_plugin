@@ -15,8 +15,8 @@
     "extra": {
         "shopware-plugin-class": "Reqser\\Plugin\\ReqserPlugin",
         "label": {
-            "de-DE": "AI Reqser.com Snippet Plugin",
-            "en-GB": "AI Reqser.com Snippet Plugin"
+            "de-DE": "AI Reqser.com Extension Plugin",
+            "en-GB": "AI Reqser.com Extension Plugin"
         },
         "description": {
             "de-DE": "Plugin zum externe Module in Shopware in der Fremdsprache aktuell zu halten.",
