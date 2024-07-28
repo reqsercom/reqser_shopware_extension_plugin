@@ -3,7 +3,7 @@
     "description": "AI Reqser.com Snippet Plugin",
     "version": "1.0.0",
     "type": "shopware-platform-plugin",
-    "license": "MIT",
+    "license": "proprietary",
     "require": {
         "shopware/core": "^6.0"
     },
