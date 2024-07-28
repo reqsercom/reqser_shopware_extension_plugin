@@ -97,8 +97,9 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                     if (substr_count($fileName, '.') < 2) {
                         //$this->logger->warning(sprintf('Skipping file with insufficient dots: %s', $filePath));
                         continue;
-                    } elseif (strpos($filePath, '/custom/plugins/SwagLanguagePack/src/Resources/snippet/') === false) {
+                    } elseif (strpos($filePath, '/custom/plugins/SwagLanguagePack/src/Resources/snippet/') !== false) {
                         //JorisK Here we exclude all SwagLangaugePack for performance reasons, they are all translated by Shopware already and as long as they are update should not be an issue, but if so remove the continue here and they will also be loaded into snipped table (Attention performance issue)
+                        //$this->logger->info(sprintf('Skipped file: %s', $filePath));
                         continue;
                     }
 
