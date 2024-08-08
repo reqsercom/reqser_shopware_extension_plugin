@@ -1,7 +1,7 @@
 {
     "name": "reqser/plugin",
     "description": "AI Reqser.com Snippet Plugin",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "type": "shopware-platform-plugin",
     "license": "proprietary",
     "require": {

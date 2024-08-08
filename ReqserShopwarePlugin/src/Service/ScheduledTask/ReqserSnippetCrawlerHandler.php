@@ -37,6 +37,9 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 
         // Start searching for directories that contain Resources/snippet
         $this->searchAndProcessSnippetDirectories($projectDir);
+
+        //make sure all translations are created
+        $this->createAllNecessarySnippetTranslations();
     }
 
     private function preloadSnippetSetIds(): void
@@ -206,6 +209,61 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                 }
             }
         }
+    }
+
+    private function createAllNecessarySnippetTranslations(): void
+    {
+        //We need to make sure the entry exist for all langauges used in any sales channel, if not we have to create the entry empty so it can be handled via Admin API
+        $sql = "SELECT DISTINCT snippet_set_id FROM sales_channel_domain";
+        $result = $this->connection->fetchAllAssociative($sql);
+
+        if (count($result) > 0) {
+            $snippet_set_array[] = [];
+            foreach ($result as $row) {
+                $snippet_set_array[] = $row['snippet_set_id'];
+            }
+            if (count($snippet_set_array) > 0){
+                //now get all the snippet keys and check if they exist in every language, if not add it as empty
+                $sql = "SELECT DISTINCT translation_key FROM snippet";
+                $result = $this->connection->fetchAllAssociative($sql);
+                if (count($result) > 0) {
+                    $snippet_key_array[] = [];
+                    foreach ($result as $row) {
+                        $snippet_key_array[] = $row['translation_key'];
+                    }
+                    if (count($snippet_key_array) > 0){
+                        foreach ($snippet_set_array as $snippet_set_id) {
+                            foreach ($snippet_key_array as $snippet_key) {
+                                $existingSnippet = $this->connection->fetchAssociative('SELECT id FROM snippet WHERE `translation_key` = ? AND `snippet_set_id` = ?', [$snippet_key, $snippet_set_id]);
+                                if (!$existingSnippet) {
+                                    try {
+                                        $this->connection->insert('snippet', [
+                                            'id' => Uuid::fromHexToBytes(Uuid::randomHex()),
+                                            'translation_key' => $snippet_key,
+                                            'value' => '',
+                                            'author' => 'reqser_plugin_crawler', // or appropriate author value
+                                            'snippet_set_id' => $snippet_set_id,
+                                            'custom_fields' => null, // or appropriate custom fields
+                                            'created_at' => (new \DateTime())->format('Y-m-d H:i:s'),
+                                            'updated_at' => (new \DateTime())->format('Y-m-d H:i:s'),
+                                        ]);
+                                    } catch (\Exception $e) {
+                                        $this->logger->error('Reqser Plugin Error inserting snippet', [
+                                            'key' => $snippet_key,
+                                            'value' => '',
+                                            'snippet_set_id' => $snippet_set_id,
+                                            'exception' => $e->getMessage(),
+                                        ]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+
     }
 
     public static function getHandledMessages(): iterable
