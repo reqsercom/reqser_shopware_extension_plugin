@@ -100,8 +100,9 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                     if (substr_count($fileName, '.') < 2) {
                         //$this->logger->warning(sprintf('Skipping file with insufficient dots: %s', $filePath));
                         continue;
-                    } elseif (strpos($filePath, '/custom/plugins/SwagLanguagePack/src/Resources/snippet/') !== false) {
+                    } elseif (strpos($filePath, '/custom/plugins/SwagLanguagePack/src/Resources/snippet/') !== false || strpos($filePath, '/vendor/shopware/core/') !== false) {
                         //JorisK Here we exclude all SwagLangaugePack for performance reasons, they are all translated by Shopware already and as long as they are update should not be an issue, but if so remove the continue here and they will also be loaded into snipped table (Attention performance issue)
+                        //Also all core files are excluded, as they should be handled to Shopware default language Pack
                         //$this->logger->info(sprintf('Skipped file: %s', $filePath));
                         continue;
                     }
@@ -213,29 +214,36 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 
     private function createAllNecessarySnippetTranslations(): void
     {
+        $this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working'));
         //We need to make sure the entry exist for all langauges used in any sales channel, if not we have to create the entry empty so it can be handled via Admin API
         $sql = "SELECT DISTINCT snippet_set_id FROM sales_channel_domain";
         $result = $this->connection->fetchAllAssociative($sql);
 
         if (count($result) > 0) {
-            $snippet_set_array[] = [];
+            $snippet_set_array = [];
             foreach ($result as $row) {
                 $snippet_set_array[] = $row['snippet_set_id'];
             }
             if (count($snippet_set_array) > 0){
+                //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working Snippet Array bigger than 0'));
                 //now get all the snippet keys and check if they exist in every language, if not add it as empty
                 $sql = "SELECT DISTINCT translation_key FROM snippet";
                 $result = $this->connection->fetchAllAssociative($sql);
                 if (count($result) > 0) {
-                    $snippet_key_array[] = [];
+                    //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working call to snippet than 0'));
+                    $snippet_key_array = [];
                     foreach ($result as $row) {
                         $snippet_key_array[] = $row['translation_key'];
                     }
                     if (count($snippet_key_array) > 0){
+                        //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working snippet_key_array bigger than 0'));
                         foreach ($snippet_set_array as $snippet_set_id) {
+                            //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working on Snippet Set ID: %s', $snippet_set_id));
                             foreach ($snippet_key_array as $snippet_key) {
+                                //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working on Snippet Key: %s', $snippet_key));
                                 $existingSnippet = $this->connection->fetchAssociative('SELECT id FROM snippet WHERE `translation_key` = ? AND `snippet_set_id` = ?', [$snippet_key, $snippet_set_id]);
                                 if (!$existingSnippet) {
+                                    //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working fond a key not existing in all languages: %s', $snippet_key));
                                     try {
                                         $this->connection->insert('snippet', [
                                             'id' => Uuid::fromHexToBytes(Uuid::randomHex()),
@@ -255,6 +263,8 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                                             'exception' => $e->getMessage(),
                                         ]);
                                     }
+                                } else {
+                                    //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations it does exist all fine', $snippet_key)); 
                                 }
                             }
                         }
