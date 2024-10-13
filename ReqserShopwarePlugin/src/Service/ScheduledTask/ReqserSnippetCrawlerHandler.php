@@ -9,7 +9,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\System\Snippet\Files\SnippetFileCollectionFactory;
 use Shopware\Core\Framework\Uuid\Uuid;
-use Shopware\Core\System\SystemConfig\SystemConfigService;
+use Shopware\Core\Framework\App\ShopId\ShopIdProvider;
 use Shopware\Core\Framework\Context;
 
 class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
@@ -19,7 +19,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     private ContainerInterface $container;
     private SnippetFileCollectionFactory $snippetFileCollectionFactory;
     private array $snippetSetMap = [];
-    private SystemConfigService $systemConfigService;
+    private ShopIdProvider $shopIdProvider;
     private $webhookUrl = 'https://test.reqser.com/app/shopware/webhook/plugin';
 
     public function __construct(
@@ -27,30 +27,19 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         Connection $connection,
         LoggerInterface $logger,
         ContainerInterface $container,
-        SystemConfigService $systemConfigService
+        ShopIdProvider $shopIdProvider
     ) {
         parent::__construct($scheduledTaskRepository);
         $this->connection = $connection;
         $this->logger = $logger;
         $this->container = $container;
-        $this->systemConfigService = $systemConfigService;
+        $this->shopIdProvider = $shopIdProvider;
     }
 
     public function run(): void
     {
         // Preload snippet set IDs
         $this->preloadSnippetSetIds();
-
-        
-
-         // Send error to webhook
-         $this->sendErrorToWebhook([
-            'type' => 'test',
-            'function' => 'Test if the call works',
-            'data' => 'Test Webhook Call',
-            'file' => __FILE__, 
-            'line' => __LINE__,
-        ]);
 
         // Get the root directory of the Shopware installation
         $projectDir = $this->container->getParameter('kernel.project_dir');
@@ -81,6 +70,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         $this->processDirectoryRecursively($baseDirectory);
     }
 
+    //Can be used for Debuging to Send a Notification to the Admin
     private function sendAdminNotification(string $message): void
     {
         $context = Context::createDefaultContext();
@@ -145,7 +135,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
             $url = $this->webhookUrl;
             //Add Standard Data host and shop_id
             $data['host'] = $_SERVER['HTTP_HOST'] ?? 'unknown';
-            $data['shopId'] = $this->systemConfigService->get('core.basicInformation.uniqueId') ?? 'unknown';
+            $data['shopId'] = $this->shopIdProvider->getShopId() ?? 'unknown';
 
             $payload = json_encode($data);
 
