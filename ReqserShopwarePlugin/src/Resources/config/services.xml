@@ -13,7 +13,7 @@
             <argument type="service" id="Doctrine\DBAL\Connection"/>
             <argument type="service" id="logger"/>
             <argument type="service" id="service_container"/>
-            <argument type="service" id="Shopware\Core\System\Snippet\Files\SnippetFileCollectionFactory"/>
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
             <tag name="messenger.message_handler" />
         </service>
     </services>
