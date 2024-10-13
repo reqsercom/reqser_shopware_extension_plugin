@@ -7,7 +7,6 @@ use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTaskHandler;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
-use Shopware\Core\System\Snippet\Files\SnippetFileCollectionFactory;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\App\ShopId\ShopIdProvider;
 use Shopware\Core\Framework\Context;
@@ -17,7 +16,6 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     private Connection $connection;
     private LoggerInterface $logger;
     private ContainerInterface $container;
-    private SnippetFileCollectionFactory $snippetFileCollectionFactory;
     private array $snippetSetMap = [];
     private ShopIdProvider $shopIdProvider;
     private $webhookUrl = 'https://reqser.com/app/shopware/webhook/plugin';
