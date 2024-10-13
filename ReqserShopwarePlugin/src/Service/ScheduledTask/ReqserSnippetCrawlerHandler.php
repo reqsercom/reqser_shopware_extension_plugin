@@ -20,7 +20,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     private SnippetFileCollectionFactory $snippetFileCollectionFactory;
     private array $snippetSetMap = [];
     private ShopIdProvider $shopIdProvider;
-    private $webhookUrl = 'https://test.reqser.com/app/shopware/webhook/plugin';
+    private $webhookUrl = 'https://reqser.com/app/shopware/webhook/plugin';
 
     public function __construct(
         EntityRepository $scheduledTaskRepository,
