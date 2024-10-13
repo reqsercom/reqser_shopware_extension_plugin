@@ -10,6 +10,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\System\Snippet\Files\SnippetFileCollectionFactory;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
+use Shopware\Core\Framework\Context;
 
 class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 {
@@ -39,6 +40,8 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     {
         // Preload snippet set IDs
         $this->preloadSnippetSetIds();
+
+        
 
          // Send error to webhook
          $this->sendErrorToWebhook([
@@ -78,7 +81,23 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         $this->processDirectoryRecursively($baseDirectory);
     }
 
-    
+    private function sendAdminNotification(string $message): void
+    {
+        $context = Context::createDefaultContext();
+
+        /** @var EntityRepository $notificationRepository */
+        $notificationRepository = $this->container->get('notification.repository');
+
+        $notificationRepository->create([
+            [
+                'id' => Uuid::randomHex(),
+                'status' => 'info',
+                'message' => $message,
+                'adminOnly' => true,
+                'requiredPrivileges' => [],
+            ],
+        ], $context);
+    }
 
     private function processDirectoryRecursively(string $directory): void
     {
