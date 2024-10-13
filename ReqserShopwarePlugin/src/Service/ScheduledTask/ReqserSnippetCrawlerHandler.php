@@ -9,6 +9,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\System\Snippet\Files\SnippetFileCollectionFactory;
 use Shopware\Core\Framework\Uuid\Uuid;
+use Shopware\Core\System\SystemConfig\SystemConfigService;
 
 class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 {
@@ -17,15 +18,23 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     private ContainerInterface $container;
     private SnippetFileCollectionFactory $snippetFileCollectionFactory;
     private array $snippetSetMap = [];
+    private SystemConfigService $systemConfigService;
     private $webhookUrl = 'https://test.reqser.com/app/shopware/webhook/plugin';
 
-    public function __construct(EntityRepository $scheduledTaskRepository, Connection $connection, LoggerInterface $logger, ContainerInterface $container, SnippetFileCollectionFactory $snippetFileCollectionFactory)
-    {
+    public function __construct(
+        EntityRepository $scheduledTaskRepository,
+        Connection $connection,
+        LoggerInterface $logger,
+        ContainerInterface $container,
+        EntityRepository $salesChannelDomainRepository,
+        SystemConfigService $systemConfigService
+    ) {
         parent::__construct($scheduledTaskRepository);
         $this->connection = $connection;
         $this->logger = $logger;
         $this->container = $container;
-        $this->snippetFileCollectionFactory = $snippetFileCollectionFactory;
+        $this->salesChannelDomainRepository = $salesChannelDomainRepository;
+        $this->systemConfigService = $systemConfigService;
     }
 
     public function run(): void
@@ -33,15 +42,14 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         // Preload snippet set IDs
         $this->preloadSnippetSetIds();
 
-        $this->sendAdminNotification('Reqser Snippet Crawler run Z'.__LINE__);
          // Send error to webhook
-         /*$this->sendErrorToWebhook([
+         $this->sendErrorToWebhook([
             'type' => 'test',
             'function' => 'Test if the call works',
             'data' => 'Test Webhook Call',
             'file' => __FILE__, 
             'line' => __LINE__,
-        ]);*/
+        ]);
 
         // Get the root directory of the Shopware installation
         $projectDir = $this->container->getParameter('kernel.project_dir');
@@ -56,23 +64,6 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         $this->createAllNecessarySnippetTranslations();
     }
 
-    private function sendAdminNotification(string $message): void
-    {
-        $context = Context::createDefaultContext();
-
-        /** @var EntityRepository $notificationRepository */
-        $notificationRepository = $this->container->get('notification.repository');
-
-        $notificationRepository->create([
-            [
-                'id' => Uuid::randomHex(),
-                'status' => 'info',
-                'message' => $message,
-                'adminOnly' => true,
-                'requiredPrivileges' => [],
-            ],
-        ], $context);
-    }
 
     private function preloadSnippetSetIds(): void
     {
@@ -137,12 +128,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
             $url = $this->webhookUrl;
             //Add Standard Data host and shop_id
             $data['host'] = $_SERVER['HTTP_HOST'] ?? 'unknown';
-
-            try {
-                $data['shop_id'] = $this->container->getParameter('shopware.uniqueid');
-            } catch (\Throwable $e) {
-                $data['shop_id'] = 'unknown';
-            }
+            $shopUniqueId = $this->systemConfigService->get('core.basicInformation.uniqueId') ?? 'unknown';
 
             $payload = json_encode($data);
 
