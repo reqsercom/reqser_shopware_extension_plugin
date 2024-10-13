@@ -41,13 +41,13 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         $this->preloadSnippetSetIds();
 
          // Send error to webhook
-         /*$this->sendErrorToWebhook([
+         $this->sendErrorToWebhook([
             'type' => 'test',
             'function' => 'Test if the call works',
             'data' => 'Test Webhook Call',
             'file' => __FILE__, 
             'line' => __LINE__,
-        ]);*/
+        ]);
 
         // Get the root directory of the Shopware installation
         $projectDir = $this->container->getParameter('kernel.project_dir');
