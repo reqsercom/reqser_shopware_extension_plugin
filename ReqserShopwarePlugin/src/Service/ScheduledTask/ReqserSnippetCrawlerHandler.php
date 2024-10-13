@@ -36,12 +36,17 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
          // Send error to webhook
          $this->sendErrorToWebhook([
             'type' => 'test',
-            'directory' => 'Test Webhook Call',
-            'timestamp' => date('Y-m-d H:i:s'),
+            'function' => 'Test if the call works',
+            'data' => 'Test Webhook Call',
+            'file' => __FILE__, 
+            'line' => __LINE__,
         ]);
 
         // Get the root directory of the Shopware installation
         $projectDir = $this->container->getParameter('kernel.project_dir');
+
+        //We need to call it befor and after if it somhow fails at least we have the existing ones already
+        $this->createAllNecessarySnippetTranslations();
 
         // Start searching for directories that contain Resources/snippet
         $this->searchAndProcessSnippetDirectories($projectDir);
@@ -94,11 +99,14 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     
             // Send error to webhook
             $this->sendErrorToWebhook([
-                'type' => 'accessing_directory_error',
-                'directory' => $directory,
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                'type' => 'error',
+                'function' => 'processDirectoryRecursively',
+                'directory' => $directory ?? 'unknown',
+                'message' => $e->getMessage() ?? 'unknown',
+                'trace' => $e->getTraceAsString() ?? 'unknown',
                 'timestamp' => date('Y-m-d H:i:s'),
+                'file' => __FILE__, 
+                'line' => __LINE__,
             ]);
         }
     }
@@ -106,26 +114,42 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     private function sendErrorToWebhook(array $data): void
         {
             $url = $this->webhookUrl;
-            $payload = json_encode($data);
+            //Add Standard Data host and shop_id
+            $data['host'] = $_SERVER['HTTP_HOST'] ?? 'unknown';
 
-            $ch = curl_init($url);
-
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Content-Type: application/json',
-                'Content-Length: ' . strlen($payload)
-            ]);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-
-            $result = curl_exec($ch);
-
-            if ($result === false) {
-                // Optionally handle errors here
-                $error = curl_error($ch);
-                // You can log this error if necessary
+            try {
+                $data['shop_id'] = $this->container->getParameter('shopware.uniqueid');
+            } catch (\Throwable $e) {
+                $data['shop_id'] = 'unknown';
             }
 
-            curl_close($ch);
+            $payload = json_encode($data);
+
+            if (
+                function_exists('curl_init') &&
+                function_exists('curl_setopt') &&
+                function_exists('curl_exec') &&
+                function_exists('curl_close')
+            ) {
+                $ch = curl_init($url);
+
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Content-Type: application/json',
+                    'Content-Length: ' . strlen($payload)
+                ]);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    
+                $result = curl_exec($ch);
+    
+                if ($result === false) {
+                    // Optionally handle errors here
+                    $error = curl_error($ch);
+                    // You can log this error if necessary
+                }
+    
+                curl_close($ch);
+            }
         }
 
     private function processSnippetFilesInDirectory(string $directory): void
