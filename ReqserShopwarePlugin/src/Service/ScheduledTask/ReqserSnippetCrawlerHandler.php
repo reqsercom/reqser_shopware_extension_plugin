@@ -17,6 +17,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     private ContainerInterface $container;
     private SnippetFileCollectionFactory $snippetFileCollectionFactory;
     private array $snippetSetMap = [];
+    private $webhookUrl = 'https://test.reqser.com/app/shopware/webhook/plugin';
 
     public function __construct(EntityRepository $scheduledTaskRepository, Connection $connection, LoggerInterface $logger, ContainerInterface $container, SnippetFileCollectionFactory $snippetFileCollectionFactory)
     {
@@ -31,6 +32,13 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     {
         // Preload snippet set IDs
         $this->preloadSnippetSetIds();
+
+         // Send error to webhook
+         $this->sendErrorToWebhook([
+            'type' => 'test',
+            'directory' => 'Test Webhook Call',
+            'timestamp' => date('Y-m-d H:i:s'),
+        ]);
 
         // Get the root directory of the Shopware installation
         $projectDir = $this->container->getParameter('kernel.project_dir');
@@ -75,14 +83,50 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                     }
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Log the error message and continue with the next directory
-            $this->logger->error('Reqser Plugin Error accessing directory', [
+            if (method_exists($this->logger, 'error')) {
+                $this->logger->error('Reqser Plugin Error accessing directory', [
+                    'directory' => $directory,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+    
+            // Send error to webhook
+            $this->sendErrorToWebhook([
+                'type' => 'accessing_directory_error',
                 'directory' => $directory,
                 'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'timestamp' => date('Y-m-d H:i:s'),
             ]);
         }
     }
+
+    private function sendErrorToWebhook(array $data): void
+        {
+            $url = $this->webhookUrl;
+            $payload = json_encode($data);
+
+            $ch = curl_init($url);
+
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'Content-Length: ' . strlen($payload)
+            ]);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+            $result = curl_exec($ch);
+
+            if ($result === false) {
+                // Optionally handle errors here
+                $error = curl_error($ch);
+                // You can log this error if necessary
+            }
+
+            curl_close($ch);
+        }
 
     private function processSnippetFilesInDirectory(string $directory): void
     {
