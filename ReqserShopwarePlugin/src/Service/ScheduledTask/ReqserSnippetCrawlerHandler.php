@@ -26,14 +26,12 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         Connection $connection,
         LoggerInterface $logger,
         ContainerInterface $container,
-        EntityRepository $salesChannelDomainRepository,
         SystemConfigService $systemConfigService
     ) {
         parent::__construct($scheduledTaskRepository);
         $this->connection = $connection;
         $this->logger = $logger;
         $this->container = $container;
-        $this->salesChannelDomainRepository = $salesChannelDomainRepository;
         $this->systemConfigService = $systemConfigService;
     }
 
