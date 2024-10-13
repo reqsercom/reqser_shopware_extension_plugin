@@ -128,7 +128,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
             $url = $this->webhookUrl;
             //Add Standard Data host and shop_id
             $data['host'] = $_SERVER['HTTP_HOST'] ?? 'unknown';
-            $shopUniqueId = $this->systemConfigService->get('core.basicInformation.uniqueId') ?? 'unknown';
+            $data['shopId'] = $this->systemConfigService->get('core.basicInformation.uniqueId') ?? 'unknown';
 
             $payload = json_encode($data);
 
