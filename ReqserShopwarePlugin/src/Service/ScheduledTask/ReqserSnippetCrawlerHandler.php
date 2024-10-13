@@ -33,14 +33,15 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         // Preload snippet set IDs
         $this->preloadSnippetSetIds();
 
+        $this->sendAdminNotification('Reqser Snippet Crawler run Z'.__LINE__);
          // Send error to webhook
-         $this->sendErrorToWebhook([
+         /*$this->sendErrorToWebhook([
             'type' => 'test',
             'function' => 'Test if the call works',
             'data' => 'Test Webhook Call',
             'file' => __FILE__, 
             'line' => __LINE__,
-        ]);
+        ]);*/
 
         // Get the root directory of the Shopware installation
         $projectDir = $this->container->getParameter('kernel.project_dir');
@@ -53,6 +54,24 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 
         //make sure all translations are created
         $this->createAllNecessarySnippetTranslations();
+    }
+
+    private function sendAdminNotification(string $message): void
+    {
+        $context = Context::createDefaultContext();
+
+        /** @var EntityRepository $notificationRepository */
+        $notificationRepository = $this->container->get('notification.repository');
+
+        $notificationRepository->create([
+            [
+                'id' => Uuid::randomHex(),
+                'status' => 'info',
+                'message' => $message,
+                'adminOnly' => true,
+                'requiredPrivileges' => [],
+            ],
+        ], $context);
     }
 
     private function preloadSnippetSetIds(): void
@@ -69,6 +88,8 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     {
         $this->processDirectoryRecursively($baseDirectory);
     }
+
+    
 
     private function processDirectoryRecursively(string $directory): void
     {
