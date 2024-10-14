@@ -71,6 +71,9 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     //Can be used for Debuging to Send a Notification to the Admin
     private function sendAdminNotification(string $message): void
     {
+        //Put this anywhere to get a notification in the Admin
+        //$this->sendAdminNotification('Reqser Snippet Crawler run Z'.__LINE__);
+
         $context = Context::createDefaultContext();
 
         /** @var EntityRepository $notificationRepository */
