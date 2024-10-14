@@ -164,7 +164,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                 }
     
                 curl_close($ch);
-            }
+            } 
         }
 
     private function processSnippetFilesInDirectory(string $directory): void
@@ -202,7 +202,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 
                     foreach ($snippets as $document => $value) {
                         //$this->logger->info(sprintf('Found snippet: key = %s, value = %s', $document, json_encode($value)));
-                        $this->processSnippet($document, $value, $filePath);
+                        $this->processSnippet((string) $document, $value, $filePath);
                     }
                 } catch (\Exception $e) {
                     // Log the error message and continue with the next file
@@ -221,8 +221,8 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     {
         if (is_array($value)) {
             foreach ($value as $subKey => $subValue) {
-                $newKey = $key . '.' . $subKey;
-                $this->processSnippet($newKey, $subValue, $filePath);
+                $newKey = $key . '.' . (string) $subKey;
+                $this->processSnippet((string) $newKey, $subValue, $filePath);
             }
         } elseif (is_string($value)) {
             $snippetSetId = $this->getSnippetSetIdFromFilePath($filePath);
