@@ -7,24 +7,31 @@ use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTaskHandler;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
-use Shopware\Core\System\Snippet\Files\SnippetFileCollectionFactory;
 use Shopware\Core\Framework\Uuid\Uuid;
+use Shopware\Core\Framework\App\ShopId\ShopIdProvider;
+use Shopware\Core\Framework\Context;
 
 class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 {
     private Connection $connection;
     private LoggerInterface $logger;
     private ContainerInterface $container;
-    private SnippetFileCollectionFactory $snippetFileCollectionFactory;
     private array $snippetSetMap = [];
+    private ShopIdProvider $shopIdProvider;
+    private $webhookUrl = 'https://reqser.com/app/shopware/webhook/plugin';
 
-    public function __construct(EntityRepository $scheduledTaskRepository, Connection $connection, LoggerInterface $logger, ContainerInterface $container, SnippetFileCollectionFactory $snippetFileCollectionFactory)
-    {
+    public function __construct(
+        EntityRepository $scheduledTaskRepository,
+        Connection $connection,
+        LoggerInterface $logger,
+        ContainerInterface $container,
+        ShopIdProvider $shopIdProvider
+    ) {
         parent::__construct($scheduledTaskRepository);
         $this->connection = $connection;
         $this->logger = $logger;
         $this->container = $container;
-        $this->snippetFileCollectionFactory = $snippetFileCollectionFactory;
+        $this->shopIdProvider = $shopIdProvider;
     }
 
     public function run(): void
@@ -35,12 +42,16 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         // Get the root directory of the Shopware installation
         $projectDir = $this->container->getParameter('kernel.project_dir');
 
+        //We need to call it befor and after if it somhow fails at least we have the existing ones already
+        $this->createAllNecessarySnippetTranslations();
+
         // Start searching for directories that contain Resources/snippet
         $this->searchAndProcessSnippetDirectories($projectDir);
 
         //make sure all translations are created
         $this->createAllNecessarySnippetTranslations();
     }
+
 
     private function preloadSnippetSetIds(): void
     {
@@ -55,6 +66,25 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     private function searchAndProcessSnippetDirectories(string $baseDirectory): void
     {
         $this->processDirectoryRecursively($baseDirectory);
+    }
+
+    //Can be used for Debuging to Send a Notification to the Admin
+    private function sendAdminNotification(string $message): void
+    {
+        $context = Context::createDefaultContext();
+
+        /** @var EntityRepository $notificationRepository */
+        $notificationRepository = $this->container->get('notification.repository');
+
+        $notificationRepository->create([
+            [
+                'id' => Uuid::randomHex(),
+                'status' => 'info',
+                'message' => $message,
+                'adminOnly' => true,
+                'requiredPrivileges' => [],
+            ],
+        ], $context);
     }
 
     private function processDirectoryRecursively(string $directory): void
@@ -75,14 +105,64 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                     }
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Log the error message and continue with the next directory
-            $this->logger->error('Reqser Plugin Error accessing directory', [
-                'directory' => $directory,
-                'message' => $e->getMessage(),
+            if (method_exists($this->logger, 'error')) {
+                $this->logger->error('Reqser Plugin Error accessing directory', [
+                    'directory' => $directory,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+    
+            // Send error to webhook
+            $this->sendErrorToWebhook([
+                'type' => 'error',
+                'function' => 'processDirectoryRecursively',
+                'directory' => $directory ?? 'unknown',
+                'message' => $e->getMessage() ?? 'unknown',
+                'trace' => $e->getTraceAsString() ?? 'unknown',
+                'timestamp' => date('Y-m-d H:i:s'),
+                'file' => __FILE__, 
+                'line' => __LINE__,
             ]);
         }
     }
+
+    private function sendErrorToWebhook(array $data): void
+        {
+            $url = $this->webhookUrl;
+            //Add Standard Data host and shop_id
+            $data['host'] = $_SERVER['HTTP_HOST'] ?? 'unknown';
+            $data['shopId'] = $this->shopIdProvider->getShopId() ?? 'unknown';
+
+            $payload = json_encode($data);
+
+            if (
+                function_exists('curl_init') &&
+                function_exists('curl_setopt') &&
+                function_exists('curl_exec') &&
+                function_exists('curl_close')
+            ) {
+                $ch = curl_init($url);
+
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Content-Type: application/json',
+                    'Content-Length: ' . strlen($payload)
+                ]);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    
+                $result = curl_exec($ch);
+    
+                if ($result === false) {
+                    // Optionally handle errors here
+                    $error = curl_error($ch);
+                    // You can log this error if necessary
+                }
+    
+                curl_close($ch);
+            }
+        }
 
     private function processSnippetFilesInDirectory(string $directory): void
     {
