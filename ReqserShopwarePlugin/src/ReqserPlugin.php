@@ -13,6 +13,8 @@ use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTaskDefinition;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Reqser\Plugin\Service\ScheduledTask\ReqserSnippetCrawler;
 use Reqser\Plugin\Service\ScheduledTask\ReqserSnippetCrawlerHandler;
+use Reqser\Plugin\Service\ScheduledTask\ReqserNotificiationRemoval;
+use Reqser\Plugin\Service\ScheduledTask\ReqserNotificiationRemovalHandler;
 
 class ReqserPlugin extends Plugin
 {
@@ -68,6 +70,22 @@ class ReqserPlugin extends Plugin
                 $currentTime
             ]
         );
+
+        $connection->executeStatement(
+            'INSERT INTO scheduled_task (id, name, scheduled_task_class, run_interval, default_run_interval, status, next_execution_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE scheduled_task_class = VALUES(scheduled_task_class), run_interval = VALUES(run_interval), status = VALUES(status), next_execution_time = VALUES(next_execution_time), updated_at = VALUES(updated_at)',
+            [
+                Uuid::randomBytes(),  // Correctly generate a binary UUID
+                ReqserNotificiationRemoval::getTaskName(),
+                ReqserNotificiationRemoval::class,
+                ReqserNotificiationRemoval::getDefaultInterval(),
+                ReqserNotificiationRemoval::getDefaultInterval(),
+                ScheduledTaskDefinition::STATUS_SCHEDULED,
+                $currentTime,
+                $currentTime,
+                $currentTime
+            ]
+        );
     }
 
     private function removeTask(): void
@@ -76,6 +94,10 @@ class ReqserPlugin extends Plugin
             'DELETE FROM scheduled_task WHERE name = ?',
             [ReqserSnippetCrawler::getTaskName()]
         );
+        $this->container->get(Connection::class)->executeStatement(
+            'DELETE FROM scheduled_task WHERE name = ?',
+            [ReqserNotificiationRemoval::getTaskName()]
+        );
     }
 
     private function runTask(): void
@@ -83,5 +105,10 @@ class ReqserPlugin extends Plugin
         /** @var ReqserSnippetCrawlerHandler $handler */
         $handler = $this->container->get(ReqserSnippetCrawlerHandler::class);
         $handler->run();
+
+        /** @var ReqserNotificiationRemovalHandler $handler */
+        $handler = $this->container->get(ReqserNotificiationRemovalHandler::class);
+        $handler->run();
+
     }
 }

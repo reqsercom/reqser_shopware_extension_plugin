@@ -16,6 +16,16 @@
             <argument type="service" id="Shopware\Core\Framework\App\ShopId\ShopIdProvider"/>
             <tag name="messenger.message_handler" />
         </service>
+        <service id="Reqser\Plugin\Service\ScheduledTask\ReqserNotificiationRemoval">
+            <tag name="shopware.scheduled.task" />
+        </service>
+        <service id="Reqser\Plugin\Service\ScheduledTask\ReqserNotificiationRemovalHandler" public="true">
+            <argument type="service" id="scheduled_task.repository" />
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="logger"/>
+            <argument type="service" id="Shopware\Core\Framework\App\ShopId\ShopIdProvider"/>
+            <tag name="messenger.message_handler" />
+        </service>
     </services>
 </container>
 
