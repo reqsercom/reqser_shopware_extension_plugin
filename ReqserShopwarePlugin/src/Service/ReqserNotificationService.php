@@ -18,6 +18,9 @@ class ReqserNotificationService
 
     public function sendAdminNotification(string $message): void
     {
+        //use this
+        //$this->notificationService->sendAdminNotification('StorefrontRenderEvent triggered');
+
         $context = Context::createDefaultContext();
 
         $this->notificationRepository->create([
