@@ -7,74 +7,109 @@ use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTaskHandler;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\App\ShopId\ShopIdProvider;
-use Reqser\Plugin\Service\ReqserAppStatusService;
-use Reqser\Plugin\Service\ReqserWebhookService;
-use Reqser\Plugin\Service\ReqserNotificationService;
 
 class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
 {
     private Connection $connection;
     private LoggerInterface $logger;
     private ShopIdProvider $shopIdProvider;
-    private ReqserAppStatusService $appStatusService;
-    private ReqserWebhookService $webhookService;
-    private ReqserNotificationService $notificationService;
-    
+    private $webhookUrl = 'https://reqser.com/app/shopware/webhook/plugin';
 
     public function __construct(
         EntityRepository $scheduledTaskRepository,
         Connection $connection,
         LoggerInterface $logger,
-        ShopIdProvider $shopIdProvider,
-        ReqserAppStatusService $appStatusService,
-        ReqserWebhookService $webhookService,
-        ReqserNotificationService $notificationService,
+        ShopIdProvider $shopIdProvider
     ) {
         parent::__construct($scheduledTaskRepository);
         $this->connection = $connection;
         $this->logger = $logger;
         $this->shopIdProvider = $shopIdProvider;
-        $this->appStatusService = $appStatusService;
-        $this->webhookService = $webhookService;
-        $this->notificationService = $notificationService;
     }
 
     public function run(): void
     {
-        $this->notificationService->sendAdminNotification('ReqserNotificiationRemovalHandler run');
+        // Preload snippet set IDs
         try {
             $this->removeReqserNotifications();
         } catch (\Throwable $e) {
-            // Use ReqserWebhookService to send error to webhook
-            $this->webhookService->sendErrorToWebhook([
+            // Log the error message and continue with the next directory
+            if (method_exists($this->logger, 'error')) {
+                $this->logger->error('Reqser Plugin Error remove Notifictaions', [
+                    'message' => $e->getMessage(),
+                ]);
+            }
+    
+            // Send error to webhook
+            $this->sendErrorToWebhook([
                 'type' => 'error',
                 'function' => 'removeReqserNotifications',
                 'message' => $e->getMessage() ?? 'unknown',
                 'trace' => $e->getTraceAsString() ?? 'unknown',
                 'timestamp' => date('Y-m-d H:i:s'),
-                'file' => __FILE__,
+                'file' => __FILE__, 
                 'line' => __LINE__,
             ]);
         }
-
+        
     }
 
     private function removeReqserNotifications(): void
     {
         $app_name = "ReqserApp";
+        
+        // Fetch the integration ID associated with your app
         $integration_id = $this->connection->fetchOne(
             "SELECT id FROM `integration` WHERE label = :label",
             ['label' => $app_name]
         );
-
+    
         if ($integration_id) {
-            $sql = "
+             // Delete notifications older than 1 hour associated with your integration ID
+                $sql = "
                 DELETE FROM `notification`
                 WHERE `created_by_integration_id` = :integration_id
                 AND `created_at` < DATE_SUB(NOW(), INTERVAL 1 HOUR)
             ";
-            $this->connection->executeStatement($sql, ['integration_id' => $integration_id]);
+
+            $deletedRows = $this->connection->executeStatement($sql, ['integration_id' => $integration_id]);
         }
+    }
+
+    private function sendErrorToWebhook(array $data): void
+    {
+        $url = $this->webhookUrl;
+        //Add Standard Data host and shop_id
+        $data['host'] = $_SERVER['HTTP_HOST'] ?? 'unknown';
+        $data['shopId'] = $this->shopIdProvider->getShopId() ?? 'unknown';
+
+        $payload = json_encode($data);
+
+        if (
+            function_exists('curl_init') &&
+            function_exists('curl_setopt') &&
+            function_exists('curl_exec') &&
+            function_exists('curl_close')
+        ) {
+            $ch = curl_init($url);
+
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'Content-Length: ' . strlen($payload)
+            ]);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+            $result = curl_exec($ch);
+
+            if ($result === false) {
+                // Optionally handle errors here
+                $error = curl_error($ch);
+                // You can log this error if necessary
+            }
+
+            curl_close($ch);
+        } 
     }
 
     public static function getHandledMessages(): iterable
