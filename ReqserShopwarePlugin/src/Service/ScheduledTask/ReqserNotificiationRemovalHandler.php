@@ -9,6 +9,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\App\ShopId\ShopIdProvider;
 use Reqser\Plugin\Service\ReqserAppStatusService;
 use Reqser\Plugin\Service\ReqserWebhookService;
+use Reqser\Plugin\Service\ReqserNotificationService;
 
 class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
 {
@@ -17,6 +18,8 @@ class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
     private ShopIdProvider $shopIdProvider;
     private ReqserAppStatusService $appStatusService;
     private ReqserWebhookService $webhookService;
+    private ReqserNotificationService $notificationService;
+    
 
     public function __construct(
         EntityRepository $scheduledTaskRepository,
@@ -24,7 +27,8 @@ class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
         LoggerInterface $logger,
         ShopIdProvider $shopIdProvider,
         ReqserAppStatusService $appStatusService,
-        ReqserWebhookService $webhookService // Injecting ReqserWebhookService
+        ReqserWebhookService $webhookService,
+        ReqserNotificationService $notificationService,
     ) {
         parent::__construct($scheduledTaskRepository);
         $this->connection = $connection;
@@ -32,10 +36,12 @@ class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
         $this->shopIdProvider = $shopIdProvider;
         $this->appStatusService = $appStatusService;
         $this->webhookService = $webhookService;
+        $this->notificationService = $notificationService;
     }
 
     public function run(): void
     {
+        $this->notificationService->sendAdminNotification('ReqserNotificiationRemovalHandler run');
         try {
             $this->removeReqserNotifications();
         } catch (\Throwable $e) {
@@ -50,20 +56,7 @@ class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
                 'line' => __LINE__,
             ]);
         }
-        try {
-            $this->appStatusService->refreshAppStatus();
-        } catch (\Throwable $e) {
-            // Use ReqserWebhookService to send error to webhook
-            $this->webhookService->sendErrorToWebhook([
-                'type' => 'error',
-                'function' => 'refreshAppStatus',
-                'message' => $e->getMessage() ?? 'unknown',
-                'trace' => $e->getTraceAsString() ?? 'unknown',
-                'timestamp' => date('Y-m-d H:i:s'),
-                'file' => __FILE__,
-                'line' => __LINE__,
-            ]);
-        }
+
     }
 
     private function removeReqserNotifications(): void

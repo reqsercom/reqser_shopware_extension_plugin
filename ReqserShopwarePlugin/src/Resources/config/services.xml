@@ -27,6 +27,7 @@
             <argument type="service" id="Shopware\Core\Framework\App\ShopId\ShopIdProvider" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserAppStatusService" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserNotificationService" />
         </service>
 
         <service id="Reqser\Plugin\Subscriber\ReqserLanguageRedirectSubscriber"
