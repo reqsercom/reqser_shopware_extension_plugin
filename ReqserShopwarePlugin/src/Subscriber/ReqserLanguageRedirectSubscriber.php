@@ -86,7 +86,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             $session = $request->getSession(); // Get the session from the request
 
             if ($session->get('reqser_redirect_done', false)) {
-                //return; // Skip redirect if it's already been done
+                return; // Skip redirect if it's already been done
             }
         
             // Retrieve sales channel domains for the current context
