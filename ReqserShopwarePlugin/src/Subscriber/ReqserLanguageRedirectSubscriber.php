@@ -14,11 +14,13 @@ use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\NotFilter;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\Sorting\FieldSorting;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsAnyFilter;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\System\SalesChannel\Aggregate\SalesChannelDomain\SalesChannelDomainCollection;
 use Symfony\Contracts\Cache\CacheInterface;
 use Doctrine\DBAL\Connection;
+use Psr\Log\LoggerInterface;
+
 
 class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
 {
@@ -29,6 +31,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
     private $cache;
     private Connection $connection;
     private $webhookService;
+    private LoggerInterface $logger;
 
     public function __construct(
         RequestStack $requestStack, 
@@ -37,7 +40,8 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         EntityRepository $domainRepository,
         CacheInterface $cache,
         Connection $connection,
-        ReqserWebhookService $webhookService
+        ReqserWebhookService $webhookService,
+        LoggerInterface $logger
         )
     {
         $this->requestStack = $requestStack;
@@ -47,6 +51,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         $this->cache = $cache;
         $this->connection = $connection;
         $this->webhookService = $webhookService;
+        $this->logger = $logger;
     }
 
     public static function getSubscribedEvents(): array
@@ -81,11 +86,11 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             $session = $request->getSession(); // Get the session from the request
 
             if ($session->get('reqser_redirect_done', false)) {
-                return; // Skip redirect if it's already been done
+                //return; // Skip redirect if it's already been done
             }
         
             // Retrieve sales channel domains for the current context
-            $salesChannelDomains = $this->getSalesChannelDomains($event->getSalesChannelContext(), $domainId);
+            $salesChannelDomains = $this->getSalesChannelDomains($event->getSalesChannelContext(), $domainId, true);
 
             if (count($salesChannelDomains) > 0) {
                 //Now check if the first result is the current one, if not this domain is not redirectected if accessed 
@@ -97,6 +102,12 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 $customFields = $salesChannelDomains->first()->getCustomFields();
                 if (!isset($customFields['ReqserRedirect']['redirectFrom']) || $customFields['ReqserRedirect']['redirectFrom'] !== true) {
                     return;
+                }
+
+                //If the current sales channel is allowing to jump Sales Channels on Redirect we need also retrieve the other domains
+                if (isset($customFields['ReqserRedirect']['jumpSalesChannels']) && $customFields['ReqserRedirect']['jumpSalesChannels'] === true) {
+                    $salesChannelDomains = $this->getSalesChannelDomains($event->getSalesChannelContext(), $domainId, false);
+                    dd($salesChannelDomains);
                 }
 
                 $browserLanguages = explode(',', (!empty($_SERVER['HTTP_ACCEPT_LANGUAGE']) ? $_SERVER['HTTP_ACCEPT_LANGUAGE'] : ''));
@@ -166,11 +177,13 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         }
     }
 
-    private function getSalesChannelDomains(SalesChannelContext $context, string $domainId)
+    private function getSalesChannelDomains(SalesChannelContext $context, string $domainId, bool $onlyCurrentSalesChannel)
     {
         // Retrieve the full collection
         $criteria = new Criteria();
-        $criteria->addFilter(new EqualsFilter('salesChannelId', $context->getSalesChannel()->getId()));
+        if ($onlyCurrentSalesChannel === true) {
+            $criteria->addFilter(new EqualsFilter('salesChannelId', $context->getSalesChannel()->getId()));
+        }
 
         $criteria->addFilter(new NotFilter(NotFilter::CONNECTION_AND, [
             new EqualsFilter('customFields.ReqserRedirect', null)
@@ -184,21 +197,46 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         $currentDomain = $salesChannelDomains->get($domainId);
 
         if ($currentDomain) {
-            // Add the current domain to the front
+            // Add the current domain (by domainId) to the front
             $sortedDomains->add($currentDomain);
-
-            // Add the remaining domains after the current domain
+        }
+    
+        // If we're fetching all domains (not just the current sales channel)
+        if (!$onlyCurrentSalesChannel) {
+            // Add remaining domains from the current sales channel
             foreach ($salesChannelDomains as $domain) {
-                if ($domain->getId() !== $domainId) {
+                if ($domain->getSalesChannelId() === $context->getSalesChannel()->getId() 
+                && $domain->getId() !== $domainId
+                && isset($domain->getCustomFields()['ReqserRedirect']['redirectInto'])
+                && $domain->getCustomFields()['ReqserRedirect']['redirectInto'] === true
+            ) {
+                    $sortedDomains->add($domain);
+                }
+            }
+    
+            // Add domains from other sales channels
+            foreach ($salesChannelDomains as $domain) {
+                if ($domain->getSalesChannelId() !== $context->getSalesChannel()->getId()
+                    && isset($domain->getCustomFields()['ReqserRedirect']['redirectInto'])
+                    && $domain->getCustomFields()['ReqserRedirect']['redirectInto'] === true
+                ) {
                     $sortedDomains->add($domain);
                 }
             }
         } else {
-            // If current domain is not found, return the original collection
-            return $salesChannelDomains;
+            // If we're only fetching the current sales channel, add the remaining domains from it
+            foreach ($salesChannelDomains as $domain) {
+                if ($domain->getId() !== $domainId
+                && isset($domain->getCustomFields()['ReqserRedirect']['redirectInto'])
+                && $domain->getCustomFields()['ReqserRedirect']['redirectInto'] === true
+                ) {
+                    $sortedDomains->add($domain);
+                }
+            }
         }
-
+    
         return $sortedDomains;
     }
+
 
 }
