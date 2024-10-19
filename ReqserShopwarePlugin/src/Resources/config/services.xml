@@ -44,7 +44,7 @@
         </service>
 
         <service id="Reqser\Plugin\Service\ReqserWebhookService">
-            <argument>https://reqser.com/app/shopware/webhook/plugin</argument>
+            <argument>https://test.reqser.com/app/shopware/webhook/plugin</argument>
             <argument type="service" id="Shopware\Core\Framework\App\ShopId\ShopIdProvider" />
             <argument type="service" id="logger" />
         </service>
