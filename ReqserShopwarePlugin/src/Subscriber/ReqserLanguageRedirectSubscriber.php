@@ -87,12 +87,15 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
 
             if ($session->get('reqser_redirect_done', false)) {
                 return; // Skip redirect if it's already been done
+            } else {
+                $this->requestStack->getSession()->set('reqser_redirect_done', true);
             }
         
             // Retrieve sales channel domains for the current context
             $salesChannelDomains = $this->getSalesChannelDomains($event->getSalesChannelContext(), $domainId, true);
 
-            if (count($salesChannelDomains) > 0) {
+            //Has to be bigger than one since the first entry should be the current one for a redirect
+            if ($salesChannelDomains->count() > 1) {
                 //Now check if the first result is the current one, if not this domain is not redirectected if accessed 
                 if ($salesChannelDomains->first()->getId() != $domainId) {
                     return;
@@ -107,7 +110,6 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 //If the current sales channel is allowing to jump Sales Channels on Redirect we need also retrieve the other domains
                 if (isset($customFields['ReqserRedirect']['jumpSalesChannels']) && $customFields['ReqserRedirect']['jumpSalesChannels'] === true) {
                     $salesChannelDomains = $this->getSalesChannelDomains($event->getSalesChannelContext(), $domainId, false);
-                    dd($salesChannelDomains);
                 }
 
                 $browserLanguages = explode(',', (!empty($_SERVER['HTTP_ACCEPT_LANGUAGE']) ? $_SERVER['HTTP_ACCEPT_LANGUAGE'] : ''));
@@ -165,9 +167,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             // Check if ReqserRedirect exists and has a languageRedirect array
             if (isset($customFields['ReqserRedirect']['languageRedirect']) && is_array($customFields['ReqserRedirect']['languageRedirect'])) {
                 if (in_array($preferred_browser_language, $customFields['ReqserRedirect']['languageRedirect'])) {
-                    
                     if ($domainId != $salesChannelDomain->getId()) {
-                        $this->requestStack->getSession()->set('reqser_redirect_done', true);
                         $response = new RedirectResponse($salesChannelDomain->getUrl());
                         $response->send();
                         exit; // Exit after redirecting
