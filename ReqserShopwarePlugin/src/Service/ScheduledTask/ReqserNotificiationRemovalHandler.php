@@ -7,109 +7,81 @@ use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTaskHandler;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\App\ShopId\ShopIdProvider;
+use Reqser\Plugin\Service\ReqserAppStatusService;
+use Reqser\Plugin\Service\ReqserWebhookService;
 
 class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
 {
     private Connection $connection;
     private LoggerInterface $logger;
     private ShopIdProvider $shopIdProvider;
-    private $webhookUrl = 'https://reqser.com/app/shopware/webhook/plugin';
+    private ReqserAppStatusService $appStatusService;
+    private ReqserWebhookService $webhookService;
 
     public function __construct(
         EntityRepository $scheduledTaskRepository,
         Connection $connection,
         LoggerInterface $logger,
-        ShopIdProvider $shopIdProvider
+        ShopIdProvider $shopIdProvider,
+        ReqserAppStatusService $appStatusService,
+        ReqserWebhookService $webhookService // Injecting ReqserWebhookService
     ) {
         parent::__construct($scheduledTaskRepository);
         $this->connection = $connection;
         $this->logger = $logger;
         $this->shopIdProvider = $shopIdProvider;
+        $this->appStatusService = $appStatusService;
+        $this->webhookService = $webhookService;
     }
 
     public function run(): void
     {
-        // Preload snippet set IDs
         try {
             $this->removeReqserNotifications();
         } catch (\Throwable $e) {
-            // Log the error message and continue with the next directory
-            if (method_exists($this->logger, 'error')) {
-                $this->logger->error('Reqser Plugin Error remove Notifictaions', [
-                    'message' => $e->getMessage(),
-                ]);
-            }
-    
-            // Send error to webhook
-            $this->sendErrorToWebhook([
+            // Use ReqserWebhookService to send error to webhook
+            $this->webhookService->sendErrorToWebhook([
                 'type' => 'error',
                 'function' => 'removeReqserNotifications',
                 'message' => $e->getMessage() ?? 'unknown',
                 'trace' => $e->getTraceAsString() ?? 'unknown',
                 'timestamp' => date('Y-m-d H:i:s'),
-                'file' => __FILE__, 
+                'file' => __FILE__,
                 'line' => __LINE__,
             ]);
         }
-        
+        try {
+            $this->appStatusService->refreshAppStatus();
+        } catch (\Throwable $e) {
+            // Use ReqserWebhookService to send error to webhook
+            $this->webhookService->sendErrorToWebhook([
+                'type' => 'error',
+                'function' => 'refreshAppStatus',
+                'message' => $e->getMessage() ?? 'unknown',
+                'trace' => $e->getTraceAsString() ?? 'unknown',
+                'timestamp' => date('Y-m-d H:i:s'),
+                'file' => __FILE__,
+                'line' => __LINE__,
+            ]);
+        }
     }
 
     private function removeReqserNotifications(): void
     {
         $app_name = "ReqserApp";
-        
-        // Fetch the integration ID associated with your app
         $integration_id = $this->connection->fetchOne(
             "SELECT id FROM `integration` WHERE label = :label",
             ['label' => $app_name]
         );
-    
+
         if ($integration_id) {
-             // Delete notifications older than 1 hour associated with your integration ID
-                $sql = "
+            $sql = "
                 DELETE FROM `notification`
                 WHERE `created_by_integration_id` = :integration_id
                 AND `created_at` < DATE_SUB(NOW(), INTERVAL 1 HOUR)
             ";
-
-            $deletedRows = $this->connection->executeStatement($sql, ['integration_id' => $integration_id]);
+            $this->connection->executeStatement($sql, ['integration_id' => $integration_id]);
         }
-    }
-
-    private function sendErrorToWebhook(array $data): void
-    {
-        $url = $this->webhookUrl;
-        //Add Standard Data host and shop_id
-        $data['host'] = $_SERVER['HTTP_HOST'] ?? 'unknown';
-        $data['shopId'] = $this->shopIdProvider->getShopId() ?? 'unknown';
-
-        $payload = json_encode($data);
-
-        if (
-            function_exists('curl_init') &&
-            function_exists('curl_setopt') &&
-            function_exists('curl_exec') &&
-            function_exists('curl_close')
-        ) {
-            $ch = curl_init($url);
-
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Content-Type: application/json',
-                'Content-Length: ' . strlen($payload)
-            ]);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-
-            $result = curl_exec($ch);
-
-            if ($result === false) {
-                // Optionally handle errors here
-                $error = curl_error($ch);
-                // You can log this error if necessary
-            }
-
-            curl_close($ch);
-        } 
     }
 
     public static function getHandledMessages(): iterable
