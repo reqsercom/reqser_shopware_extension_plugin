@@ -65,8 +65,9 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
     public function onStorefrontRender(StorefrontRenderEvent $event): void
     {
         try{
-            if (!$this->cache->hasItem('reqser_app_active')) {
-                //Double check if the app is active
+            $cacheItem = $this->cache->getItem('reqser_app_active');
+            if (!$cacheItem->isHit()) {
+                // Double check if the app is active
                 $app_name = "ReqserApp";
                 $is_app_active = $this->connection->fetchOne(
                     "SELECT active FROM `app` WHERE name = :app_name",
@@ -75,7 +76,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 if (!$is_app_active) {
                     return;
                 }
-                $cacheItem = $this->cache->getItem('reqser_app_active');
+                
                 $cacheItem->set(true);
                 $cacheItem->expiresAfter(86400);
                 $this->cache->save($cacheItem);
@@ -125,15 +126,12 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                     $this->handleLanguageRedirect($preferred_browser_language, $salesChannelDomains, $currentDomain, $jumpSalesChannels);
                 }
         
-                // Second pass: If matchOnlyLanguage is enabled, check without region code
-                if ($region_code_exist && isset($customFields['ReqserRedirect']['redirectWithoutCountryCode']) && $customFields['ReqserRedirect']['redirectWithoutCountryCode'] === true) {
+                //If there was no redirect yet, we can try again but this time we remove the country code from the preferred browser language
+                if (isset($customFields['ReqserRedirect']['redirectOnLanguageOnly']) && $customFields['ReqserRedirect']['redirectOnLanguageOnly'] === true) {
                     foreach ($browserLanguages as $browserLanguage) {
                         $languageCode = explode(';', $browserLanguage)[0]; // Get the part before ';'
                         $preferred_browser_language = strtolower(trim(explode('-', $languageCode)[0])); // Trim and get only the language code
-                        $this->handleLanguageRedirect($preferred_browser_language, $salesChannelDomains, $domainId);
-                        if (isset($customFields['ReqserRedirect']['onlyRedirectDefaultLanguage']) && $customFields['ReqserRedirect']['onlyRedirectDefaultLanguage'] === true) {
-                            break; // Break the loop if onlyRedirectDefaultLanguage is enabled
-                        }
+                        $this->handleLanguageRedirect($preferred_browser_language, $salesChannelDomains, $currentDomain, $jumpSalesChannels);
                     }
                 }
             }
@@ -158,22 +156,26 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
     
     private function handleLanguageRedirect(string $preferred_browser_language, SalesChannelDomainCollection $salesChannelDomains, $currentDomain, bool $jumpSalesChannels): void
     {
-
         foreach ($salesChannelDomains as $salesChannelDomain) {
             //If the current domain is the check we continue and only if jumpSalesChannels is true we can look into domains on other sales channels
-            if ($currentDomain->getId() == $salesChannelDomain->getId()
-            || (!$jumpSalesChannels && $salesChannelDomain->getId() != $domainId)) continue;
-
+            if ($currentDomain->getSalesChannelId() == $salesChannelDomain->getSalesChannelId()
+                || (!$jumpSalesChannels && $salesChannelDomain->getSalesChannelId() != $currentDomain->getSalesChannelId())
+            ) {
+                continue;
+            }
             $customFields = $salesChannelDomain->getCustomFields();
-    
+
+            //Only allow if redirectInto is set to true
+            if (!isset($customFields['ReqserRedirect']['redirectInto']) || $customFields['ReqserRedirect']['redirectInto'] !== true) {
+                continue;
+            }
+
             // Check if ReqserRedirect exists and has a languageRedirect array
             if (isset($customFields['ReqserRedirect']['languageRedirect']) && is_array($customFields['ReqserRedirect']['languageRedirect'])) {
                 if (in_array($preferred_browser_language, $customFields['ReqserRedirect']['languageRedirect'])) {
-                    if ($currentDomain->getId() != $salesChannelDomain->getId()) {
                         $response = new RedirectResponse($salesChannelDomain->getUrl());
                         $response->send();
-                        exit; // Exit after redirecting
-                    }
+                        exit;
                 }
             }
         }
