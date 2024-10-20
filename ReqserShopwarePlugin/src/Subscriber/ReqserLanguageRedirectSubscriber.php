@@ -65,9 +65,8 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
     public function onStorefrontRender(StorefrontRenderEvent $event): void
     {
         try{
-            $cacheItem = $this->cache->getItem('reqser_app_active');
-            if (!$cacheItem->isHit()) {
-                // Double check if the app is active
+            if (!$this->cache->hasItem('reqser_app_active')) {
+                //Double check if the app is active
                 $app_name = "ReqserApp";
                 $is_app_active = $this->connection->fetchOne(
                     "SELECT active FROM `app` WHERE name = :app_name",
@@ -76,7 +75,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 if (!$is_app_active) {
                     return;
                 }
-                
+                $cacheItem = $this->cache->getItem('reqser_app_active');
                 $cacheItem->set(true);
                 $cacheItem->expiresAfter(86400);
                 $this->cache->save($cacheItem);
@@ -86,12 +85,6 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             $domainId = $request->attributes->get('sw-domain-id');
             $session = $request->getSession(); // Get the session from the request
 
-            if ($session->get('reqser_redirect_done', false)) {
-                return; // Skip redirect if it's already been done
-            } else {
-                $this->requestStack->getSession()->set('reqser_redirect_done', true);
-            }
-        
             // Retrieve sales channel domains for the current context
             $salesChannelDomains = $this->getSalesChannelDomains($event->getSalesChannelContext());
 
@@ -106,6 +99,12 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 $customFields = $currentDomain->getCustomFields();
                 if (!isset($customFields['ReqserRedirect']['redirectFrom']) || $customFields['ReqserRedirect']['redirectFrom'] !== true) {
                     return;
+                }
+
+                if ($session->get('reqser_redirect_done', false)) {
+                    if (!isset($customFields['ReqserRedirect']['debugMode']) || $customFields['ReqserRedirect']['debugMode'] !== true) return;
+                } else {
+                    $this->requestStack->getSession()->set('reqser_redirect_done', true);
                 }
 
                 //If the current sales channel is allowing to jump Sales Channels on Redirect we need also retrieve the other domains
