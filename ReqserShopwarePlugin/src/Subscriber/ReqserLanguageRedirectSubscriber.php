@@ -134,6 +134,9 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                     $preferred_browser_language = strtolower(trim($languageCode)); // Normalize to lowercase and trim spaces
                     if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'calling handleLanguageRedirect()', 'preferred_browser_language' => $preferred_browser_language, 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
                     $this->handleLanguageRedirect($preferred_browser_language, $salesChannelDomains, $currentDomain, $jumpSalesChannels, $debugMode);
+                    if (isset($customFields['ReqserRedirect']['redirectOnDefaultBrowserLanguageOnly']) && $customFields['ReqserRedirect']['redirectOnDefaultBrowserLanguageOnly'] === true) {
+                        break;
+                    }
                 }
         
                 //If there was no redirect yet, we can try again but this time we remove the country code from the preferred browser language
@@ -142,6 +145,9 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                         $languageCode = explode(';', $browserLanguage)[0]; // Get the part before ';'
                         $preferred_browser_language = strtolower(trim(explode('-', $languageCode)[0])); // Trim and get only the language code
                         $this->handleLanguageRedirect($preferred_browser_language, $salesChannelDomains, $currentDomain, $jumpSalesChannels, $debugMode);
+                        if (isset($customFields['ReqserRedirect']['redirectOnDefaultBrowserLanguageOnly']) && $customFields['ReqserRedirect']['redirectOnDefaultBrowserLanguageOnly'] === true) {
+                            break;
+                        }
                     }
                 }
             }
