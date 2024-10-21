@@ -105,7 +105,6 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             $sessionIgnoreMode = false;
             if (isset($customFields['ReqserRedirect']['sessionIgnoreMode']) && $customFields['ReqserRedirect']['sessionIgnoreMode'] === true) {
                 $sessionIgnoreMode = true;
-                $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Debug Mode activ', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
             }
 
             if ($session->get('reqser_redirect_done', false)) {
