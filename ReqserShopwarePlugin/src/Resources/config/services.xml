@@ -16,6 +16,7 @@
             <argument type="service" id="Shopware\Core\Framework\App\ShopId\ShopIdProvider"/>
             <tag name="messenger.message_handler" />
         </service>
+
         <service id="Reqser\Plugin\Service\ScheduledTask\ReqserNotificiationRemoval">
             <tag name="shopware.scheduled.task" />
         </service>
@@ -23,9 +24,35 @@
             <argument type="service" id="scheduled_task.repository" />
             <argument type="service" id="Doctrine\DBAL\Connection"/>
             <argument type="service" id="logger"/>
-            <argument type="service" id="Shopware\Core\Framework\App\ShopId\ShopIdProvider"/>
+            <argument type="service" id="Reqser\Plugin\Service\ReqserNotificationService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
+            <argument type="service" id="cache.app" />
             <tag name="messenger.message_handler" />
         </service>
+
+        <service id="Reqser\Plugin\Subscriber\ReqserLanguageRedirectSubscriber"
+                class="Reqser\Plugin\Subscriber\ReqserLanguageRedirectSubscriber">
+            <argument type="service" id="request_stack" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserNotificationService" />
+            <argument type="service" id="Shopware\Core\System\SalesChannel\Context\CachedSalesChannelContextFactory" />
+            <argument type="service" id="sales_channel_domain.repository" />
+            <argument type="service" id="cache.app" />
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
+            <argument type="service" id="logger"/>
+            <tag name="kernel.event_subscriber" />
+        </service>
+
+        <service id="Reqser\Plugin\Service\ReqserNotificationService"
+                class="Reqser\Plugin\Service\ReqserNotificationService">
+            <argument type="service" id="notification.repository" />
+        </service>
+
+        <service id="Reqser\Plugin\Service\ReqserWebhookService">
+            <argument>https://reqser.com/app/shopware/webhook/plugin</argument>
+            <argument type="service" id="Shopware\Core\Framework\App\ShopId\ShopIdProvider" />
+            <argument type="service" id="logger" />
+        </service>
+
     </services>
 </container>
-
