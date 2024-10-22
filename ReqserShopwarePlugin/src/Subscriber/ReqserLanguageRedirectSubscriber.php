@@ -93,10 +93,6 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             }
 
             $customFields = $currentDomain->getCustomFields();
-            if (!isset($customFields['ReqserRedirect']['redirectFrom']) || $customFields['ReqserRedirect']['redirectFrom'] !== true) {
-                return;
-            }
-
             $debugMode = false;
             if (isset($customFields['ReqserRedirect']['debugMode']) && $customFields['ReqserRedirect']['debugMode'] === true) {
                 $debugMode = true;
@@ -106,6 +102,15 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             if (isset($customFields['ReqserRedirect']['sessionIgnoreMode']) && $customFields['ReqserRedirect']['sessionIgnoreMode'] === true) {
                 $sessionIgnoreMode = true;
             }
+            if (!isset($customFields['ReqserRedirect']['active']) || $customFields['ReqserRedirect']['active'] !== true){
+                if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'domain is not active return', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
+                return;
+            } elseif (!isset($customFields['ReqserRedirect']['redirectFrom']) || $customFields['ReqserRedirect']['redirectFrom'] !== true) {
+                if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'redirectFrom is not true return', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
+                return;
+            }
+
+    
 
             if ($session->get('reqser_redirect_done', false)) {
                 if ($debugMode === false && $sessionIgnoreMode === false) return;
