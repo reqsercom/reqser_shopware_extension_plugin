@@ -128,6 +128,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
 
                 $browserLanguages = explode(',', (!empty($_SERVER['HTTP_ACCEPT_LANGUAGE']) ? $_SERVER['HTTP_ACCEPT_LANGUAGE'] : ''));
                 if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'browserLanguages' => $browserLanguages, 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
+                if (empty($browserLanguages)) return;
                 $region_code_exist = false;
         
                 foreach ($browserLanguages as $browserLanguage) {
@@ -176,10 +177,14 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
     
     private function handleLanguageRedirect(string $preferred_browser_language, SalesChannelDomainCollection $salesChannelDomains, $currentDomain, bool $jumpSalesChannels, bool $debugMode): void
     {
+        if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'All Sales Channel Domains to check', 'salesChannelDomains' => $salesChannelDomains, 'file' => __FILE__, 'line' => __LINE__]);
         foreach ($salesChannelDomains as $salesChannelDomain) {
             if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Working on each Sales Channel', 'url' => $salesChannelDomain->url, 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
             //If the current domain is the check we continue and only if jumpSalesChannels is true we can look into domains on other sales channels
-            if ($currentDomain->getId() == $salesChannelDomain->getId()) continue;
+            if ($currentDomain->getId() == $salesChannelDomain->getId()){
+                if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Continue because it is the default domain', 'domain_id' => $salesChannelDomain->getId(), 'file' => __FILE__, 'line' => __LINE__]);
+                continue;
+            } 
             if (!$jumpSalesChannels && $salesChannelDomain->getSalesChannelId() != $currentDomain->getSalesChannelId()
             ) {
                 if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Continue', 'url' => $salesChannelDomain->url, 'jumpSalesChannels' => $jumpSalesChannels, 'file' => __FILE__, 'line' => __LINE__]);
@@ -197,6 +202,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             if (isset($customFields['ReqserRedirect']['languageRedirect']) && is_array($customFields['ReqserRedirect']['languageRedirect'])) {
                 if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Checking Language Redirect', 'languageRedirect' => $customFields['ReqserRedirect']['languageRedirect'], 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
                 if (in_array($preferred_browser_language, $customFields['ReqserRedirect']['languageRedirect'])) {
+                    if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Redirecting now', 'file' => __FILE__, 'line' => __LINE__]);
                         $response = new RedirectResponse($salesChannelDomain->getUrl());
                         $response->send();
                         exit;
