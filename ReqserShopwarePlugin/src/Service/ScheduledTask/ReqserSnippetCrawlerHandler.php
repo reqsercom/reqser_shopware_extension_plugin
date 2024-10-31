@@ -248,10 +248,11 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 
     private function addSnippetIfNotExists(string $key, string $value, string $snippetSetId): void
     {
-        $existingSnippet = $this->connection->fetchAssociative('SELECT id, author, value FROM snippet WHERE `translation_key` = ? AND `snippet_set_id` = ?', [$key, $snippetSetId]);
+        $existingSnippet = $this->connection->fetchAssociative('SELECT id, author, created_at, updated_at value FROM snippet WHERE `translation_key` = ? AND `snippet_set_id` = ?', [$key, $snippetSetId]);
 
         if (!$existingSnippet) {
             try {
+                $timespan = (new \DateTime())->format('Y-m-d H:i:s');
                 $this->connection->insert('snippet', [
                     'id' => Uuid::fromHexToBytes(Uuid::randomHex()),
                     'translation_key' => $key,
@@ -259,8 +260,8 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                     'author' => 'reqser_plugin_crawler', // or appropriate author value
                     'snippet_set_id' => $snippetSetId,
                     'custom_fields' => null, // or appropriate custom fields
-                    'created_at' => (new \DateTime())->format('Y-m-d H:i:s'),
-                    'updated_at' => (new \DateTime())->format('Y-m-d H:i:s'),
+                    'created_at' => $timespan,
+                    'updated_at' => $timespan,
                 ]);
             } catch (\Exception $e) {
                 $this->logger->error('Reqser Plugin Error inserting snippet', [
@@ -274,12 +275,16 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
             // Check if the value is changed and the author is the plugin itself, so it can be overwritten in case a module is updated
             if ($existingSnippet['value'] != $value) {
                 try {
-                    $this->connection->update('snippet', [
-                        'value' => $value,
-                        'updated_at' => (new \DateTime())->format('Y-m-d H:i:s'),
-                    ], [
-                        'id' => $existingSnippet['id'],
-                    ]);
+                    if ($existingSnippet['created_at'] !== $existingSnippet['updated_at']) {
+                        $timespan = (new \DateTime())->format('Y-m-d H:i:s');
+                        $this->connection->update('snippet', [
+                            'value' => $value,
+                            'created_at' => $timespan, // Update the created_at timestamp to ensure manual changes are not overwritten
+                            'updated_at' => $timespan,
+                        ], [
+                            'id' => $existingSnippet['id'],
+                        ]);
+                    }
                 } catch (\Exception $e) {
                     $this->logger->error('Reqser Plugin Error updating snippet', [
                         'key' => $key,
