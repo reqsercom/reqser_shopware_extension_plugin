@@ -42,9 +42,6 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         // Get the root directory of the Shopware installation
         $projectDir = $this->container->getParameter('kernel.project_dir');
 
-        //We need to call it befor and after if it somhow fails at least we have the existing ones already
-        $this->createAllNecessarySnippetTranslations();
-
         // Start searching for directories that contain Resources/snippet
         $this->searchAndProcessSnippetDirectories($projectDir);
 
@@ -183,7 +180,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                     if (substr_count($fileName, '.') < 2) {
                         //$this->logger->warning(sprintf('Skipping file with insufficient dots: %s', $filePath));
                         continue;
-                    } elseif (strpos($filePath, '/custom/plugins/SwagLanguagePack/src/Resources/snippet/') !== false || strpos($filePath, '/vendor/shopware/core/') !== false) {
+                    } elseif (strpos($filePath, '/custom/plugins/SwagLanguagePack/src/Resources/snippet/') !== false || strpos($filePath, '/vendor/shopware/') !== false) {
                         //JorisK Here we exclude all SwagLangaugePack for performance reasons, they are all translated by Shopware already and as long as they are update should not be an issue, but if so remove the continue here and they will also be loaded into snipped table (Attention performance issue)
                         //Also all core files are excluded, as they should be handled to Shopware default language Pack
                         //$this->logger->info(sprintf('Skipped file: %s', $filePath));
