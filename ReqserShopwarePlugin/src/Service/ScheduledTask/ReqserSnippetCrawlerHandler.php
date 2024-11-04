@@ -192,6 +192,10 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                     $content = file_get_contents($filePath);
                     $snippets = json_decode($content, true);
 
+                    if (empty(trim($content))) {
+                        continue;
+                    }
+
                     if (json_last_error() !== JSON_ERROR_NONE) {
                         $this->logger->error(sprintf('Reqser Plugin Invalid JSON in file %s: %s', $filePath, json_last_error_msg()));
                         continue;
