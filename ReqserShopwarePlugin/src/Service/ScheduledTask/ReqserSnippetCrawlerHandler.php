@@ -279,7 +279,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
             // Check if the value is changed and the author is the plugin itself, so it can be overwritten in case a module is updated
             if ($existingSnippet['value'] != $value) {
                 try {
-                    if ($existingSnippet['created_at'] !== $existingSnippet['updated_at']) {
+                    if ($existingSnippet['created_at'] == $existingSnippet['updated_at']) {
                         $timespan = (new \DateTime())->format('Y-m-d H:i:s');
                         $this->connection->update('snippet', [
                             'value' => $value,
