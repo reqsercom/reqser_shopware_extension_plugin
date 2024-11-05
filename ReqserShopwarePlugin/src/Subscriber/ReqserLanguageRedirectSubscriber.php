@@ -110,22 +110,28 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 return;
             }
 
-            if (isset($customFields['ReqserRedirect']['onlyRedirectFrontPage']) && $customFields['ReqserRedirect']['onlyRedirectFrontPage'] === true) {
-                //Now lets check if the current page is the sales channel domain, and not already something more like a product or category page
-                $currentUrl = $request->getUri();
-                //Lets compare if it matches the current sales channel domain
-                if ($currentDomain->url != $currentUrl) {
-                    if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'currentUrl is not the same as the domain url', 'currentUrl' => $currentUrl, 'domainUrl' => $currentDomain->url, 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
-                    return;
-                }
-            }
-
-    
-
             if ($session->get('reqser_redirect_done', false)) {
                 if ($debugMode === false && $sessionIgnoreMode === false) return;
             } else {
                 $this->requestStack->getSession()->set('reqser_redirect_done', true);
+            }
+
+            if (isset($customFields['ReqserRedirect']['onlyRedirectFrontPage']) && $customFields['ReqserRedirect']['onlyRedirectFrontPage'] === true) {
+                //Now lets check if the current page is the sales channel domain, and not already something more like a product or category page
+                $currentUrl = rtrim($request->getUri(), '/');
+                $domainUrl = rtrim($currentDomain->url, '/');
+                if ($domainUrl !== $currentUrl) {
+                    $this->webhookService->sendErrorToWebhook([
+                        'type' => 'debug',
+                        'info' => 'currentUrl is not the same as the domain url',
+                        'currentUrl' => $currentUrl,
+                        'domainUrl' => $domainUrl,
+                        'domain_id' => $currentDomain,
+                        'file' => __FILE__,
+                        'line' => __LINE__
+                    ]);
+                    return;
+                }                
             }
 
             //Has to be bigger than one since the first entry should be the current one for a redirect
