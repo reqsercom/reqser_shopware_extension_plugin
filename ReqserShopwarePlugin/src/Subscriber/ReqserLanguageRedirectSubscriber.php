@@ -121,7 +121,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 $currentUrl = rtrim($request->getUri(), '/');
                 $domainUrl = rtrim($currentDomain->url, '/');
                 if ($domainUrl !== $currentUrl) {
-                    $this->webhookService->sendErrorToWebhook([
+                    if ($debugMode) $this->webhookService->sendErrorToWebhook([
                         'type' => 'debug',
                         'info' => 'currentUrl is not the same as the domain url',
                         'currentUrl' => $currentUrl,
