@@ -83,7 +83,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
 
             $request = $event->getRequest();
             $domainId = $request->attributes->get('sw-domain-id');
-            $session = $request->getSession(); // Get the session from the request
+            
 
             // Retrieve sales channel domains for the current context
             $salesChannelDomains = $this->getSalesChannelDomains($event->getSalesChannelContext());
@@ -110,11 +110,18 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 return;
             }
 
-            if ($session->get('reqser_redirect_done', false)) {
-                if ($debugMode === false && $sessionIgnoreMode === false) return;
-            } else {
-                $this->requestStack->getSession()->set('reqser_redirect_done', true);
+            if ($sessionIgnoreMode === false && !headers_sent()){
+                $session = $request->getSession(); // Get the session from the request
+                if ($session->get('reqser_redirect_done', false)) {
+                    return;
+                } else {
+                    $this->requestStack->getSession()->set('reqser_redirect_done', true);
+                }
+            } elseif (headers_sent()){
+                if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Headers already sent, no redirect possible any more', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
+                return;
             }
+          
 
             if (isset($customFields['ReqserRedirect']['onlyRedirectFrontPage']) && $customFields['ReqserRedirect']['onlyRedirectFrontPage'] === true) {
                 //Now lets check if the current page is the sales channel domain, and not already something more like a product or category page

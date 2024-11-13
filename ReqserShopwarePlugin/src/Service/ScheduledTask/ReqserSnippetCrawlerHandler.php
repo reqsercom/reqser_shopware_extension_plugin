@@ -252,7 +252,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 
     private function addSnippetIfNotExists(string $key, string $value, string $snippetSetId): void
     {
-        $existingSnippet = $this->connection->fetchAssociative('SELECT id, author, created_at, updated_at value FROM snippet WHERE `translation_key` = ? AND `snippet_set_id` = ?', [$key, $snippetSetId]);
+        $existingSnippet = $this->connection->fetchAssociative('SELECT id, author, value, created_at, updated_at FROM snippet WHERE `translation_key` = ? AND `snippet_set_id` = ?', [$key, $snippetSetId]);
 
         if (!$existingSnippet) {
             try {
