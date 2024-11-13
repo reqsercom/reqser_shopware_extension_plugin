@@ -83,7 +83,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
 
             $request = $event->getRequest();
             $domainId = $request->attributes->get('sw-domain-id');
-            $session = $request->getSession(); // Get the session from the request
+            
 
             // Retrieve sales channel domains for the current context
             $salesChannelDomains = $this->getSalesChannelDomains($event->getSalesChannelContext());
@@ -110,11 +110,15 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 return;
             }
 
-            if ($session->get('reqser_redirect_done', false)) {
-                if ($debugMode === false && $sessionIgnoreMode === false) return;
-            } else {
-                $this->requestStack->getSession()->set('reqser_redirect_done', true);
+            if ($sessionIgnoreMode === false){
+                $session = $request->getSession(); // Get the session from the request
+                if ($session->get('reqser_redirect_done', false)) {
+                    if ($debugMode === false && $sessionIgnoreMode === false) return;
+                } else {
+                    $this->requestStack->getSession()->set('reqser_redirect_done', true);
+                }
             }
+          
 
             if (isset($customFields['ReqserRedirect']['onlyRedirectFrontPage']) && $customFields['ReqserRedirect']['onlyRedirectFrontPage'] === true) {
                 //Now lets check if the current page is the sales channel domain, and not already something more like a product or category page
