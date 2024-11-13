@@ -110,13 +110,16 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 return;
             }
 
-            if ($sessionIgnoreMode === false){
+            if ($sessionIgnoreMode === false && !headers_sent()){
                 $session = $request->getSession(); // Get the session from the request
                 if ($session->get('reqser_redirect_done', false)) {
-                    if ($debugMode === false && $sessionIgnoreMode === false) return;
+                    return;
                 } else {
                     $this->requestStack->getSession()->set('reqser_redirect_done', true);
                 }
+            } elseif (headers_sent()){
+                if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Headers already sent, no redirect possible any more', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
+                return;
             }
           
 
