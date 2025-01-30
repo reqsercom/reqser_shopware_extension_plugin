@@ -55,38 +55,59 @@ class ReqserPlugin extends Plugin
         $connection = $this->container->get(Connection::class);
         $currentTime = (new \DateTime())->format('Y-m-d H:i:s');
 
-        $connection->executeStatement(
-            'INSERT INTO scheduled_task (id, name, scheduled_task_class, run_interval, default_run_interval, status, next_execution_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE scheduled_task_class = VALUES(scheduled_task_class), run_interval = VALUES(run_interval), status = VALUES(status), next_execution_time = VALUES(next_execution_time), updated_at = VALUES(updated_at)',
-            [
-                Uuid::randomBytes(),  // Correctly generate a binary UUID
-                ReqserSnippetCrawler::getTaskName(),
-                ReqserSnippetCrawler::class,
-                ReqserSnippetCrawler::getDefaultInterval(),
-                ReqserSnippetCrawler::getDefaultInterval(),
-                ScheduledTaskDefinition::STATUS_SCHEDULED,
-                $currentTime,
-                $currentTime,
-                $currentTime
-            ]
-        );
+        // Check if 'default_run_interval' column exists in 'scheduled_task' table since this row was added on Shopware 6.5
+        $columns = $connection->fetchFirstColumn('SHOW COLUMNS FROM scheduled_task');
+        $hasDefaultRunInterval = in_array('default_run_interval', $columns, true);
 
-        $connection->executeStatement(
-            'INSERT INTO scheduled_task (id, name, scheduled_task_class, run_interval, default_run_interval, status, next_execution_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE scheduled_task_class = VALUES(scheduled_task_class), run_interval = VALUES(run_interval), status = VALUES(status), next_execution_time = VALUES(next_execution_time), updated_at = VALUES(updated_at)',
-            [
-                Uuid::randomBytes(),  // Correctly generate a binary UUID
-                ReqserNotificiationRemoval::getTaskName(),
-                ReqserNotificiationRemoval::class,
-                ReqserNotificiationRemoval::getDefaultInterval(),
-                ReqserNotificiationRemoval::getDefaultInterval(),
-                ScheduledTaskDefinition::STATUS_SCHEDULED,
-                $currentTime,
-                $currentTime,
-                $currentTime
-            ]
-        );
+        $sql = 'INSERT INTO scheduled_task (id, name, scheduled_task_class, run_interval, ' .
+            ($hasDefaultRunInterval ? 'default_run_interval, ' : '') .
+            'status, next_execution_time, created_at, updated_at) VALUES (?, ?, ?, ?, ' .
+            ($hasDefaultRunInterval ? '?, ' : '') .
+            '?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE scheduled_task_class = VALUES(scheduled_task_class), run_interval = VALUES(run_interval), status = VALUES(status), next_execution_time = VALUES(next_execution_time), updated_at = VALUES(updated_at)';
+
+        $params = [
+            Uuid::randomBytes(),
+            ReqserSnippetCrawler::getTaskName(),
+            ReqserSnippetCrawler::class,
+            ReqserSnippetCrawler::getDefaultInterval(),
+        ];
+
+        if ($hasDefaultRunInterval) {
+            $params[] = ReqserSnippetCrawler::getDefaultInterval();
+        }
+
+        $params = array_merge($params, [
+            ScheduledTaskDefinition::STATUS_SCHEDULED,
+            $currentTime,
+            $currentTime,
+            $currentTime
+        ]);
+
+        $connection->executeStatement($sql, $params);
+
+        // Repeat for ReqserNotificationRemoval
+        $params = [
+            Uuid::randomBytes(),
+            ReqserNotificiationRemoval::getTaskName(),
+            ReqserNotificiationRemoval::class,
+            ReqserNotificiationRemoval::getDefaultInterval(),
+        ];
+
+        if ($hasDefaultRunInterval) {
+            $params[] = ReqserNotificiationRemoval::getDefaultInterval();
+        }
+
+        $params = array_merge($params, [
+            ScheduledTaskDefinition::STATUS_SCHEDULED,
+            $currentTime,
+            $currentTime,
+            $currentTime
+        ]);
+
+        $connection->executeStatement($sql, $params);
     }
+
 
     private function removeTask(): void
     {
