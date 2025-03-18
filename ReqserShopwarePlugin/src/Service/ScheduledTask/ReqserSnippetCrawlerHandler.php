@@ -66,6 +66,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                   $this->logger->error('Reqser Plugin Error retrieving and read custom_fields from snippet_set', [
                     'id' => $row['id'] ?? 'unknown',    
                     'iso' => $row['iso'] ?? 'unknown',
+                    'custom_fields' => $row['custom_fields'] ?? 'unknown',
                     'message' => $e->getMessage(),
                 ]);
                 continue;
