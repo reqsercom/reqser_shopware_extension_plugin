@@ -52,11 +52,24 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 
     private function preloadSnippetSetIds(): void
     {
-        $sql = "SELECT id, iso FROM snippet_set";
+        $sql = "SELECT id, iso, custom_fields FROM snippet_set WHERE custom_fields IS NOT NULL";
         $result = $this->connection->fetchAllAssociative($sql);
 
         foreach ($result as $row) {
-            $this->snippetSetMap[$row['iso']] = (string) $row['id'];
+            try {
+                $customFields = json_decode($row['custom_fields'], true);
+                if (isset($customFields['ReqserSnippetCrawl']['active']) && $customFields['ReqserSnippetCrawl']['active'] === true) {
+                    $this->snippetSetMap[$row['iso']][] = (string) $row['id'];
+                }
+            } catch (\Exception $e) {
+                  // Log the error message and continue with the next directory
+                  $this->logger->error('Reqser Plugin Error retrieving and read custom_fields from snippet_set', [
+                    'id' => $row['id'] ?? 'unknown',    
+                    'iso' => $row['iso'] ?? 'unknown',
+                    'message' => $e->getMessage(),
+                ]);
+                continue;
+            }
         }
     }
 
@@ -218,6 +231,14 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         }
     }
 
+    /**
+     * Process the Snippet
+     * 
+     * @param string $key
+     * @param mixed $value
+     * @param string $filePath
+     * @return void
+     */ 
     private function processSnippet(string $key, $value, string $filePath): void
     {
         if (is_array($value)) {
@@ -227,8 +248,10 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
             }
         } elseif (is_string($value)) {
             $snippetSetId = $this->getSnippetSetIdFromFilePath($filePath);
-            if ($snippetSetId !== null && $snippetSetId != '') {
-                $this->addSnippetIfNotExists($key, $value, $snippetSetId);
+            if ($snippetSetId !== null && count($snippetSetId) > 0) {
+                foreach ($snippetSetId as $id) {
+                    $this->addSnippetIfNotExists($key, $value, $id);
+                }
             } else {
                 //$this->logger->error(sprintf('Snippet set ID not found for file %s', $filePath));
                 //$this->logger->error(sprintf('Snippet set ID not found for file %s', json_encode($this->snippetSetMap)));
@@ -239,7 +262,14 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         }
     }
 
-    private function getSnippetSetIdFromFilePath(string $filePath): string|null
+
+    /**
+     * Get the Snippet Set IDs from the File Path
+     * 
+     * @param string $filePath
+     * @return array|null
+     */
+    private function getSnippetSetIdFromFilePath(string $filePath): array|null
     {
         $fileName = pathinfo($filePath, PATHINFO_BASENAME); // Get the basename of the file
         $parts = explode('.', $fileName); // Split by periods
@@ -247,7 +277,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         if (!isset($this->snippetSetMap[$iso])) {
             //$this->logger->error(sprintf('Snippet set ID not found for Filename &s ISO code %s', $fileName, $iso));
         }
-        return (string) ($this->snippetSetMap[$iso] ?? null); // Default to 1 if the ISO code is not found
+        return ($this->snippetSetMap[$iso] ?? null); // Default to 1 if the ISO code is not found
     }
 
     private function addSnippetIfNotExists(string $key, string $value, string $snippetSetId): void
