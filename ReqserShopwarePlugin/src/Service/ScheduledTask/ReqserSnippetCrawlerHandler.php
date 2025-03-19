@@ -17,6 +17,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     private LoggerInterface $logger;
     private ContainerInterface $container;
     private array $snippetSetMap = [];
+    private string $baseLanguageSnippetSetID = '';
     private ShopIdProvider $shopIdProvider;
     private $webhookUrl = 'https://reqser.com/app/shopware/webhook/plugin';
 
@@ -52,11 +53,28 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 
     private function preloadSnippetSetIds(): void
     {
-        $sql = "SELECT id, iso FROM snippet_set";
+        $sql = "SELECT id, iso, custom_fields FROM snippet_set WHERE custom_fields IS NOT NULL";
         $result = $this->connection->fetchAllAssociative($sql);
 
         foreach ($result as $row) {
-            $this->snippetSetMap[$row['iso']] = (string) $row['id'];
+            try {
+                $customFields = json_decode($row['custom_fields'], true);
+                if (isset($customFields['ReqserSnippetCrawl']['active']) && $customFields['ReqserSnippetCrawl']['active'] === true) {
+                    $this->snippetSetMap[$row['iso']][] = (string) $row['id'];
+                    if (isset($customFields['ReqserSnippetCrawl']['baseLanguage']) && $customFields['ReqserSnippetCrawl']['baseLanguage'] === true) {
+                        $this->baseLanguageSnippetSetID = (string) $row['id'];
+                    }
+                }
+            } catch (\Exception $e) {
+                  // Log the error message and continue with the next directory
+                  $this->logger->error('Reqser Plugin Error retrieving and read custom_fields from snippet_set', [
+                    'id' => $row['id'] ?? 'unknown',    
+                    'iso' => $row['iso'] ?? 'unknown',
+                    'custom_fields' => $row['custom_fields'] ?? 'unknown',
+                    'message' => $e->getMessage(),
+                ]);
+                continue;
+            }
         }
     }
 
@@ -218,6 +236,14 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         }
     }
 
+    /**
+     * Process the Snippet
+     * 
+     * @param string $key
+     * @param mixed $value
+     * @param string $filePath
+     * @return void
+     */ 
     private function processSnippet(string $key, $value, string $filePath): void
     {
         if (is_array($value)) {
@@ -227,8 +253,10 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
             }
         } elseif (is_string($value)) {
             $snippetSetId = $this->getSnippetSetIdFromFilePath($filePath);
-            if ($snippetSetId !== null && $snippetSetId != '') {
-                $this->addSnippetIfNotExists($key, $value, $snippetSetId);
+            if ($snippetSetId !== null && count($snippetSetId) > 0) {
+                foreach ($snippetSetId as $id) {
+                    $this->addSnippetIfNotExists($key, $value, $id);
+                }
             } else {
                 //$this->logger->error(sprintf('Snippet set ID not found for file %s', $filePath));
                 //$this->logger->error(sprintf('Snippet set ID not found for file %s', json_encode($this->snippetSetMap)));
@@ -239,7 +267,14 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         }
     }
 
-    private function getSnippetSetIdFromFilePath(string $filePath): string|null
+
+    /**
+     * Get the Snippet Set IDs from the File Path
+     * 
+     * @param string $filePath
+     * @return array|null
+     */
+    private function getSnippetSetIdFromFilePath(string $filePath): array|null
     {
         $fileName = pathinfo($filePath, PATHINFO_BASENAME); // Get the basename of the file
         $parts = explode('.', $fileName); // Split by periods
@@ -247,7 +282,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         if (!isset($this->snippetSetMap[$iso])) {
             //$this->logger->error(sprintf('Snippet set ID not found for Filename &s ISO code %s', $fileName, $iso));
         }
-        return (string) ($this->snippetSetMap[$iso] ?? null); // Default to 1 if the ISO code is not found
+        return ($this->snippetSetMap[$iso] ?? null); // Default to 1 if the ISO code is not found
     }
 
     private function addSnippetIfNotExists(string $key, string $value, string $snippetSetId): void
@@ -304,56 +339,65 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     private function createAllNecessarySnippetTranslations(): void
     {
         $this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working'));
-        //We need to make sure the entry exist for all langauges used in any sales channel, if not we have to create the entry empty so it can be handled via Admin API
-        $sql = "SELECT DISTINCT snippet_set_id FROM sales_channel_domain";
-        $result = $this->connection->fetchAllAssociative($sql);
-
-        if (count($result) > 0) {
-            $snippet_set_array = [];
-            foreach ($result as $row) {
-                $snippet_set_array[] = $row['snippet_set_id'];
-            }
-            if (count($snippet_set_array) > 0){
-                //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working Snippet Array bigger than 0'));
-                //now get all the snippet keys and check if they exist in every language, if not add it as empty
-                $sql = "SELECT DISTINCT translation_key FROM snippet";
+            if ($this->baseLanguageSnippetSetID != ''){
+                //We need to make sure the entry exist for all langauges used in any sales channel, if not we have to create the entry empty so it can be handled via Admin API
+                $sql = "SELECT DISTINCT snippet_set_id FROM sales_channel_domain";
                 $result = $this->connection->fetchAllAssociative($sql);
-                if (count($result) > 0) {
-                    //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working call to snippet than 0'));
-                    $snippet_key_array = [];
-                    foreach ($result as $row) {
-                        $snippet_key_array[] = $row['translation_key'];
+
+            if (count($result) > 0) {
+                $snippet_set_array = [];
+                foreach ($result as $row) {
+                    if ($row['snippet_set_id'] == $this->baseLanguageSnippetSetID) continue;
+                    // Check if the snippet_set_id exists in any of the ISO's snippet arrays
+                    foreach ($this->snippetSetMap as $snippetIdsArray) {
+                        if (in_array($row['snippet_set_id'], $snippetIdsArray)) {
+                            $snippet_set_array[] = $row['snippet_set_id'];
+                            break; // Exit inner loop once found
+                        }
                     }
-                    if (count($snippet_key_array) > 0){
-                        //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working snippet_key_array bigger than 0'));
-                        foreach ($snippet_set_array as $snippet_set_id) {
-                            //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working on Snippet Set ID: %s', $snippet_set_id));
-                            foreach ($snippet_key_array as $snippet_key) {
-                                //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working on Snippet Key: %s', $snippet_key));
-                                $existingSnippet = $this->connection->fetchAssociative('SELECT id FROM snippet WHERE `translation_key` = ? AND `snippet_set_id` = ?', [$snippet_key, $snippet_set_id]);
-                                if (!$existingSnippet) {
-                                    //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working fond a key not existing in all languages: %s', $snippet_key));
-                                    try {
-                                        $this->connection->insert('snippet', [
-                                            'id' => Uuid::fromHexToBytes(Uuid::randomHex()),
-                                            'translation_key' => $snippet_key,
-                                            'value' => '',
-                                            'author' => 'reqser_plugin_crawler', // or appropriate author value
-                                            'snippet_set_id' => $snippet_set_id,
-                                            'custom_fields' => null, // or appropriate custom fields
-                                            'created_at' => (new \DateTime())->format('Y-m-d H:i:s'),
-                                            'updated_at' => (new \DateTime())->format('Y-m-d H:i:s'),
-                                        ]);
-                                    } catch (\Exception $e) {
-                                        $this->logger->error('Reqser Plugin Error inserting snippet', [
-                                            'key' => $snippet_key,
-                                            'value' => '',
-                                            'snippet_set_id' => $snippet_set_id,
-                                            'exception' => $e->getMessage(),
-                                        ]);
+                }
+                if (count($snippet_set_array) > 0){
+                    //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working Snippet Array bigger than 0'));
+                    //now get all the snippet keys from our base language and make sure the entries exist in all other languages that are active handled by reqser
+                    $sql = "SELECT DISTINCT translation_key FROM snippet WHERE snippet_set_id = ?";
+                    $result = $this->connection->fetchAllAssociative($sql, [$this->baseLanguageSnippetSetID]);
+                    if (count($result) > 0) {
+                        //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working call to snippet than 0'));
+                        $snippet_key_array = [];
+                        foreach ($result as $row) {
+                            $snippet_key_array[] = $row['translation_key'];
+                        }
+                        if (count($snippet_key_array) > 0){
+                            //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working snippet_key_array bigger than 0'));
+                            foreach ($snippet_set_array as $snippet_set_id) {
+                                //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working on Snippet Set ID: %s', $snippet_set_id));
+                                foreach ($snippet_key_array as $snippet_key) {
+                                    //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working on Snippet Key: %s', $snippet_key));
+                                    $existingSnippet = $this->connection->fetchAssociative('SELECT id FROM snippet WHERE `translation_key` = ? AND `snippet_set_id` = ?', [$snippet_key, $snippet_set_id]);
+                                    if (!$existingSnippet) {
+                                        //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working fond a key not existing in all languages: %s', $snippet_key));
+                                        try {
+                                            $this->connection->insert('snippet', [
+                                                'id' => Uuid::fromHexToBytes(Uuid::randomHex()),
+                                                'translation_key' => $snippet_key,
+                                                'value' => '',
+                                                'author' => 'reqser_plugin_crawler', // or appropriate author value
+                                                'snippet_set_id' => $snippet_set_id,
+                                                'custom_fields' => null, // or appropriate custom fields
+                                                'created_at' => (new \DateTime())->format('Y-m-d H:i:s'),
+                                                'updated_at' => (new \DateTime())->format('Y-m-d H:i:s'),
+                                            ]);
+                                        } catch (\Exception $e) {
+                                            $this->logger->error('Reqser Plugin Error inserting snippet', [
+                                                'key' => $snippet_key,
+                                                'value' => '',
+                                                'snippet_set_id' => $snippet_set_id,
+                                                'exception' => $e->getMessage(),
+                                            ]);
+                                        }
+                                    } else {
+                                        //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations it does exist all fine', $snippet_key)); 
                                     }
-                                } else {
-                                    //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations it does exist all fine', $snippet_key)); 
                                 }
                             }
                         }
@@ -361,8 +405,6 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                 }
             }
         }
-
-
     }
 
     public static function getHandledMessages(): iterable
