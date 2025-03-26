@@ -37,7 +37,6 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 
     public function run(): void
     {
-        $this->sendAdminNotification('Reqser Snippet Crawler run Z'.__LINE__);
         // Preload snippet set IDs
         $this->preloadSnippetSetIds();
 
@@ -49,7 +48,6 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 
         //make sure all translations are created
         $this->createAllNecessarySnippetTranslations();
-        $this->sendAdminNotification('Reqser Snippet Crawler finished Z'.__LINE__);
     }
 
 
