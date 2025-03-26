@@ -19,7 +19,6 @@ use Reqser\Plugin\Service\ScheduledTask\ReqserNotificiationRemovalHandler;
 class ReqserPlugin extends Plugin
 {
 
-
     public function install(InstallContext $installContext): void
     {
         parent::install($installContext);
@@ -30,12 +29,18 @@ class ReqserPlugin extends Plugin
     {
         parent::update($updateContext);
         $this->scheduleTask();
+        if ($this->shouldRunTask('update')) {
+            $this->runTask();
+        }
     }
 
     public function activate(ActivateContext $activateContext): void
     {
         parent::activate($activateContext);
         $this->scheduleTask();
+        if ($this->shouldRunTask('activate')) {
+            $this->runTask();
+        }
     }
 
     public function deactivate(DeactivateContext $deactivateContext): void
@@ -54,6 +59,7 @@ class ReqserPlugin extends Plugin
     {
         $connection = $this->container->get(Connection::class);
         $currentTime = (new \DateTime())->format('Y-m-d H:i:s');
+        $nextExecutionTime = (new \DateTime())->modify('+1 hour')->format('Y-m-d H:i:s');
 
         // Check if 'default_run_interval' column exists in 'scheduled_task' table since this row was added on Shopware 6.5
         $columns = $connection->fetchFirstColumn('SHOW COLUMNS FROM scheduled_task');
@@ -79,7 +85,7 @@ class ReqserPlugin extends Plugin
 
         $params = array_merge($params, [
             ScheduledTaskDefinition::STATUS_SCHEDULED,
-            $currentTime,
+            $nextExecutionTime,
             $currentTime,
             $currentTime
         ]);
@@ -100,7 +106,7 @@ class ReqserPlugin extends Plugin
 
         $params = array_merge($params, [
             ScheduledTaskDefinition::STATUS_SCHEDULED,
-            $currentTime,
+            $nextExecutionTime,
             $currentTime,
             $currentTime
         ]);
@@ -132,4 +138,36 @@ class ReqserPlugin extends Plugin
         $handler->run();
 
     }
+
+    private function shouldRunTask(string $type = 'update'): bool
+    {
+        try {
+            $connection = $this->container->get(Connection::class);
+            $sql = "SELECT id, iso, custom_fields FROM snippet_set WHERE custom_fields IS NOT NULL";
+            $result = $connection->fetchAllAssociative($sql);
+
+            foreach ($result as $row) {
+                try {
+                    $customFields = json_decode($row['custom_fields'], true);
+                    if (isset($customFields['ReqserSnippetCrawl']) 
+                        && isset($customFields['ReqserSnippetCrawl']['active']) 
+                        && $customFields['ReqserSnippetCrawl']['active'] === true
+                        && isset($customFields['ReqserSnippetCrawl']['baseLanguage']) 
+                        && $customFields['ReqserSnippetCrawl']['baseLanguage'] === true
+                        && isset($customFields['ReqserSnippetCrawl']['run_on_'.$type]) 
+                        && $customFields['ReqserSnippetCrawl']['run_on_'.$type] === true
+                    ) {
+                        return true;
+                    } else {
+                    }
+                } catch (\Exception $e) {
+                    continue;
+                }
+            }
+        } catch (\Exception $e) {
+            return false;
+        }
+        return false;
+    }
+
 }
