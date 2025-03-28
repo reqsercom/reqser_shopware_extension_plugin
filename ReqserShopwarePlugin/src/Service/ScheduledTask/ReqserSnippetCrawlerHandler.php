@@ -39,7 +39,6 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     public function run(): void
     {
         // Preload snippet set IDs
-        $this->sendAdminNotification('Reqser Snippet Crawler run Z'.__LINE__);
         $this->preloadSnippetSetIds();
 
         // Get the root directory of the Shopware installation
@@ -50,7 +49,6 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 
         //make sure all translations are created
         $this->createAllNecessarySnippetTranslations();
-        $this->sendAdminNotification('Reqser Snippet Crawler finished Z'.__LINE__);
     }
 
 
