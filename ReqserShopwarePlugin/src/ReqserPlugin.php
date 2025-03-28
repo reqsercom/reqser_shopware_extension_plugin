@@ -59,7 +59,7 @@ class ReqserPlugin extends Plugin
     {
         $connection = $this->container->get(Connection::class);
         $currentTime = (new \DateTime())->format('Y-m-d H:i:s');
-        $nextExecutionTime = (new \DateTime())->format('Y-m-d H:i:s');
+        $nextExecutionTime = (new \DateTime())->modify('+1 hour')->format('Y-m-d H:i:s');
 
         // Check if 'default_run_interval' column exists in 'scheduled_task' table since this row was added on Shopware 6.5
         $columns = $connection->fetchFirstColumn('SHOW COLUMNS FROM scheduled_task');

@@ -12,7 +12,6 @@ use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\App\ShopId\ShopIdProvider;
 use Shopware\Core\Framework\Context;
 
-
 class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 {
     private Connection $connection;
