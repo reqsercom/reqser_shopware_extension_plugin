@@ -5,11 +5,13 @@ namespace Reqser\Plugin\Service\ScheduledTask;
 use Doctrine\DBAL\Connection;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTaskHandler;
+use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\App\ShopId\ShopIdProvider;
 use Shopware\Core\Framework\Context;
+
 
 class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 {
@@ -38,6 +40,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     public function run(): void
     {
         // Preload snippet set IDs
+        $this->sendAdminNotification('Reqser Snippet Crawler run Z'.__LINE__);
         $this->preloadSnippetSetIds();
 
         // Get the root directory of the Shopware installation
@@ -48,6 +51,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 
         //make sure all translations are created
         $this->createAllNecessarySnippetTranslations();
+        $this->sendAdminNotification('Reqser Snippet Crawler finished Z'.__LINE__);
     }
 
 
@@ -407,8 +411,20 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         }
     }
 
+
+    //Needed for Shopware <=6.5 support, not neccessary any from from 6.6+
     public static function getHandledMessages(): iterable
     {
-        return [ReqserSnippetCrawler::class];
+        return [ ReqserSnippetCrawler::class ];
+    }
+}
+
+//Shopware 6.6+ support
+if (class_exists(AsMessageHandler::class)) {
+
+    #[AsMessageHandler(handles: ReqserSnippetCrawler::class)]
+    class ReqserSnippetCrawlerHandler66 extends ReqserSnippetCrawlerHandler
+    {
+        //needs to stay empty
     }
 }
