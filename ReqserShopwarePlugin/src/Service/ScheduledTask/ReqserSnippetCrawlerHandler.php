@@ -12,6 +12,7 @@ use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\App\ShopId\ShopIdProvider;
 use Shopware\Core\Framework\Context;
 
+#[AsMessageHandler(handles: ReqserSnippetCrawler::class)]
 class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 {
     private Connection $connection;
@@ -409,19 +410,5 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     }
 
 
-    //Needed for Shopware <=6.5 support, not neccessary any from from 6.6+
-    public static function getHandledMessages(): iterable
-    {
-        return [ ReqserSnippetCrawler::class ];
-    }
 }
 
-//Shopware 6.6+ support
-if (class_exists(AsMessageHandler::class)) {
-
-    #[AsMessageHandler(handles: ReqserSnippetCrawler::class)]
-    class ReqserSnippetCrawlerHandler66 extends ReqserSnippetCrawlerHandler
-    {
-        //needs to stay empty
-    }
-}
