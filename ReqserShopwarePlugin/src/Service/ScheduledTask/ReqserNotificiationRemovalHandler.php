@@ -96,9 +96,4 @@ class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
             }
         }
     }
-
-    public static function getHandledMessages(): iterable
-    {
-        return [ReqserNotificiationRemoval::class];
-    }
 }
