@@ -212,7 +212,10 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                     $content = file_get_contents($filePath);
                     
                     if ($content === false) {
-                        $this->logger->error(sprintf('Reqser Plugin Error reading file %s: %s', $filePath));
+                        $this->logger->error('Reqser Plugin Error reading file', [
+                            'file' => $filePath,
+                            'message' => 'file_get_contents returned false, unknown issue on reading the file',
+                        ]);
                         continue;
                     }
                     
