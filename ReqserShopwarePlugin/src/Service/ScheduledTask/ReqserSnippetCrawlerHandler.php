@@ -111,18 +111,30 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     {
         try {
             $items = new \FilesystemIterator($directory, \FilesystemIterator::FOLLOW_SYMLINKS);
-
+            
+            // Collect directories first
+            $directories = [];
             foreach ($items as $item) {
                 if ($item->isDir()) {
-                    try {
-                        $this->processSnippetFilesInDirectory($item->getPathname());
-                    } catch (\Exception $e) {
-                        // Log the error message and continue with the next directory
-                        $this->logger->error('Reqser Plugin Error processing snippet directory', [
-                            'path' => $item->getPathname(),
-                            'message' => $e->getMessage(),
-                        ]);
-                    }
+                    $directories[] = $item;
+                }
+            }
+            
+            // Sort directories by name length in descending order
+            usort($directories, function($a, $b) {
+                return strlen($b->getBasename()) - strlen($a->getBasename());
+            });
+            
+            // Process directories in sorted order
+            foreach ($directories as $item) {
+                try {
+                    $this->processSnippetFilesInDirectory($item->getPathname());
+                } catch (\Exception $e) {
+                    // Log the error message and continue with the next directory
+                    $this->logger->error('Reqser Plugin Error processing snippet directory', [
+                        'path' => $item->getPathname(),
+                        'message' => $e->getMessage(),
+                    ]);
                 }
             }
         } catch (\Throwable $e) {
