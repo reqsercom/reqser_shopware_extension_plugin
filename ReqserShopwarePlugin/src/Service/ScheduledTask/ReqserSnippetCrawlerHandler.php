@@ -192,15 +192,17 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
             $iterator = new \RecursiveIteratorIterator($directoryIterator);
             $regexIterator = new \RegexIterator($iterator, '/^.+\.json$/i', \RecursiveRegexIterator::GET_MATCH);
 
-            // Collect file paths and sort them in descending order in one step to ensure 'child' files are processed last
-            $sortedFiles = array_values(array_map(function($file) {
-                return $file[0];
-            }, iterator_to_array($regexIterator, false)));
-            
+            // Collect file paths and sort them in ascending order to ensure 'child' files are processed last
+            $sortedFiles = [];
+            foreach ($regexIterator as $file) {
+                $sortedFiles[] = $file[0];
+            }
+            sort($sortedFiles);
+                        
             foreach ($sortedFiles as $file) {
                 
                 try {
-                    $filePath = $file[0];
+                    $filePath = $file;
                     $fileName = basename($filePath);
 
                     // Check if the filename contains at least two dots
