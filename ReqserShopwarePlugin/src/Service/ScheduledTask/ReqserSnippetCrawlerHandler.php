@@ -112,29 +112,18 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         try {
             $items = new \FilesystemIterator($directory, \FilesystemIterator::FOLLOW_SYMLINKS);
             
-            // Collect directories first
-            $directories = [];
             foreach ($items as $item) {
                 if ($item->isDir()) {
-                    $directories[] = $item;
-                }
-            }
-            
-            // Sort directories by name length in descending order
-            usort($directories, function($a, $b) {
-                return strlen($b->getBasename()) - strlen($a->getBasename());
-            });
-            
-            // Process directories in sorted order
-            foreach ($directories as $item) {
-                try {
-                    $this->processSnippetFilesInDirectory($item->getPathname());
-                } catch (\Exception $e) {
-                    // Log the error message and continue with the next directory
-                    $this->logger->error('Reqser Plugin Error processing snippet directory', [
-                        'path' => $item->getPathname(),
-                        'message' => $e->getMessage(),
-                    ]);
+                    try {
+                        //$this->logger->info(sprintf('Reqser Plugin Working on directory: %s', $item->getPathname()));
+                        $this->processSnippetFilesInDirectory($item->getPathname());
+                    } catch (\Exception $e) {
+                        // Log the error message and continue with the next directory
+                        $this->logger->error('Reqser Plugin Error processing snippet directory', [
+                            'path' => $item->getPathname(),
+                            'message' => $e->getMessage(),
+                        ]);
+                    }
                 }
             }
         } catch (\Throwable $e) {
@@ -203,7 +192,13 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
             $iterator = new \RecursiveIteratorIterator($directoryIterator);
             $regexIterator = new \RegexIterator($iterator, '/^.+\.json$/i', \RecursiveRegexIterator::GET_MATCH);
 
-            foreach ($regexIterator as $file) {
+            // Collect file paths and sort them in descending order in one step to ensure 'child' files are processed last
+            $sortedFiles = array_values(array_map(function($file) {
+                return $file[0];
+            }, iterator_to_array($regexIterator, false)));
+            
+            foreach ($sortedFiles as $file) {
+                
                 try {
                     $filePath = $file[0];
                     $fileName = basename($filePath);
