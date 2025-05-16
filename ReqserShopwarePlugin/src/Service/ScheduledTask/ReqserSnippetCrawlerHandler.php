@@ -111,10 +111,11 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
     {
         try {
             $items = new \FilesystemIterator($directory, \FilesystemIterator::FOLLOW_SYMLINKS);
-
+            
             foreach ($items as $item) {
                 if ($item->isDir()) {
                     try {
+                        //$this->logger->info(sprintf('Reqser Plugin Working on directory: %s', $item->getPathname()));
                         $this->processSnippetFilesInDirectory($item->getPathname());
                     } catch (\Exception $e) {
                         // Log the error message and continue with the next directory
@@ -191,9 +192,17 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
             $iterator = new \RecursiveIteratorIterator($directoryIterator);
             $regexIterator = new \RegexIterator($iterator, '/^.+\.json$/i', \RecursiveRegexIterator::GET_MATCH);
 
+            // Collect file paths and sort them in ascending order to ensure 'child' files are processed last
+            $sortedFiles = [];
             foreach ($regexIterator as $file) {
+                $sortedFiles[] = $file[0];
+            }
+            sort($sortedFiles);
+                        
+            foreach ($sortedFiles as $file) {
+                
                 try {
-                    $filePath = $file[0];
+                    $filePath = $file;
                     $fileName = basename($filePath);
 
                     // Check if the filename contains at least two dots
