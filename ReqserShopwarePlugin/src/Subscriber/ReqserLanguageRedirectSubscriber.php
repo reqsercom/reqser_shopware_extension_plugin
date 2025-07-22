@@ -97,6 +97,11 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             if (isset($customFields['ReqserRedirect']['debugMode']) && $customFields['ReqserRedirect']['debugMode'] === true) {
                 $debugMode = true;
                 $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Debug Mode activ', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
+
+                // Get all session values
+                $session = $request->getSession();
+                $sessionValues = $session->all();
+                $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Session Values', 'sessionValues' => $sessionValues, 'file' => __FILE__, 'line' => __LINE__]);
             }
             $sessionIgnoreMode = false;
             if (isset($customFields['ReqserRedirect']['sessionIgnoreMode']) && $customFields['ReqserRedirect']['sessionIgnoreMode'] === true) {
@@ -110,12 +115,30 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 return;
             }
 
-            if ($sessionIgnoreMode === false && !headers_sent()){
-                $session = $request->getSession(); // Get the session from the request
+            $session = $request->getSession(); // Get the session from the request
+            if ($session->get('reqser_redirect_domain_user_override') !== null) {
+                $overrideDomainId = $session->get('reqser_redirect_domain_user_override');
+                if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'No redirect possible because of domain user override', 'overrideDomainId' => $overrideDomainId, 'file' => __FILE__, 'line' => __LINE__]);
+                return;
+            }
+
+            if ($sessionIgnoreMode === false && !headers_sent()) {
                 if ($session->get('reqser_redirect_done', false)) {
-                    return;
+
+                    $lastRedirectTime = $session->get('reqser_redirect_done_time');
+                    $maxRedirectThreshold = 10;
+                    if (isset($customFields['ReqserRedirect']['maxRedirectThreshold']) && $customFields['ReqserRedirect']['maxRedirectThreshold'] > 0) {
+                        $maxRedirectThreshold = $customFields['ReqserRedirect']['maxRedirectThreshold'];
+                    }
+                    if ($lastRedirectTime !== null && time() - $lastRedirectTime > $maxRedirectThreshold) {
+                        if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Last redirect was more than ' . $maxRedirectThreshold . ' seconds ago, no redirect possible', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
+                        return;
+                    }
+                    if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Last redirect was less than ' . $maxRedirectThreshold . ' seconds ago, redirect possible', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
+                    $session->set('reqser_redirect_done_time', time());
                 } else {
-                    $this->requestStack->getSession()->set('reqser_redirect_done', true);
+                    $session->set('reqser_redirect_done', true);
+                    $session->set('reqser_redirect_done_time', time());
                 }
             } elseif (headers_sent()){
                 if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Headers already sent, no redirect possible any more', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
