@@ -235,9 +235,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                     }
 
                     if (json_last_error() !== JSON_ERROR_NONE) {
-                        $errorMsg = json_last_error_msg() ?: 'Unknown JSON error';
-                        $safeFilePath = $filePath ?: 'unknown file';
-                        $this->logger->error(sprintf('Reqser Plugin Invalid JSON in file %s: %s', $safeFilePath, $errorMsg));
+                        $this->logger->error(sprintf('Reqser Plugin Invalid JSON in file %s: %s', $filePath, json_last_error_msg()));
                         continue;
                     }
 
@@ -254,9 +252,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                 }
             }
         } catch (\Exception $e) {
-            $errorMsg = $e->getMessage() ?: 'Unknown error';
-            $safeDirectory = $directory ?: 'unknown directory';
-            $this->logger->error(sprintf('Reqser Plugin Error processing directory %s: %s', $safeDirectory, $errorMsg));
+            $this->logger->error(sprintf('Reqser Plugin Error processing directory %s: %s', $directory, $e->getMessage()));
         }
     }
 

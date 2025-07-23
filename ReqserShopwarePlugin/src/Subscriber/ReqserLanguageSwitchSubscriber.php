@@ -38,7 +38,6 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
             return;
         }
 
-        $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Setting domain user override', 'domainId' => $domainId, 'file' => __FILE__, 'line' => __LINE__]);
         $this->requestStack->getSession()->set('reqser_redirect_domain_user_override', $domainId);
     }
 }

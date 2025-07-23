@@ -111,7 +111,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 return;
             }
 
-            if ($session->get('reqser_redirect_domain_user_override') !== null) {
+            if ($session->get('reqser_redirect_domain_user_override', false)) {
                 $overrideDomainId = $session->get('reqser_redirect_domain_user_override');
                 if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'No redirect possible because of domain user override', 'overrideDomainId' => $overrideDomainId, 'file' => __FILE__, 'line' => __LINE__]);
                 return;
@@ -121,13 +121,16 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 if ($session->get('reqser_redirect_done', false)) {
 
                     $lastRedirectTime = $session->get('reqser_last_redirect_at');
-                    $gracePeriodMs = 10;
-                    $blockPeriodMs = 86400000; // 24h
-                    if (isset($customFields['ReqserRedirect']['gracePeriodMs']) && $customFields['ReqserRedirect']['gracePeriodMs'] > 0) {
-                        $gracePeriodMs = $customFields['ReqserRedirect']['gracePeriodMs'];
-                    }
-                    if (isset($customFields['ReqserRedirect']['blockPeriodMs']) && $customFields['ReqserRedirect']['blockPeriodMs'] > 0) {
-                        $blockPeriodMs = $customFields['ReqserRedirect']['blockPeriodMs'];
+                    $gracePeriodMs = $customFields['ReqserRedirect']['gracePeriodMs'] ?? 100;
+                    $blockPeriodMs = $customFields['ReqserRedirect']['blockPeriodMs'] ?? 3600000; // 1h
+                    $maxRedirects = $customFields['ReqserRedirect']['maxRedirects'] ?? 10;
+
+                    $redirectCount = $session->get('reqser_redirect_count', 0);
+                    $redirectCount++;
+                    $session->set('reqser_redirect_count', $redirectCount);
+                    if ($redirectCount >= $maxRedirects) {
+                        if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Max redirects reached, no redirect possible', 'redirectCount' => $redirectCount, 'maxRedirects' => $maxRedirects, 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
+                        return;
                     }
 
                     // Check if the last redirect was done after the grace period but within the block period, in that case, we should return as no redirect is allowed
@@ -138,10 +141,12 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                     }
 
                     if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Last redirect was either within the grace period or outside the block period, redirect possible', 'currentTimestamp' => $currentTimestamp, 'lastRedirectTime' => $lastRedirectTime, 'gracePeriodMs' => $gracePeriodMs, 'blockPeriodMs' => $blockPeriodMs, 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
-                    $session->set('reqser_redirect_done_time', microtime(true) * 1000);
+                    $session->set('reqser_last_redirect_at', microtime(true) * 1000);
+                    
                 } else {
                     $session->set('reqser_redirect_done', true);
                     $session->set('reqser_last_redirect_at', microtime(true) * 1000);
+                    $session->set('reqser_redirect_count', 0);
                 }
             } elseif (headers_sent()) {
                 if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Headers already sent, no redirect possible any more', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
