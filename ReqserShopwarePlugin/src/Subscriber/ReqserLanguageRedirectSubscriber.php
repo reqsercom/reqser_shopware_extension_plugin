@@ -92,30 +92,25 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 return;
             }
 
+            $session = $request->getSession(); // Get the session from the request
             $customFields = $currentDomain->getCustomFields();
             $debugMode = false;
             if (isset($customFields['ReqserRedirect']['debugMode']) && $customFields['ReqserRedirect']['debugMode'] === true) {
                 $debugMode = true;
-                $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Debug Mode activ', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
-
-                // Get all session values
-                $session = $request->getSession();
-                $sessionValues = $session->all();
-                $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Session Values', 'sessionValues' => $sessionValues, 'file' => __FILE__, 'line' => __LINE__]);
+                $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Debug Mode activ', 'sessionValues' => $session->all(), 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
             }
             $sessionIgnoreMode = false;
             if (isset($customFields['ReqserRedirect']['sessionIgnoreMode']) && $customFields['ReqserRedirect']['sessionIgnoreMode'] === true) {
                 $sessionIgnoreMode = true;
             }
-            if (!isset($customFields['ReqserRedirect']['active']) || $customFields['ReqserRedirect']['active'] !== true){
-                if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'domain is not active return', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
+            if (!isset($customFields['ReqserRedirect']['active']) || $customFields['ReqserRedirect']['active'] !== true) {
+                if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'domain is not active, return', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
                 return;
             } elseif (!isset($customFields['ReqserRedirect']['redirectFrom']) || $customFields['ReqserRedirect']['redirectFrom'] !== true) {
-                if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'redirectFrom is not true return', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
+                if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'redirectFrom is not true, return', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
                 return;
             }
 
-            $session = $request->getSession(); // Get the session from the request
             if ($session->get('reqser_redirect_domain_user_override') !== null) {
                 $overrideDomainId = $session->get('reqser_redirect_domain_user_override');
                 if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'No redirect possible because of domain user override', 'overrideDomainId' => $overrideDomainId, 'file' => __FILE__, 'line' => __LINE__]);
