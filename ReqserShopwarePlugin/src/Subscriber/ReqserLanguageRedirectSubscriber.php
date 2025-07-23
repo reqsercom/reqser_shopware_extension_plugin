@@ -125,26 +125,33 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             if ($sessionIgnoreMode === false && !headers_sent()) {
                 if ($session->get('reqser_redirect_done', false)) {
 
-                    $lastRedirectTime = $session->get('reqser_redirect_done_time');
-                    $maxRedirectThreshold = 10;
-                    if (isset($customFields['ReqserRedirect']['maxRedirectThreshold']) && $customFields['ReqserRedirect']['maxRedirectThreshold'] > 0) {
-                        $maxRedirectThreshold = $customFields['ReqserRedirect']['maxRedirectThreshold'];
+                    $lastRedirectTime = $session->get('reqser_last_redirect_at');
+                    $gracePeriodMs = 10;
+                    $blockPeriodMs = 86400000; // 24h
+                    if (isset($customFields['ReqserRedirect']['gracePeriodMs']) && $customFields['ReqserRedirect']['gracePeriodMs'] > 0) {
+                        $gracePeriodMs = $customFields['ReqserRedirect']['gracePeriodMs'];
                     }
-                    if ($lastRedirectTime !== null && time() - $lastRedirectTime > $maxRedirectThreshold) {
-                        if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Last redirect was more than ' . $maxRedirectThreshold . ' seconds ago, no redirect possible', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
+                    if (isset($customFields['ReqserRedirect']['blockPeriodMs']) && $customFields['ReqserRedirect']['blockPeriodMs'] > 0) {
+                        $blockPeriodMs = $customFields['ReqserRedirect']['blockPeriodMs'];
+                    }
+
+                    // Check if the last redirect was done after the grace period but within the block period, in that case, we should return as no redirect is allowed
+                    $currentTimestamp = microtime(true) * 1000;
+                    if ($lastRedirectTime !== null && $lastRedirectTime < $currentTimestamp - $gracePeriodMs && $lastRedirectTime > $currentTimestamp - $blockPeriodMs) {
+                        if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Last redirect was more than ' . $gracePeriodMs . ' ms ago but less than ' . $blockPeriodMs . ' ms ago, no redirect possible', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
                         return;
                     }
-                    if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Last redirect was less than ' . $maxRedirectThreshold . ' seconds ago, redirect possible', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
-                    $session->set('reqser_redirect_done_time', time());
+
+                    if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Last redirect was either within the grace period or outside the block period, redirect possible', 'currentTimestamp' => $currentTimestamp, 'lastRedirectTime' => $lastRedirectTime, 'gracePeriodMs' => $gracePeriodMs, 'blockPeriodMs' => $blockPeriodMs, 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
+                    $session->set('reqser_redirect_done_time', microtime(true) * 1000);
                 } else {
                     $session->set('reqser_redirect_done', true);
-                    $session->set('reqser_redirect_done_time', time());
+                    $session->set('reqser_last_redirect_at', microtime(true) * 1000);
                 }
-            } elseif (headers_sent()){
+            } elseif (headers_sent()) {
                 if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Headers already sent, no redirect possible any more', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
                 return;
             }
-          
 
             if (isset($customFields['ReqserRedirect']['onlyRedirectFrontPage']) && $customFields['ReqserRedirect']['onlyRedirectFrontPage'] === true) {
                 //Now lets check if the current page is the sales channel domain, and not already something more like a product or category page
