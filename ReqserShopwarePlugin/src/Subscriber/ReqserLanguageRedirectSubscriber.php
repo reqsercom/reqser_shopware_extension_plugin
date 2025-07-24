@@ -111,7 +111,10 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 return;
             }
 
-            if ($session->get('reqser_redirect_domain_user_override', false)) {
+            $advancedRedirectEnabled = $customFields['ReqserRedirect']['advancedRedirectEnabled'] ?? false;
+            $userOverrideEnabled = $customFields['ReqserRedirect']['userOverrideEnabled'] ?? false;
+
+            if ($userOverrideEnabled === true && $advancedRedirectEnabled === true && $session->get('reqser_redirect_domain_user_override', false)) {
                 $overrideDomainId = $session->get('reqser_redirect_domain_user_override');
                 if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'No redirect possible because of domain user override', 'overrideDomainId' => $overrideDomainId, 'file' => __FILE__, 'line' => __LINE__]);
                 return;
@@ -120,22 +123,32 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             if ($sessionIgnoreMode === false && !headers_sent()) {
                 if ($session->get('reqser_redirect_done', false)) {
 
+                    if ($advancedRedirectEnabled === false) {
+                        if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Advanced redirect is not enabled, return', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
+                        return;
+                    }
+
                     $lastRedirectTime = $session->get('reqser_last_redirect_at');
-                    $gracePeriodMs = $customFields['ReqserRedirect']['gracePeriodMs'] ?? 100;
-                    $blockPeriodMs = $customFields['ReqserRedirect']['blockPeriodMs'] ?? 3600000; // 1h
-                    $maxRedirects = $customFields['ReqserRedirect']['maxRedirects'] ?? 10;
+                    $gracePeriodMs = $customFields['ReqserRedirect']['gracePeriodMs'] ?? null;
+                    $blockPeriodMs = $customFields['ReqserRedirect']['blockPeriodMs'] ?? null;
+                    $maxRedirects = $customFields['ReqserRedirect']['maxRedirects'] ?? null;
+
+                    if ($maxRedirects === null && $gracePeriodMs === null && $blockPeriodMs === null) {
+                        if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'No redirect possible because of no settings', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
+                        return;
+                    }
 
                     $redirectCount = $session->get('reqser_redirect_count', 0);
                     $redirectCount++;
                     $session->set('reqser_redirect_count', $redirectCount);
-                    if ($redirectCount >= $maxRedirects) {
+                    if ($maxRedirects !== null && $redirectCount >= $maxRedirects) {
                         if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Max redirects reached, no redirect possible', 'redirectCount' => $redirectCount, 'maxRedirects' => $maxRedirects, 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
                         return;
                     }
 
                     // Check if the last redirect was done after the grace period but within the block period, in that case, we should return as no redirect is allowed
                     $currentTimestamp = microtime(true) * 1000;
-                    if ($lastRedirectTime !== null && $lastRedirectTime < $currentTimestamp - $gracePeriodMs && $lastRedirectTime > $currentTimestamp - $blockPeriodMs) {
+                    if ($gracePeriodMs !== null && $lastRedirectTime !== null && $lastRedirectTime < $currentTimestamp - $gracePeriodMs && $lastRedirectTime > $currentTimestamp - $blockPeriodMs) {
                         if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Last redirect was more than ' . $gracePeriodMs . ' ms ago but less than ' . $blockPeriodMs . ' ms ago, no redirect possible', 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
                         return;
                     }
@@ -210,7 +223,6 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 }
             }
         } catch (\Throwable $e) {
-            // Log the error message and continue with the next directory
             if (method_exists($this->logger, 'error')) {
                 $this->logger->error('Reqser Plugin Error onStorefrontRender', [
                     'message' => $e->getMessage(),

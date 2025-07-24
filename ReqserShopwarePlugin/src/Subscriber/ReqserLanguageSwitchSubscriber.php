@@ -14,8 +14,9 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
     private $webhookService;
     
     public function __construct(
-        RequestStack $requestStack, 
-        ReqserWebhookService $webhookService)
+        RequestStack $requestStack,
+        ReqserWebhookService $webhookService
+        )
     {
         $this->requestStack = $requestStack;
         $this->webhookService = $webhookService;
@@ -30,14 +31,27 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
 
     public function onKernelResponse(ResponseEvent $event): void
     {
-        $request = $event->getRequest();
-        $domainId = $request->attributes->get('sw-domain-id');
-        $currentRoute = $request->attributes->get('_route');
+        try {
+            $request = $event->getRequest();
+            $domainId = $request->attributes->get('sw-domain-id');
+            $currentRoute = $request->attributes->get('_route');
 
-        if ($currentRoute !== 'frontend.checkout.switch-language' || $domainId === null) {
+            if ($currentRoute !== 'frontend.checkout.switch-language' || $domainId === null) {
+                return;
+            }
+
+            $this->requestStack->getSession()->set('reqser_redirect_domain_user_override', $domainId);
+        } catch (\Throwable $e) {
+            $this->webhookService->sendErrorToWebhook([
+                'type' => 'error',
+                'function' => 'onKernelResponse',
+                'message' => $e->getMessage() ?? 'unknown',
+                'trace' => $e->getTraceAsString() ?? 'unknown',
+                'timestamp' => date('Y-m-d H:i:s'),
+                'file' => __FILE__, 
+                'line' => __LINE__,
+            ]);
             return;
         }
-
-        $this->requestStack->getSession()->set('reqser_redirect_domain_user_override', $domainId);
     }
 }
