@@ -140,7 +140,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                         return;
                     }
 
-                    if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Last redirect was either within the grace period or outside the block period, redirect possible', 'currentTimestamp' => $currentTimestamp, 'lastRedirectTime' => $lastRedirectTime, 'gracePeriodMs' => $gracePeriodMs, 'blockPeriodMs' => $blockPeriodMs, 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
+                    if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Last redirect was either within the grace period or outside the block period, redirect possible', 'currentTimestamp' => $currentTimestamp, 'lastRedirectTime' => $lastRedirectTime, 'gracePeriodMs' => $gracePeriodMs, 'blockPeriodMs' => $blockPeriodMs, 'maxRedirects' => $maxRedirects, 'redirectCount' => $redirectCount, 'domain_id' => $currentDomain, 'file' => __FILE__, 'line' => __LINE__]);
                     $session->set('reqser_last_redirect_at', microtime(true) * 1000);
                     
                 } else {
