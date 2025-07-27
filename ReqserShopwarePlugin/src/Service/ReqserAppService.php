@@ -3,41 +3,69 @@
 namespace Reqser\Plugin\Service;
 
 use Doctrine\DBAL\Connection;
-use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Component\HttpFoundation\RequestStack;
 
 class ReqserAppService
 {
     private Connection $connection;
-    private CacheInterface $cache;
+    private RequestStack $requestStack;
 
     public function __construct(
         Connection $connection,
-        CacheInterface $cache
+        RequestStack $requestStack
     ) {
         $this->connection = $connection;
-        $this->cache = $cache;
+        $this->requestStack = $requestStack;
     }
 
     public function isAppActive(): bool
     {
-        if (!$this->cache->hasItem('reqser_app_active')) {
-            // Double check if the app is active
+        try {
+            $request = $this->requestStack->getCurrentRequest();
+            
+            if (!$request) {
+                // No request available (e.g., CLI context), query database directly
+                return $this->queryDatabaseForAppStatus();
+            }
+            
+            $session = $request->getSession();
+            
+            if (!$session) {
+                // No session available, query database directly
+                return $this->queryDatabaseForAppStatus();
+            }
+            
+            // Check if app status is already stored in session
+            if ($session->has('reqser_app_active')) {
+                return $session->get('reqser_app_active');
+            }
+            
+            // Session miss - check database
+            $is_app_active = $this->queryDatabaseForAppStatus();
+            
+            // Store in session for future requests
+            $session->set('reqser_app_active', $is_app_active);
+            
+            return $is_app_active;
+            
+        } catch (\Throwable $e) {
+            // If anything goes wrong with session handling, fall back to database query
+            return $this->queryDatabaseForAppStatus();
+        }
+    }
+    
+    private function queryDatabaseForAppStatus(): bool
+    {
+        try {
             $app_name = "ReqserApp";
             $is_app_active = $this->connection->fetchOne(
                 "SELECT active FROM `app` WHERE name = :app_name",
                 ['app_name' => $app_name]
             );
             
-            if (!$is_app_active) {
-                return false;
-            }
-            
-            $cacheItem = $this->cache->getItem('reqser_app_active');
-            $cacheItem->set(true);
-            $cacheItem->expiresAfter(86400);
-            $this->cache->save($cacheItem);
+            return (bool)$is_app_active;
+        } catch (\Throwable $e) {
+            return false;
         }
-        
-        return true;
     }
 } 

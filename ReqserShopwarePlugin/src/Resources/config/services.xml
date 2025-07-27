@@ -73,7 +73,7 @@
         <service id="Reqser\Plugin\Service\ReqserAppService"
                 class="Reqser\Plugin\Service\ReqserAppService">
             <argument type="service" id="Doctrine\DBAL\Connection"/>
-            <argument type="service" id="cache.app"/>
+            <argument type="service" id="request_stack"/>
         </service>
 
     </services>
