@@ -8,6 +8,12 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Shopware\Storefront\Event\StorefrontRenderEvent;
 use Shopware\Storefront\Page\Product\ProductPage;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\NotFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\System\SalesChannel\SalesChannelContext;
+use Shopware\Core\System\SalesChannel\Aggregate\SalesChannelDomain\SalesChannelDomainCollection;
 use Psr\Log\LoggerInterface;
 
 class ReqserProductReviewSubscriber implements EventSubscriberInterface
@@ -15,17 +21,20 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
     private $requestStack;
     private $webhookService;
     private $appService;
+    private $domainRepository;
     private $logger;
     
     public function __construct(
         RequestStack $requestStack,
         ReqserWebhookService $webhookService,
         ReqserAppService $appService,
+        EntityRepository $domainRepository,
         LoggerInterface $logger
     ) {
         $this->requestStack = $requestStack;
         $this->webhookService = $webhookService;
         $this->appService = $appService;
+        $this->domainRepository = $domainRepository;
         $this->logger = $logger;
     }
 
@@ -51,9 +60,18 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
                 return;
             }
 
-            // Check if review translation is active for this sales channel
-            $salesChannel = $context->getSalesChannel();
-            $customFields = $salesChannel->getCustomFields();
+            // Check if review translation is active for this sales channel domain
+            $request = $event->getRequest();
+            $domainId = $request->attributes->get('sw-domain-id');
+            
+            // Retrieve sales channel domains for the current context
+            $salesChannelDomains = $this->getSalesChannelDomains($context);
+            $currentDomain = $salesChannelDomains->get($domainId);
+            if (!$currentDomain) {
+                return;
+            }
+            
+            $customFields = $currentDomain->getCustomFields();
             
             if (!isset($customFields['ReqserReviewTranslate']['active']) || $customFields['ReqserReviewTranslate']['active'] !== true) {
                 return;
@@ -152,5 +170,19 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
                 'line' => __LINE__,
             ]);
         }
-    } 
+    }
+
+    private function getSalesChannelDomains(SalesChannelContext $context)
+    {
+        // Retrieve the full collection without limiting to the current sales channel
+        $criteria = new Criteria();
+        
+        // Ensure we're only retrieving domains that have the 'ReqserReviewTranslate' custom field set
+        $criteria->addFilter(new NotFilter(NotFilter::CONNECTION_AND, [
+            new EqualsFilter('customFields.ReqserReviewTranslate', null)
+        ]));
+    
+        // Get the collection from the repository
+        return $this->domainRepository->search($criteria, $context->getContext())->getEntities();
+    }
 } 

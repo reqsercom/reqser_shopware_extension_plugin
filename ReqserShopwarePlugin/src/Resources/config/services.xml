@@ -54,6 +54,7 @@
             <argument type="service" id="request_stack" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserAppService" />
+            <argument type="service" id="sales_channel_domain.repository" />
             <argument type="service" id="logger"/>
             <tag name="kernel.event_subscriber" />
         </service>
