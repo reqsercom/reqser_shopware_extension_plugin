@@ -1,7 +1,7 @@
 {
     "name": "reqser/plugin",
     "description": "AI Reqser.com Snippet Plugin",
-    "version": "1.3.3",
+    "version": "1.3.5",
     "type": "shopware-platform-plugin",
     "license": "proprietary",
     "require": {
@@ -22,10 +22,10 @@
 
         },
         "description": {
-            "de-DE": "Plugin zum externe Module in Shopware in der Fremdsprache aktuell zu halten.",
-            "de-CH": "Plugin zum externe Module in Shopware in der Fremdsprache aktuell zu halten.",
-            "en-GB": "Plugin to keep external modules up to date in the foreign language in Shopware.",
-            "en-US": "Plugin to keep external modules up to date in the foreign language in Shopware."
+            "de-DE": "Dieses Plugin hält externe Module automatisch in mehreren Sprachen aktuell und bietet intelligente Weiterleitungen basierend auf der Browsersprache der Nutzer für ein optimiertes fremdsprachiges Einkaufserlebnis.",
+            "de-CH": "Dieses Plugin hält externe Module automatisch in mehreren Sprachen aktuell und bietet intelligente Weiterleitungen basierend auf der Browsersprache der Nutzer für ein optimiertes fremdsprachiges Einkaufserlebnis.",
+            "en-GB": "This plugin automatically keeps external modules up to date in multiple languages and offers intelligent redirects based on the user's browser language for an optimised foreign-language shopping experience.",
+            "en-US": "This plugin automatically keeps external modules up to date in multiple languages and offers intelligent redirects based on the user's browser language for an optimised foreign-language shopping experience."
         },
         "icon": "Resources/icon.png"
     },

@@ -43,6 +43,13 @@
             <tag name="kernel.event_subscriber" />
         </service>
 
+        <service id="Reqser\Plugin\Subscriber\ReqserLanguageSwitchSubscriber"
+                class="Reqser\Plugin\Subscriber\ReqserLanguageSwitchSubscriber">
+            <argument type="service" id="request_stack" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
+            <tag name="kernel.event_subscriber" />
+        </service>
+        
         <service id="Reqser\Plugin\Service\ReqserNotificationService"
                 class="Reqser\Plugin\Service\ReqserNotificationService">
             <argument type="service" id="notification.repository" />

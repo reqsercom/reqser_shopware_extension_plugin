@@ -300,7 +300,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         $parts = explode('.', $fileName); // Split by periods
         $iso = $parts[count($parts) - 2]; // Get the second last part
         if (!isset($this->snippetSetMap[$iso])) {
-            //$this->logger->error(sprintf('Snippet set ID not found for Filename &s ISO code %s', $fileName, $iso));
+            //$this->logger->error(sprintf('Snippet set ID not found for Filename %s ISO code %s', $fileName, $iso));
         }
         return ($this->snippetSetMap[$iso] ?? null); // Default to 1 if the ISO code is not found
     }
@@ -395,7 +395,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                                     //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working on Snippet Key: %s', $snippet_key));
                                     $existingSnippet = $this->connection->fetchAssociative('SELECT id FROM snippet WHERE `translation_key` = ? AND `snippet_set_id` = ?', [$snippet_key, $snippet_set_id]);
                                     if (!$existingSnippet) {
-                                        //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working fond a key not existing in all languages: %s', $snippet_key));
+                                        //$this->logger->info(sprintf('ReqserApp createAllNecessarySnippetTranslations Working found a key not existing in all languages: %s', $snippet_key));
                                         try {
                                             $this->connection->insert('snippet', [
                                                 'id' => Uuid::fromHexToBytes(Uuid::randomHex()),
