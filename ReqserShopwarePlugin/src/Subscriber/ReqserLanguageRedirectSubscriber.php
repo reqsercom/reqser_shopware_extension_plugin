@@ -9,6 +9,7 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Reqser\Plugin\Service\ReqserNotificationService;
 use Reqser\Plugin\Service\ReqserWebhookService;
+use Reqser\Plugin\Service\ReqserAppService;
 use Shopware\Core\System\SalesChannel\Context\CachedSalesChannelContextFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
@@ -17,8 +18,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\NotFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsAnyFilter;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\System\SalesChannel\Aggregate\SalesChannelDomain\SalesChannelDomainCollection;
-use Symfony\Contracts\Cache\CacheInterface;
-use Doctrine\DBAL\Connection;
 use Psr\Log\LoggerInterface;
 
 
@@ -28,8 +27,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
     private $notificationService;
     private $salesChannelContextFactory;
     private $domainRepository;
-    private $cache;
-    private Connection $connection;
+    private $appService;
     private $webhookService;
     private LoggerInterface $logger;
 
@@ -38,8 +36,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         ReqserNotificationService $notificationService, 
         CachedSalesChannelContextFactory $salesChannelContextFactory, 
         EntityRepository $domainRepository,
-        CacheInterface $cache,
-        Connection $connection,
+        ReqserAppService $appService,
         ReqserWebhookService $webhookService,
         LoggerInterface $logger
         )
@@ -48,8 +45,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         $this->notificationService = $notificationService;
         $this->salesChannelContextFactory = $salesChannelContextFactory;
         $this->domainRepository = $domainRepository;
-        $this->cache = $cache;
-        $this->connection = $connection;
+        $this->appService = $appService;
         $this->webhookService = $webhookService;
         $this->logger = $logger;
     }
@@ -65,20 +61,9 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
     public function onStorefrontRender(StorefrontRenderEvent $event): void
     {
         try{
-            if (!$this->cache->hasItem('reqser_app_active')) {
-                //Double check if the app is active
-                $app_name = "ReqserApp";
-                $is_app_active = $this->connection->fetchOne(
-                    "SELECT active FROM `app` WHERE name = :app_name",
-                    ['app_name' => $app_name]
-                );
-                if (!$is_app_active) {
-                    return;
-                }
-                $cacheItem = $this->cache->getItem('reqser_app_active');
-                $cacheItem->set(true);
-                $cacheItem->expiresAfter(86400);
-                $this->cache->save($cacheItem);
+            // Check if the app is active
+            if (!$this->appService->isAppActive()) {
+                return;
             }
 
             $request = $event->getRequest();

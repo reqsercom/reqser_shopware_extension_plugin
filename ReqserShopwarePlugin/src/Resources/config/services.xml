@@ -36,8 +36,7 @@
             <argument type="service" id="Reqser\Plugin\Service\ReqserNotificationService" />
             <argument type="service" id="Shopware\Core\System\SalesChannel\Context\CachedSalesChannelContextFactory" />
             <argument type="service" id="sales_channel_domain.repository" />
-            <argument type="service" id="cache.app" />
-            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="Reqser\Plugin\Service\ReqserAppService" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
             <argument type="service" id="logger"/>
             <tag name="kernel.event_subscriber" />
@@ -47,6 +46,16 @@
                 class="Reqser\Plugin\Subscriber\ReqserLanguageSwitchSubscriber">
             <argument type="service" id="request_stack" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
+            <tag name="kernel.event_subscriber" />
+        </service>
+
+        <service id="Reqser\Plugin\Subscriber\ReqserProductReviewSubscriber"
+                class="Reqser\Plugin\Subscriber\ReqserProductReviewSubscriber">
+            <argument type="service" id="request_stack" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserAppService" />
+            <argument type="service" id="sales_channel_domain.repository" />
+            <argument type="service" id="logger"/>
             <tag name="kernel.event_subscriber" />
         </service>
         
@@ -59,6 +68,12 @@
             <argument>https://reqser.com/app/shopware/webhook/plugin</argument>
             <argument type="service" id="Shopware\Core\Framework\App\ShopId\ShopIdProvider" />
             <argument type="service" id="logger" />
+        </service>
+
+        <service id="Reqser\Plugin\Service\ReqserAppService"
+                class="Reqser\Plugin\Service\ReqserAppService">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="request_stack"/>
         </service>
 
     </services>
