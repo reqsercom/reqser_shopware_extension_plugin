@@ -86,14 +86,6 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
 
             $currentLanguage = $context->getLanguageId();
             $reviews = $event->reviews;
-            
-            $this->logger->info('Reqser Plugin caught ProductReviewsLoadedEvent', [
-                'productId' => $reviews->getProductId(),
-                'totalReviews' => $reviews->getTotal(),
-                'file' => __FILE__, 
-                'line' => __LINE__,
-            ]);
-            
             // Process the reviews from the event
             $this->modifyProductReviews($reviews->getEntities(), $currentLanguage);
 
