@@ -15,10 +15,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\System\SalesChannel\Aggregate\SalesChannelDomain\SalesChannelDomainCollection;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\HttpKernel\Event\ResponseEvent;
-use Symfony\Component\HttpKernel\KernelEvents;
 use Shopware\Core\Content\Product\SalesChannel\Review\Event\ProductReviewsLoadedEvent;
-use Shopware\Core\Content\Product\SalesChannel\Review\ProductReviewsWidgetLoadedHook;
 
 class ReqserProductReviewSubscriber implements EventSubscriberInterface
 {
@@ -46,9 +43,7 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
     {
         return [
             StorefrontRenderEvent::class => 'onStorefrontRender',
-            KernelEvents::RESPONSE => 'onKernelResponse',
-            ProductReviewsLoadedEvent::class => 'onProductReviewsLoaded',
-            ProductReviewsWidgetLoadedHook::class => 'onProductReviewsWidgetLoaded'
+            ProductReviewsLoadedEvent::class => 'onProductReviewsLoaded'
         ];
     }
 
@@ -76,66 +71,7 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
         }
     }
 
-    public function onKernelResponse(ResponseEvent $event): void
-    {
-        try {
-            $request = $event->getRequest();
-            $response = $event->getResponse();
-            
-            // Only handle AJAX requests
-            if (!$request->isXmlHttpRequest()) {
-                return;
-            }
-            
-            // Check if this is a review-related route (more comprehensive check)
-            $route = $request->attributes->get('_route');
-            $path = $request->getPathInfo();
-            
-            // Log all AJAX requests for debugging
-            $this->logger->info('Reqser Plugin caught AJAX request', [
-                'route' => $route,
-                'path' => $path,
-                'method' => $request->getMethod(),
-                'contentType' => $response->headers->get('Content-Type'),
-                'file' => __FILE__, 
-                'line' => __LINE__,
-            ]);
-            
-            // Check various possible review routes and paths
-            $isReviewRoute = $route && (
-                str_contains($route, 'review') ||
-                str_contains($route, 'product') ||
-                str_contains($route, 'frontend.product')
-            );
-            
-            $isReviewPath = str_contains($path, 'review') || 
-                           str_contains($path, 'product') ||
-                           str_contains($path, 'ajax');
-            
-            if (!$isReviewRoute && !$isReviewPath) {
-                return;
-            }
-            
-            // Get the sales channel context from the request
-            $context = $request->attributes->get('sw-sales-channel-context');
-            if (!$context) {
-                return;
-            }
-            
-            // Validate if we should process this request
-            if (!$this->shouldProcessRequest($context, $request)) {
-                return;
-            }
 
-            $currentLanguage = $context->getLanguageId();
-            
-            // Process AJAX review response with debugging
-            $this->processAjaxReviewResponse($response, $currentLanguage, $route, $path);
-
-        } catch (\Throwable $e) {
-            $this->handleError('onKernelResponse', $e);
-        }
-    }
 
     public function onProductReviewsLoaded(ProductReviewsLoadedEvent $event): void
     {
@@ -166,26 +102,7 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
         }
     }
 
-    public function onProductReviewsWidgetLoaded(ProductReviewsWidgetLoadedHook $event): void
-    {
-        try {
-            $context = $event->getSalesChannelContext();
-            $reviews = $event->getReviews();
-            
-            $this->logger->info('Reqser Plugin caught ProductReviewsWidgetLoadedHook', [
-                'productId' => $reviews->getProductId(),
-                'totalReviews' => $reviews->getTotal(),
-                'file' => __FILE__, 
-                'line' => __LINE__,
-            ]);
-            
-            // Process the reviews from the hook
-            $this->modifyProductReviews($reviews->getEntities(), $context->getLanguageId());
 
-        } catch (\Throwable $e) {
-            $this->handleError('onProductReviewsWidgetLoaded', $e);
-        }
-    }
 
     /**
      * Validates if the request should be processed based on app status and domain settings
@@ -248,82 +165,7 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
         }
     }
 
-    /**
-     * Processes AJAX review response
-     */
-    private function processAjaxReviewResponse($response, string $currentLanguage, string $route = '', string $path = ''): void
-    {
-        if (!$response->getContent()) {
-            return;
-        }
-        
-        $content = $response->getContent();
-        $contentType = $response->headers->get('Content-Type', '');
-        
-        // Log for debugging
-        $this->logger->info('Reqser Plugin processing AJAX response', [
-            'route' => $route,
-            'path' => $path,
-            'contentType' => $contentType,
-            'contentLength' => strlen($content),
-            'file' => __FILE__, 
-            'line' => __LINE__,
-        ]);
-        
-        // Handle JSON responses
-        if (str_contains($contentType, 'application/json') || $this->isJson($content)) {
-            $data = json_decode($content, true);
-            if ($data) {
-                $modified = false;
-                
-                // Check for different possible review data structures
-                if (isset($data['reviews'])) {
-                    $this->modifyReviewsInResponse($data['reviews'], $currentLanguage);
-                    $modified = true;
-                } elseif (isset($data['data']['reviews'])) {
-                    $this->modifyReviewsInResponse($data['data']['reviews'], $currentLanguage);
-                    $modified = true;
-                } elseif (isset($data['elements'])) {
-                    $this->modifyReviewsInResponse($data['elements'], $currentLanguage);
-                    $modified = true;
-                } elseif (isset($data['data']['elements'])) {
-                    $this->modifyReviewsInResponse($data['data']['elements'], $currentLanguage);
-                    $modified = true;
-                }
-                
-                if ($modified) {
-                    $response->setContent(json_encode($data));
-                    $this->logger->info('Reqser Plugin modified review response', [
-                        'route' => $route,
-                        'file' => __FILE__, 
-                        'line' => __LINE__,
-                    ]);
-                }
-            }
-        }
-        // Handle HTML responses (some pagination might return HTML)
-        elseif (str_contains($contentType, 'text/html') || str_contains($content, '<div')) {
-            // For HTML responses, we might need to parse and modify HTML content
-            // This is more complex and would require DOM manipulation
-            $this->logger->info('Reqser Plugin found HTML response for reviews', [
-                'route' => $route,
-                'file' => __FILE__, 
-                'line' => __LINE__,
-            ]);
-        }
-    }
-    
-    /**
-     * Check if a string is valid JSON
-     */
-    private function isJson($string): bool
-    {
-        if (!is_string($string)) {
-            return false;
-        }
-        json_decode($string);
-        return json_last_error() === JSON_ERROR_NONE;
-    }
+
 
     /**
      * Handles errors consistently across all methods
@@ -372,24 +214,7 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
         }
     }
 
-    /**
-     * Modifies reviews in AJAX response
-     */
-    private function modifyReviewsInResponse(array &$reviews, string $currentLanguageId): void
-    {
-        try {
-            foreach ($reviews as &$review) {
-                $this->translateReviewArray($review, $currentLanguageId);
-            }
 
-        } catch (\Exception $e) {
-            $this->logger->error('Reqser Plugin Error modifying reviews in response', [
-                'message' => $e->getMessage(),
-                'file' => __FILE__, 
-                'line' => __LINE__,
-            ]);
-        }
-    }
 
     /**
      * Translates a single review entity
@@ -408,19 +233,7 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
         }
     }
 
-    /**
-     * Translates a single review array
-     */
-    private function translateReviewArray(array &$review, string $currentLanguageId): void
-    {
-        // Check if the review has a different language ID
-        if (isset($review['languageId']) && $review['languageId'] !== $currentLanguageId) {
-            $translationData = $this->getTranslationData($review['customFields'] ?? [], $currentLanguageId);
-            if ($translationData) {
-                $this->applyTranslationToArray($review, $translationData, $currentLanguageId);
-            }
-        }
-    }
+
 
     /**
      * Gets translation data from custom fields
@@ -453,24 +266,7 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
         $review->setLanguageId($currentLanguageId);
     }
 
-    /**
-     * Applies translation to a review array
-     */
-    private function applyTranslationToArray(array &$review, array $translationData, string $currentLanguageId): void
-    {
-        if (isset($translationData['title'])) {
-            $review['title'] = $translationData['title'];
-        }
-        if (isset($translationData['content'])) {
-            $review['content'] = $translationData['content'];
-        }
-        if (isset($translationData['comment'])) {
-            $review['comment'] = $translationData['comment'];
-        }
-        
-        // Update the language ID to match the current language
-        $review['languageId'] = $currentLanguageId;
-    }
+
 
     private function getSalesChannelDomains(SalesChannelContext $context)
     {
