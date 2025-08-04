@@ -211,6 +211,8 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             if (method_exists($this->logger, 'error')) {
                 $this->logger->error('Reqser Plugin Error onStorefrontRender', [
                     'message' => $e->getMessage(),
+                    'file' => __FILE__, 
+                    'line' => __LINE__,
                 ]);
             }
             $this->webhookService->sendErrorToWebhook([
