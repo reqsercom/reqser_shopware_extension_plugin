@@ -47,7 +47,7 @@ class ReqserWebhookService
             if ($result === false) {
                 // Optionally log curl error
                 $error = curl_error($ch);
-                $this->logger->error("Webhook error: " . $error);
+                $this->logger->error("Webhook error: " . $error, ['file' => __FILE__, 'line' => __LINE__]);
             }
 
             curl_close($ch);

@@ -25,12 +25,13 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 
     public function __construct(
         EntityRepository $scheduledTaskRepository,
+        LoggerInterface $exceptionLogger,
         Connection $connection,
         LoggerInterface $logger,
         ContainerInterface $container,
         ShopIdProvider $shopIdProvider
     ) {
-        parent::__construct($scheduledTaskRepository);
+        parent::__construct($scheduledTaskRepository, $exceptionLogger);
         $this->connection = $connection;
         $this->logger = $logger;
         $this->container = $container;
@@ -71,6 +72,8 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                     'iso' => $row['iso'] ?? 'unknown',
                     'custom_fields' => $row['custom_fields'] ?? 'unknown',
                     'message' => $e->getMessage(),
+                    'file' => __FILE__, 
+                    'line' => __LINE__,
                 ]);
                 continue;
             }
@@ -119,6 +122,8 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                         $this->logger->error('Reqser Plugin Error processing snippet directory', [
                             'path' => $item->getPathname(),
                             'message' => $e->getMessage(),
+                            'file' => __FILE__, 
+                            'line' => __LINE__,
                         ]);
                     }
                 }
@@ -129,6 +134,8 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                 $this->logger->error('Reqser Plugin Error accessing directory', [
                     'directory' => $directory,
                     'message' => $e->getMessage(),
+                    'file' => __FILE__, 
+                    'line' => __LINE__,
                 ]);
             }
     
@@ -218,10 +225,12 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                     $content = file_get_contents($filePath);
                     
                     if ($content === false) {
-                        $this->logger->error('Reqser Plugin Error reading file', [
-                            'file' => $filePath,
-                            'message' => 'file_get_contents returned false, unknown issue on reading the file',
-                        ]);
+                                        $this->logger->error('Reqser Plugin Error reading file', [
+                    'file' => $filePath,
+                    'message' => 'file_get_contents returned false, unknown issue on reading the file',
+                    'log_file' => __FILE__, 
+                    'line' => __LINE__,
+                ]);
                         continue;
                     }
                     
@@ -232,7 +241,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                     }
 
                     if (json_last_error() !== JSON_ERROR_NONE) {
-                        $this->logger->error(sprintf('Reqser Plugin Invalid JSON in file %s: %s', $filePath, json_last_error_msg()));
+                        $this->logger->error(sprintf('Reqser Plugin Invalid JSON in file %s: %s', $filePath, json_last_error_msg()), ['file' => __FILE__, 'line' => __LINE__]);
                         continue;
                     }
 
@@ -242,14 +251,16 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                     }
                 } catch (\Exception $e) {
                     // Log the error message and continue with the next file
-                    $this->logger->error('Reqser Plugin Error processing file', [
-                        'file' => $filePath,
-                        'message' => $e->getMessage(),
-                    ]);
+                                            $this->logger->error('Reqser Plugin Error processing file', [
+                            'file' => $filePath,
+                            'message' => $e->getMessage(),
+                            'log_file' => __FILE__, 
+                            'line' => __LINE__,
+                        ]);
                 }
             }
         } catch (\Exception $e) {
-            $this->logger->error(sprintf('Reqser Plugin Error processing directory %s: %s', $directory, $e->getMessage()));
+            $this->logger->error(sprintf('Reqser Plugin Error processing directory %s: %s', $directory, $e->getMessage()), ['file' => __FILE__, 'line' => __LINE__]);
         }
     }
 
@@ -325,6 +336,8 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                     'value' => $value,
                     'snippet_set_id' => $snippetSetId,
                     'exception' => $e->getMessage(),
+                    'file' => __FILE__, 
+                    'line' => __LINE__,
                 ]);
             }
         } elseif ($existingSnippet['author'] == 'reqser_plugin_crawler') {
@@ -347,6 +360,8 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                         'value' => $value,
                         'snippet_set_id' => $snippetSetId,
                         'exception' => $e->getMessage(),
+                        'file' => __FILE__, 
+                        'line' => __LINE__,
                     ]);
                 }
             }

@@ -24,13 +24,14 @@ class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
 
     public function __construct(
         EntityRepository $scheduledTaskRepository,
+        LoggerInterface $exceptionLogger,
         Connection $connection,
         LoggerInterface $logger,
         ReqserNotificationService $notificationService,
         ReqserWebhookService $webhookService,
         CacheInterface $cache
     ) {
-        parent::__construct($scheduledTaskRepository);
+        parent::__construct($scheduledTaskRepository, $exceptionLogger);
         $this->connection = $connection;
         $this->logger = $logger;
         $this->notificationService = $notificationService;
@@ -48,6 +49,8 @@ class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
             if (method_exists($this->logger, 'error')) {
                 $this->logger->error('Reqser Plugin Error remove Notifictaions', [
                     'message' => $e->getMessage(),
+                    'file' => __FILE__, 
+                    'line' => __LINE__,
                 ]);
             }
             $this->webhookService->sendErrorToWebhook([
