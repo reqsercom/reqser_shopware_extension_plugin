@@ -220,17 +220,16 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                         continue;
                     }
 
+                    $snippetSetIds = $this->getSnippetSetIdFromFilePath($filePath);
+                    if ($snippetSetIds === null || count($snippetSetIds) === 0) {
+                        continue;
+                    }
+
                     //$this->logger->info(sprintf('Working on file: %s', $filePath));
 
                     $content = file_get_contents($filePath);
                     
                     if ($content === false) {
-                                        $this->logger->error('Reqser Plugin Error reading file', [
-                    'file' => $filePath,
-                    'message' => 'file_get_contents returned false, unknown issue on reading the file',
-                    'log_file' => __FILE__, 
-                    'line' => __LINE__,
-                ]);
                         continue;
                     }
                     
@@ -241,22 +240,22 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
                     }
 
                     if (json_last_error() !== JSON_ERROR_NONE) {
-                        $this->logger->error(sprintf('Reqser Plugin Invalid JSON in file %s: %s', $filePath, json_last_error_msg()), ['file' => __FILE__, 'line' => __LINE__]);
+                        //$this->logger->error(sprintf('Reqser Plugin Invalid JSON in file %s: %s', $filePath, json_last_error_msg()), ['file' => __FILE__, 'line' => __LINE__]);
                         continue;
                     }
 
                     foreach ($snippets as $document => $value) {
                         //$this->logger->info(sprintf('Found snippet: key = %s, value = %s', $document, json_encode($value)));
-                        $this->processSnippet((string) $document, $value, $filePath);
+                        $this->processSnippet((string) $document, $value, $snippetSetIds);
                     }
                 } catch (\Exception $e) {
                     // Log the error message and continue with the next file
-                                            $this->logger->error('Reqser Plugin Error processing file', [
-                            'file' => $filePath,
-                            'message' => $e->getMessage(),
-                            'log_file' => __FILE__, 
-                            'line' => __LINE__,
-                        ]);
+                    $this->logger->error('Reqser Plugin Error processing file', [
+                        'file' => $filePath,
+                        'message' => $e->getMessage(),
+                        'log_file' => __FILE__, 
+                        'line' => __LINE__,
+                    ]);
                 }
             }
         } catch (\Exception $e) {
@@ -272,24 +271,17 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
      * @param string $filePath
      * @return void
      */ 
-    private function processSnippet(string $key, $value, string $filePath): void
+    private function processSnippet(string $key, $value, array $snippetSetIds): void
     {
         if (is_array($value)) {
             foreach ($value as $subKey => $subValue) {
                 $newKey = $key . '.' . (string) $subKey;
-                $this->processSnippet((string) $newKey, $subValue, $filePath);
+                $this->processSnippet((string) $newKey, $subValue, $snippetSetIds);
             }
         } elseif (is_string($value)) {
-            $snippetSetId = $this->getSnippetSetIdFromFilePath($filePath);
-            if ($snippetSetId !== null && count($snippetSetId) > 0) {
-                foreach ($snippetSetId as $id) {
-                    $this->addSnippetIfNotExists($key, $value, $id);
-                }
-            } else {
-                //$this->logger->error(sprintf('Snippet set ID not found for file %s', $filePath));
-                //$this->logger->error(sprintf('Snippet set ID not found for file %s', json_encode($this->snippetSetMap)));
+            foreach ($snippetSetIds as $id) {
+                $this->addSnippetIfNotExists($key, $value, $id);
             }
-
         } else {
             //$this->logger->error(sprintf('Invalid snippet value for key %s: must be a string or array', $key));
         }
