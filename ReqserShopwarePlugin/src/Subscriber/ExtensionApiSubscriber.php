@@ -57,20 +57,34 @@ class ExtensionApiSubscriber implements EventSubscriberInterface
             if (is_array($data)) {
                 foreach ($data as &$extension) {
                     if (isset($extension['name']) && $extension['name'] === 'ReqserPlugin') {
-                        $extension['updateAvailable'] = true; //$this->updateAvailable($versionData['plugin_version'], $extension['currentVersion']);
-                        $extension['latestVersion'] = $versionData['plugin_version'];
-                        $data_changed = true;
+                        if ($this->updateIsNecessary($versionData['plugin_version'], $extension['currentVersion'])){
+                            $extension['updateAvailable'] = true; //$this->updateAvailable($versionData['plugin_version'], $extension['currentVersion']);
+                            $extension['latestVersion'] = $versionData['plugin_version']; //$versionData['plugin_version'];
+                            
+                            // Add update source information
+                            $extension['updateSource'] = 'reqser'; // Custom source identifier
+                            $extension['downloadUrl'] = $versionData['plugin_download_url'];
+                            $extension['changelog'] = [
+                                'en-GB' => 'New features and improvements in version 2.0.0',
+                                'de-DE' => 'Neue Funktionen und Verbesserungen in Version 2.0.0'
+                            ];
+                            $extension['releaseDate'] = date('Y-m-d');
+                            $extension['compatible'] = true;
+                            $extension['verified'] = true;
+                            
+                            $data_changed = true;
+                        }
+                        
                     } elseif (isset($extension['name']) && $extension['name'] === 'ReqserApp') {
-                        $extension['updateAvailable'] = $this->updateAvailable($versionData['app_version'], $extension['currentVersion']);
+                        /*$extension['updateAvailable'] = $this->updateIsNecessary($versionData['app_version'], $extension['currentVersion']);
                         $extension['latestVersion'] = $versionData['app_version'];
-                        $data_changed = true;
+                        $data_changed = true;*/
                     }
                 }
             }
             if ($data_changed) {
                 $response->setContent(json_encode($data));
                 $event->setResponse($response);
-                
             }
         } catch (\Throwable $e) {
             // Silently fail - never break the application
@@ -101,7 +115,7 @@ class ExtensionApiSubscriber implements EventSubscriberInterface
                 set_time_limit(10); // Max 10 seconds for external call
                 
                 $client = HttpClient::create();
-                $response = $client->request('GET', 'https://reqser.com/app/shopware/check_version');
+                $response = $client->request('GET', 'https://reqser.com/app/shopware/check_version'); //todo add shopware version
                 
                 $content = $response->getContent();
                 $statusCode = $response->getStatusCode();
@@ -134,8 +148,10 @@ class ExtensionApiSubscriber implements EventSubscriberInterface
         return ['updateAvailable' => false];
     }
 
-    private function updateAvailable(string $latestVersion, string $currentVersion): bool
+    private function updateIsNecessary(string $latestVersion, string $currentVersion): bool
     {
+        //Testing
+        return true;
         try {
             // Parse version numbers
             $latest = $this->parseVersion($latestVersion);
