@@ -7,16 +7,19 @@ use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\HttpClient\HttpClient;
+use Reqser\Plugin\Service\ReqserVersionService;
 
 class ExtensionApiSubscriber implements EventSubscriberInterface
 {
     private FilesystemAdapter $cache;
+    private ReqserVersionService $versionService;
     private string $shopwareVersion;
 
-    public function __construct(string $shopwareVersion)
+    public function __construct(ReqserVersionService $versionService)
     {
         $this->cache = new FilesystemAdapter('reqser_extension_api');
-        $this->shopwareVersion = $shopwareVersion;
+        $this->versionService = $versionService;
+        $this->shopwareVersion = $versionService->getShopwareVersion();
     }
 
     public static function getSubscribedEvents(): array
@@ -57,6 +60,7 @@ class ExtensionApiSubscriber implements EventSubscriberInterface
             
             // Get version check data (cached for 24 hours)
             $versionData = $this->getVersionCheckData();
+            file_put_contents($debugFile, "Version data: " . json_encode($versionData, JSON_PRETTY_PRINT) . "\n", FILE_APPEND | LOCK_EX);
             if (!$versionData) {
                 return;
             }
@@ -64,19 +68,22 @@ class ExtensionApiSubscriber implements EventSubscriberInterface
             $data_changed = false;
             if (is_array($data)) {
                 foreach ($data as &$extension) {
+               
+                    //file_put_contents($debugFile, "Extension: " . json_encode($extension, JSON_PRETTY_PRINT) . "\n", FILE_APPEND | LOCK_EX);
                     if (isset($extension['name']) && strpos($extension['name'], 'Reqser') !== false) {
+                        //file_put_contents($debugFile, "Extension name: " . $extension['name'] . "\n", FILE_APPEND | LOCK_EX);
                         if ($extension['name'] === 'ReqserPlugin' 
                         && isset($extension['version'])
                         && isset($versionData['plugin_version'])
                         && isset($versionData['plugin_download_url'])
                         ) {
-                            if ($this->updateIsNecessary($versionData['plugin_version'], $extension['version'])){
+                            file_put_contents($debugFile, "Extension version: " . $extension['version'] . "\n", FILE_APPEND | LOCK_EX);
+                            if ($this->versionService->updateIsNecessary($versionData['plugin_version'], $extension['version'])){
+                                file_put_contents($debugFile, "Update is necessary\n", FILE_APPEND | LOCK_EX);
+                                file_put_contents($debugFile, "All Extension data before update: " . json_encode($extension, JSON_PRETTY_PRINT) . "\n", FILE_APPEND | LOCK_EX);
                                 $extension['updateAvailable'] = true; 
                                 $extension['latestVersion'] = $versionData['plugin_version']; 
                                 
-                                // Add update source information
-                                $extension['updateSource'] = 'reqser'; // Custom source identifier
-                                $extension['downloadUrl'] = $versionData['plugin_download_url'];
                                 $extension['changelog'] = [
                                     'en-GB' => 'Details available at customer support of Reqser.com',
                                     'de-DE' => 'Details sind beim Kundensupport von Reqser.com erhältlich.'
@@ -84,11 +91,13 @@ class ExtensionApiSubscriber implements EventSubscriberInterface
                                 $extension['releaseDate'] = date('Y-m-d');
                                 $extension['compatible'] = true;
                                 $extension['verified'] = true;
+
+                                file_put_contents($debugFile, "All Extension data after update: " . json_encode($extension, JSON_PRETTY_PRINT) . "\n", FILE_APPEND | LOCK_EX);
                                 
                                 $data_changed = true;
                             } 
                         } elseif ($extension['name'] === 'ReqserApp') {
-    
+                            //Todo Add APP update
                         }
                     }
                     
@@ -105,46 +114,45 @@ class ExtensionApiSubscriber implements EventSubscriberInterface
         return;
     }
 
-    private function getVersionCheckData(): array|bool
+    private function getVersionCheckData(): ?array
     {
-
         // Check cache for HTTP response (cached for 1 day)
         $httpCacheKey = 'reqser_versioncheck_http_request';
         $httpCached = $this->cache->getItem($httpCacheKey);
         
         $content = null;
         $statusCode = null;
-        $cached_at = null;
         
         if ($httpCached->isHit()) {
             // Use cached response
             $cachedData = $httpCached->get();
             $content = $cachedData['content'];
             $statusCode = $cachedData['status_code'];
-            $cached_at = $cachedData['cached_at'];
         } else {
-            // Make fresh HTTP request
+            // Make fresh HTTP request using shared service
             try {
                 set_time_limit(10); // Max 10 seconds for external call
-                $shopwareVersion = $this->shopwareVersion;
-                $client = HttpClient::create();
-                $response = $client->request('GET', 'https://reqser.com/app/shopware/versioncheck/'.$shopwareVersion);
+                $result = $this->versionService->getVersionData();
                 
-                $content = $response->getContent();
-                $statusCode = $response->getStatusCode();
-                $cached_at = date('Y-m-d H:i:s');
+                if ($result) {
+                    $content = json_encode($result);
+                    $statusCode = 200;
+                } else {
+                    $content = null;
+                    $statusCode = 500;
+                }
                 
                 // Cache the HTTP response for 1 day (86400 seconds)
                 $httpCached->set([
                     'content' => $content,
                     'status_code' => $statusCode,
-                    'cached_at' => $cached_at
+                    'cached_at' => date('Y-m-d H:i:s')
                 ]);
-                $httpCached->expiresAfter(1); // 86400, 24 hours testin use 1
+                $httpCached->expiresAfter(1); // 86400, 24 hours testing use 1
                 $this->cache->save($httpCached);
                 
             } catch (\Throwable $e) {
-                return false;
+                return null;
             }
         }
         
@@ -157,51 +165,10 @@ class ExtensionApiSubscriber implements EventSubscriberInterface
                 }
             }
         } catch (\Throwable $e) {
-            return false;
+            return null;
         }
         
-        // Default fallback
-        return false;
+        return null;
     }
 
-    private function updateIsNecessary(string $latestVersion, string $currentVersion): bool
-    {
-        try {
-            // Parse version numbers
-            $latest = $this->parseVersion($latestVersion);
-            $current = $this->parseVersion($currentVersion);
-            
-            // Compare major version
-            if ($latest['major'] > $current['major']) {
-                return true;
-            }
-            
-            // If major versions are equal, compare minor version
-            if ($latest['major'] === $current['major'] && $latest['minor'] > $current['minor']) {
-                return true;
-            }
-            
-            // If major and minor are equal, we don't consider patch updates as requiring update
-            // (patch updates are not considered "updateAvailable" for this use case)
-            return false;
-        } catch (\Throwable $e) {
-            // If version comparison fails, assume no update available
-            return false;
-        }
-    }
-
-    private function parseVersion(string $version): array
-    {
-        // Remove any 'v' prefix and normalize
-        $version = ltrim($version, 'v');
-        
-        // Split by dots and ensure we have at least 3 parts
-        $parts = explode('.', $version);
-        
-        return [
-            'major' => (int) ($parts[0] ?? 0),
-            'minor' => (int) ($parts[1] ?? 0), 
-            'patch' => (int) ($parts[2] ?? 0)
-        ];
-    }
 }
