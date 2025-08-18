@@ -51,37 +51,47 @@ class ExtensionApiSubscriber implements EventSubscriberInterface
             if (!$data) {
                 return;
             }
+            $debugFile = __DIR__ . '/../../debug_extension.log';
+            $timestamp = date('Y-m-d H:i:s');
+            file_put_contents($debugFile, "\n=== DEBUG EXTENSION API [{$timestamp}] ===\n", FILE_APPEND | LOCK_EX);
             
             // Get version check data (cached for 24 hours)
             $versionData = $this->getVersionCheckData();
-     
+            if (!$versionData) {
+                return;
+            }
+
             $data_changed = false;
             if (is_array($data)) {
                 foreach ($data as &$extension) {
-                    if (isset($extension['name']) && $extension['name'] === 'ReqserPlugin') {
-                        if ($this->updateIsNecessary($versionData['plugin_version'], $extension['currentVersion'])){
-                            $extension['updateAvailable'] = true; //$this->updateAvailable($versionData['plugin_version'], $extension['currentVersion']);
-                            $extension['latestVersion'] = $versionData['plugin_version']; //$versionData['plugin_version'];
-                            
-                            // Add update source information
-                            $extension['updateSource'] = 'reqser'; // Custom source identifier
-                            $extension['downloadUrl'] = $versionData['plugin_download_url'];
-                            $extension['changelog'] = [
-                                'en-GB' => 'New features and improvements in version 2.0.0',
-                                'de-DE' => 'Neue Funktionen und Verbesserungen in Version 2.0.0'
-                            ];
-                            $extension['releaseDate'] = date('Y-m-d');
-                            $extension['compatible'] = true;
-                            $extension['verified'] = true;
-                            
-                            $data_changed = true;
+                    if (isset($extension['name']) && strpos($extension['name'], 'Reqser') !== false) {
+                        if ($extension['name'] === 'ReqserPlugin' 
+                        && isset($extension['version'])
+                        && isset($versionData['plugin_version'])
+                        && isset($versionData['plugin_download_url'])
+                        ) {
+                            if ($this->updateIsNecessary($versionData['plugin_version'], $extension['version'])){
+                                $extension['updateAvailable'] = true; 
+                                $extension['latestVersion'] = $versionData['plugin_version']; 
+                                
+                                // Add update source information
+                                $extension['updateSource'] = 'reqser'; // Custom source identifier
+                                $extension['downloadUrl'] = $versionData['plugin_download_url'];
+                                $extension['changelog'] = [
+                                    'en-GB' => 'Details available at customer support of Reqser.com',
+                                    'de-DE' => 'Details sind beim Kundensupport von Reqser.com erhältlich.'
+                                ];
+                                $extension['releaseDate'] = date('Y-m-d');
+                                $extension['compatible'] = true;
+                                $extension['verified'] = true;
+                                
+                                $data_changed = true;
+                            } 
+                        } elseif ($extension['name'] === 'ReqserApp') {
+    
                         }
-                        
-                    } elseif (isset($extension['name']) && $extension['name'] === 'ReqserApp') {
-                        /*$extension['updateAvailable'] = $this->updateIsNecessary($versionData['app_version'], $extension['currentVersion']);
-                        $extension['latestVersion'] = $versionData['app_version'];
-                        $data_changed = true;*/
                     }
+                    
                 }
             }
             if ($data_changed) {
@@ -95,10 +105,11 @@ class ExtensionApiSubscriber implements EventSubscriberInterface
         return;
     }
 
-    private function getVersionCheckData(): array
+    private function getVersionCheckData(): array|bool
     {
+
         // Check cache for HTTP response (cached for 1 day)
-        $httpCacheKey = 'reqser_version_check_http_response';
+        $httpCacheKey = 'reqser_versioncheck_http_request';
         $httpCached = $this->cache->getItem($httpCacheKey);
         
         $content = null;
@@ -129,31 +140,32 @@ class ExtensionApiSubscriber implements EventSubscriberInterface
                     'status_code' => $statusCode,
                     'cached_at' => $cached_at
                 ]);
-                $httpCached->expiresAfter(86400); // 24 hours
+                $httpCached->expiresAfter(1); // 86400, 24 hours testin use 1
                 $this->cache->save($httpCached);
                 
             } catch (\Throwable $e) {
-                // Fallback to cached data or defaults
-                return ['updateAvailable' => false];
+                return false;
             }
         }
         
-        // Parse response and return structured data
-        if ($statusCode === 200 && $content) {
-            $responseData = json_decode($content, true);
-            if ($responseData && isset($responseData['content'])) {
-                return ['content' => $responseData['content']];
+        try {
+            // Parse response and return structured data
+            if ($statusCode === 200 && $content) {
+                $responseData = json_decode($content, true);
+                if ($responseData) {
+                    return $responseData;
+                }
             }
+        } catch (\Throwable $e) {
+            return false;
         }
         
         // Default fallback
-        return ['updateAvailable' => false];
+        return false;
     }
 
     private function updateIsNecessary(string $latestVersion, string $currentVersion): bool
     {
-        //Testing
-        return true;
         try {
             // Parse version numbers
             $latest = $this->parseVersion($latestVersion);
