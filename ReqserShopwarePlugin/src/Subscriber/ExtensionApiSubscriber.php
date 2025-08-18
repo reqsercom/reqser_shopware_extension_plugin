@@ -11,10 +11,12 @@ use Symfony\Component\HttpClient\HttpClient;
 class ExtensionApiSubscriber implements EventSubscriberInterface
 {
     private FilesystemAdapter $cache;
+    private string $shopwareVersion;
 
-    public function __construct()
+    public function __construct(string $shopwareVersion)
     {
         $this->cache = new FilesystemAdapter('reqser_extension_api');
+        $this->shopwareVersion = $shopwareVersion;
     }
 
     public static function getSubscribedEvents(): array
@@ -113,9 +115,9 @@ class ExtensionApiSubscriber implements EventSubscriberInterface
             // Make fresh HTTP request
             try {
                 set_time_limit(10); // Max 10 seconds for external call
-                
+                $shopwareVersion = $this->shopwareVersion;
                 $client = HttpClient::create();
-                $response = $client->request('GET', 'https://reqser.com/app/shopware/check_version'); //todo add shopware version
+                $response = $client->request('GET', 'https://reqser.com/app/shopware/versioncheck/'.$shopwareVersion);
                 
                 $content = $response->getContent();
                 $statusCode = $response->getStatusCode();

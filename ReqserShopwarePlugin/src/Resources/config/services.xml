@@ -80,6 +80,7 @@
 
         <service id="Reqser\Plugin\Subscriber\ExtensionApiSubscriber"
                 class="Reqser\Plugin\Subscriber\ExtensionApiSubscriber">
+            <argument>%kernel.shopware_version%</argument>
             <tag name="kernel.event_subscriber" />
         </service>
 
