@@ -78,8 +78,8 @@
             <argument type="service" id="request_stack"/>
         </service>
 
-        <service id="Reqser\Plugin\Subscriber\ReqserVersionCheckSubscriber"
-                class="Reqser\Plugin\Subscriber\ReqserVersionCheckSubscriber">
+        <service id="Reqser\Plugin\Subscriber\ExtensionApiSubscriber"
+                class="Reqser\Plugin\Subscriber\ExtensionApiSubscriber">
             <tag name="kernel.event_subscriber" />
         </service>
 
