@@ -48,18 +48,33 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
             
             $this->writeLog("ReqserPlugin: Version data received: " . json_encode($versionData));
             
-            if (!$versionData || !isset($versionData['plugin_download_url'])) {
-                $this->writeLog("ReqserPlugin: No update data available");
+            if (!$versionData || !isset($versionData['plugin_download_url']) || !isset($versionData['plugin_version'])) {
+                $this->writeLog("ReqserPlugin: No update data available or missing required fields");
+                return;
+            }
+
+            $targetVersion = $versionData['plugin_version'];
+
+            // Check if the target version is already installed (avoid unnecessary downloads)
+            if ($currentVersion === $targetVersion) {
+                $this->writeLog("ReqserPlugin: Target version {$targetVersion} is already installed (current: {$currentVersion}), skipping download");
                 return;
             }
 
             // Check if update is actually necessary before downloading
-            if (!$this->versionService->updateIsNecessary($versionData['plugin_version'], $currentVersion)) {
-                $this->writeLog("ReqserPlugin: No update necessary - current: $currentVersion, latest: {$versionData['plugin_version']}");
+            if (!$this->versionService->updateIsNecessary($targetVersion, $currentVersion)) {
+                $this->writeLog("ReqserPlugin: No update necessary - current: $currentVersion, latest: {$targetVersion}");
                 return;
             }
 
-            $this->writeLog("ReqserPlugin: Update is necessary - current: $currentVersion, latest: {$versionData['plugin_version']}");
+            $this->writeLog("ReqserPlugin: Update is necessary - current: $currentVersion, latest: {$targetVersion}");
+
+            // Create backup of current plugin folder
+            $backupSuccess = $this->createPluginBackup();
+            if (!$backupSuccess) {
+                $this->writeLog("ReqserPlugin: Failed to create backup, aborting update");
+                return;
+            }
 
             // Download and extract the new version
             $success = $this->downloadAndExtractUpdate($versionData);
@@ -67,23 +82,28 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
             if ($success) {
                 $this->writeLog("ReqserPlugin: Successfully downloaded and extracted update");
                 
+                // Clean up backup folder after successful update
+                $this->cleanupBackup();
+                
                 // Set the upgrade version for Shopware's update process
                 try {
-                    $newVersion = $versionData['plugin_version'];
-                    $this->writeLog("ReqserPlugin: Setting upgrade version to: $newVersion");
+                    $this->writeLog("ReqserPlugin: Setting upgrade version to: $targetVersion");
                     
                     // Use the public setter to set the upgrade version
-                    $plugin->setUpgradeVersion($newVersion);
-                    $this->writeLog("ReqserPlugin: Successfully set upgradeVersion to: $newVersion");
+                    $plugin->setUpgradeVersion($targetVersion);
+                    $this->writeLog("ReqserPlugin: Successfully set upgradeVersion to: $targetVersion");
                 } catch (\Throwable $e) {
                     $this->writeLog("ReqserPlugin: Failed to set upgrade version: " . $e->getMessage());
                 }
             } else {
-                $this->writeLog("ReqserPlugin: Failed to download update");
+                $this->writeLog("ReqserPlugin: Failed to download update, attempting rollback");
+                $this->rollbackFromBackup();
             }
             
         } catch (\Throwable $e) {
             $this->writeLog("ReqserPlugin: Update failed: " . $e->getMessage() . "\nTrace: " . $e->getTraceAsString());
+            $this->writeLog("ReqserPlugin: Attempting rollback due to unexpected error");
+            $this->rollbackFromBackup();
         }
     }
 
@@ -121,6 +141,11 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
             $tempFile = sys_get_temp_dir() . '/reqser_plugin_update.zip';
 
             $this->writeLog("ReqserPlugin: Download details - URL: $downloadUrl, Plugin Dir: $pluginDir, Temp File: $tempFile");
+
+            // Clean up any existing temp file
+            if (file_exists($tempFile)) {
+                unlink($tempFile);
+            }
 
             // Download the ZIP file
             $client = HttpClient::create();
@@ -170,20 +195,38 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
                     }
                     
                     if ($pluginFolder) {
-                        $this->writeLog("ReqserPlugin: Found plugin folder: $pluginFolder, copying to $pluginDir");
+                        $this->writeLog("ReqserPlugin: Found plugin folder: $pluginFolder, replacing current plugin directory");
                         
-                        // Copy contents from the subfolder to plugin directory
+                        // Remove current plugin directory completely
+                        if (is_dir($pluginDir)) {
+                            $this->recursiveDelete($pluginDir);
+                        }
+                        
+                        // Copy the new plugin files
                         $sourceDir = $tempExtractDir . '/' . $pluginFolder;
                         $this->recursiveCopy($sourceDir, $pluginDir);
                         
-                        // Clean up
+                        // Clean up temp extraction directory
                         $this->recursiveDelete($tempExtractDir);
                     } else {
                         $this->writeLog("ReqserPlugin: Could not find plugin folder in extracted ZIP");
+                        // Clean up temp extraction directory
+                        if (is_dir($tempExtractDir)) {
+                            $this->recursiveDelete($tempExtractDir);
+                        }
                         return false;
                     }
                 } else {
-                    $this->writeLog("ReqserPlugin: ZIP has flat structure, extracting directly");
+                    $this->writeLog("ReqserPlugin: ZIP has flat structure, replacing plugin directory");
+                    
+                    // Remove current plugin directory completely
+                    if (is_dir($pluginDir)) {
+                        $this->recursiveDelete($pluginDir);
+                    }
+                    
+                    // Create new plugin directory
+                    mkdir($pluginDir, 0755, true);
+                    
                     // Extract new files directly (flat structure)
                     $zip->extractTo($pluginDir);
                     $zip->close();
@@ -201,6 +244,12 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
 
         } catch (\Throwable $e) {
             $this->writeLog("ReqserPlugin: Download/extract failed: " . $e->getMessage());
+            
+            // Clean up temp file if it exists
+            if (isset($tempFile) && file_exists($tempFile)) {
+                unlink($tempFile);
+            }
+            
             return false;
         }
     }
@@ -241,6 +290,82 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
             rmdir($dir);
         } else {
             unlink($dir);
+        }
+    }
+
+    private function createPluginBackup(): bool
+    {
+        try {
+            $pluginDir = __DIR__ . '/../../';
+            $backupDir = dirname($pluginDir) . '/ReqserShopwarePlugin_backup';
+
+            $this->writeLog("ReqserPlugin: Creating backup from $pluginDir to $backupDir");
+
+            // Remove existing backup if it exists
+            if (is_dir($backupDir)) {
+                $this->writeLog("ReqserPlugin: Removing existing backup directory");
+                $this->recursiveDelete($backupDir);
+            }
+
+            // Create backup by copying current plugin directory
+            $this->recursiveCopy($pluginDir, $backupDir);
+
+            $this->writeLog("ReqserPlugin: Backup created successfully at $backupDir");
+            return true;
+
+        } catch (\Throwable $e) {
+            $this->writeLog("ReqserPlugin: Failed to create backup: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function cleanupBackup(): void
+    {
+        try {
+            $pluginDir = __DIR__ . '/../../';
+            $backupDir = dirname($pluginDir) . '/ReqserShopwarePlugin_backup';
+
+            if (is_dir($backupDir)) {
+                $this->writeLog("ReqserPlugin: Cleaning up backup directory at $backupDir");
+                $this->recursiveDelete($backupDir);
+                $this->writeLog("ReqserPlugin: Backup cleanup completed");
+            } else {
+                $this->writeLog("ReqserPlugin: No backup directory found to clean up");
+            }
+
+        } catch (\Throwable $e) {
+            $this->writeLog("ReqserPlugin: Failed to cleanup backup: " . $e->getMessage());
+        }
+    }
+
+    private function rollbackFromBackup(): void
+    {
+        try {
+            $pluginDir = __DIR__ . '/../../';
+            $backupDir = dirname($pluginDir) . '/ReqserShopwarePlugin_backup';
+
+            if (!is_dir($backupDir)) {
+                $this->writeLog("ReqserPlugin: No backup directory found for rollback");
+                return;
+            }
+
+            $this->writeLog("ReqserPlugin: Rolling back from backup at $backupDir");
+
+            // Remove current (potentially corrupted) plugin directory
+            if (is_dir($pluginDir)) {
+                $this->recursiveDelete($pluginDir);
+            }
+
+            // Restore from backup
+            $this->recursiveCopy($backupDir, $pluginDir);
+
+            // Clean up backup after successful rollback
+            $this->recursiveDelete($backupDir);
+
+            $this->writeLog("ReqserPlugin: Rollback completed successfully");
+
+        } catch (\Throwable $e) {
+            $this->writeLog("ReqserPlugin: Failed to rollback from backup: " . $e->getMessage());
         }
     }
 }
