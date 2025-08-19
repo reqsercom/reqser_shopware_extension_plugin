@@ -1,0 +1,50 @@
+[2025-08-18 15:37:28] Requesting version data from: https://reqser.com/app/shopware/versioncheck/6.7.1.2
+[2025-08-18 15:37:28] Version data received: {"app_version":"1.2.5","app_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_app","plugin_version":"1.3.10","plugin_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_plugin\/6.7.1.2"}
+[2025-08-18 15:37:29] Comparing versions: latest=1.3.10 vs current=1.1.0
+[2025-08-18 15:37:29] Minor version update available
+[2025-08-18 15:38:47] Requesting version data from: https://reqser.com/app/shopware/versioncheck/6.7.1.2
+[2025-08-18 15:38:48] Version data received: {"app_version":"1.2.5","app_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_app","plugin_version":"1.3.10","plugin_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_plugin\/6.7.1.2"}
+[2025-08-18 15:38:48] Comparing versions: latest=1.3.10 vs current=1.1.0
+[2025-08-18 15:38:48] Minor version update available
+[2025-08-18 15:39:20] Current plugin version from composer.json: 1.1.0
+[2025-08-18 15:39:20] Requesting version data from: https://reqser.com/app/shopware/versioncheck/6.7.1.2
+[2025-08-18 15:39:20] Version data received: {"app_version":"1.2.5","app_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_app","plugin_version":"1.3.10","plugin_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_plugin\/6.7.1.2"}
+[2025-08-18 15:39:20] Comparing versions: latest=1.3.10 vs current=1.1.0
+[2025-08-18 15:39:20] Minor version update available
+[2025-08-18 15:40:15] Requesting version data from: https://reqser.com/app/shopware/versioncheck/6.7.1.2
+[2025-08-18 15:40:16] Version data received: {"app_version":"1.2.5","app_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_app","plugin_version":"1.3.10","plugin_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_plugin\/6.7.1.2"}
+[2025-08-18 15:40:16] Comparing versions: latest=1.3.10 vs current=1.1.0
+[2025-08-18 15:40:16] Minor version update available
+[2025-08-18 15:42:01] Requesting version data from: https://reqser.com/app/shopware/versioncheck/6.7.1.2
+[2025-08-18 15:42:02] Version data received: {"app_version":"1.2.5","app_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_app","plugin_version":"1.3.10","plugin_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_plugin\/6.7.1.2"}
+[2025-08-18 15:42:03] Comparing versions: latest=1.3.10 vs current=1.1.0
+[2025-08-18 15:42:03] Minor version update available
+[2025-08-18 15:42:29] Current plugin version from composer.json: 1.3.10
+[2025-08-18 15:42:29] Requesting version data from: https://reqser.com/app/shopware/versioncheck/6.7.1.2
+[2025-08-18 15:42:29] Version data received: {"app_version":"1.2.5","app_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_app","plugin_version":"1.3.10","plugin_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_plugin\/6.7.1.2"}
+[2025-08-18 15:42:29] Comparing versions: latest=1.3.10 vs current=1.3.10
+[2025-08-18 15:42:29] No update necessary
+[2025-08-18 23:46:13] Requesting version data from: https://reqser.com/app/shopware/versioncheck/6.7.1.2
+[2025-08-18 23:46:13] Version data received: {"app_version":"1.2.5","app_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_app","plugin_version":"1.3.10","plugin_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_plugin\/6.7.1.2"}
+[2025-08-18 23:46:13] Comparing versions: latest=1.3.10 vs current=1.1.1
+[2025-08-18 23:46:13] Minor version update available
+[2025-08-18 23:49:36] Requesting version data from: https://reqser.com/app/shopware/versioncheck/6.7.1.2
+[2025-08-18 23:49:37] Version data received: {"app_version":"1.2.5","app_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_app","plugin_version":"1.3.10","plugin_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_plugin\/6.7.1.2"}
+[2025-08-18 23:49:37] Comparing versions: latest=1.3.10 vs current=1.1.1
+[2025-08-18 23:49:37] Minor version update available
+[2025-08-19 00:12:32] Requesting version data from: https://reqser.com/app/shopware/versioncheck/6.7.1.2
+[2025-08-19 00:12:32] Version data received: {"app_version":"1.2.5","app_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_app","plugin_version":"1.3.10","plugin_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_plugin\/6.7.1.2"}
+[2025-08-19 00:12:32] Comparing versions: latest=1.3.10 vs current=1.1.1
+[2025-08-19 00:12:32] Minor version update available
+[2025-08-19 00:12:38] Requesting version data from: https://reqser.com/app/shopware/versioncheck/6.7.1.2
+[2025-08-19 00:12:39] Version data received: {"app_version":"1.2.5","app_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_app","plugin_version":"1.3.10","plugin_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_plugin\/6.7.1.2"}
+[2025-08-19 00:12:39] Comparing versions: latest=1.3.10 vs current=1.1.1
+[2025-08-19 00:12:39] Minor version update available
+[2025-08-19 00:16:28] Requesting version data from: https://reqser.com/app/shopware/versioncheck/6.7.1.2
+[2025-08-19 00:16:28] Version data received: {"app_version":"1.2.5","app_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_app","plugin_version":"1.3.10","plugin_download_url":"https:\/\/reqser.com\/download\/reqser_shopware_plugin\/6.7.1.2"}
+[2025-08-19 00:16:28] Comparing versions: latest=1.3.10 vs current=1.1.1
+[2025-08-19 00:16:28] Minor version update available
+[2025-08-19 00:19:50] Comparing versions: latest=1.3.10 vs current=1.1.1
+[2025-08-19 00:19:50] Minor version update available
+[2025-08-19 00:30:33] Comparing versions: latest=1.3.10 vs current=1.1.1
+[2025-08-19 00:30:33] Minor version update available

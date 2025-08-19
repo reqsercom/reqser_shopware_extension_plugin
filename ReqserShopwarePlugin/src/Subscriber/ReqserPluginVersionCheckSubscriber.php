@@ -9,7 +9,7 @@ use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\HttpClient\HttpClient;
 use Reqser\Plugin\Service\ReqserVersionService;
 
-class ExtensionApiSubscriber implements EventSubscriberInterface
+class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
 {
     private FilesystemAdapter $cache;
     private ReqserVersionService $versionService;
@@ -80,17 +80,9 @@ class ExtensionApiSubscriber implements EventSubscriberInterface
                             file_put_contents($debugFile, "Extension version: " . $extension['version'] . "\n", FILE_APPEND | LOCK_EX);
                             if ($this->versionService->updateIsNecessary($versionData['plugin_version'], $extension['version'])){
                                 file_put_contents($debugFile, "Update is necessary\n", FILE_APPEND | LOCK_EX);
-                                file_put_contents($debugFile, "All Extension data before update: " . json_encode($extension, JSON_PRETTY_PRINT) . "\n", FILE_APPEND | LOCK_EX);
+
                                 $extension['updateAvailable'] = true; 
                                 $extension['latestVersion'] = $versionData['plugin_version']; 
-                                
-                                $extension['changelog'] = [
-                                    'en-GB' => 'Details available at customer support of Reqser.com',
-                                    'de-DE' => 'Details sind beim Kundensupport von Reqser.com erhältlich.'
-                                ];
-                                $extension['releaseDate'] = date('Y-m-d');
-                                $extension['compatible'] = true;
-                                $extension['verified'] = true;
 
                                 file_put_contents($debugFile, "All Extension data after update: " . json_encode($extension, JSON_PRETTY_PRINT) . "\n", FILE_APPEND | LOCK_EX);
                                 
@@ -148,7 +140,7 @@ class ExtensionApiSubscriber implements EventSubscriberInterface
                     'status_code' => $statusCode,
                     'cached_at' => date('Y-m-d H:i:s')
                 ]);
-                $httpCached->expiresAfter(1); // 86400, 24 hours testing use 1
+                $httpCached->expiresAfter(86400);
                 $this->cache->save($httpCached);
                 
             } catch (\Throwable $e) {
