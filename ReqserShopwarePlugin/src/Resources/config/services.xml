@@ -81,6 +81,7 @@
         <service id="Reqser\Plugin\Subscriber\ReqserPluginVersionCheckSubscriber"
                 class="Reqser\Plugin\Subscriber\ReqserPluginVersionCheckSubscriber">
             <argument type="service" id="Reqser\Plugin\Service\ReqserVersionService" />
+            <argument type="service" id="translator" />
             <tag name="kernel.event_subscriber" />
         </service>
 

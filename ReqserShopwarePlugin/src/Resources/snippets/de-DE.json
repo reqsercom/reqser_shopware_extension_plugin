@@ -1,1 +1,7 @@
-{}
+{
+    "reqser-plugin": {
+        "update": {
+            "clickTwiceToUpdate": "klicke 2x auf Aktualisieren"
+        }
+    }
+}

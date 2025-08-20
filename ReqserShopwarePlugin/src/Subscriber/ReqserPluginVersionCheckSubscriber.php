@@ -7,18 +7,21 @@ use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\HttpClient\HttpClient;
+use Symfony\Contracts\Translation\TranslatorInterface;
 use Reqser\Plugin\Service\ReqserVersionService;
 
 class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
 {
     private FilesystemAdapter $cache;
     private ReqserVersionService $versionService;
+    private TranslatorInterface $translator;
     private string $shopwareVersion;
 
-    public function __construct(ReqserVersionService $versionService)
+    public function __construct(ReqserVersionService $versionService, TranslatorInterface $translator)
     {
         $this->cache = new FilesystemAdapter('reqser_extension_api');
         $this->versionService = $versionService;
+        $this->translator = $translator;
         $this->shopwareVersion = $versionService->getShopwareVersion();
     }
 
@@ -85,7 +88,8 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
 
                                 $extension['updateAvailable'] = true; 
                                 $extension['latestVersion'] = $versionData['plugin_version']; 
-                                $extension['label'] .= ' (click 2x on update to auto download version '.$versionData['plugin_version'].')';
+                                $updateMessage = $this->translator->trans('reqser-plugin.update.clickTwiceToUpdate', ['%version%' => $versionData['plugin_version']]);
+                                $extension['label'] .= ' (' . $updateMessage . ')';
 
                                 file_put_contents($debugFile, "All Extension data after update: " . json_encode($extension, JSON_PRETTY_PRINT) . "\n", FILE_APPEND | LOCK_EX);
                                 
