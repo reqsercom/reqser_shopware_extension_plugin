@@ -16,7 +16,7 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
     public function __construct(ReqserVersionService $versionService)
     {
         $this->versionService = $versionService;
-        $this->debugFile = __DIR__ . '/../../debug_plugin_update.log';
+        $this->debugFile = $this->versionService->getPluginDir() . '/debug_plugin_update.log';
     }
 
     public static function getSubscribedEvents(): array
@@ -41,6 +41,9 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
 
         try {
             $this->writeLog("ReqserPlugin: Starting custom update process");
+            
+            // Set the plugin instance in the version service for proper path resolution
+            $this->versionService->setPlugin($plugin);
             
             // Get current plugin version and check for updates
             $currentVersion = $this->versionService->getCurrentPluginVersion();
@@ -141,7 +144,7 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
     {
         try {
             $downloadUrl = $versionData['plugin_download_url'];
-            $pluginDir = __DIR__ . '/../../';
+            $pluginDir = $this->versionService->getPluginDir();
             $tempFile = sys_get_temp_dir() . '/reqser_plugin_update.zip';
 
             $this->writeLog("ReqserPlugin: Download details - URL: $downloadUrl, Plugin Dir: $pluginDir, Temp File: $tempFile");
@@ -300,8 +303,8 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
     private function createPluginBackup(): bool
     {
         try {
-            $pluginDir = __DIR__ . '/../../';
-            $backupDir = dirname($pluginDir) . '/ReqserShopwarePlugin_backup';
+            $pluginDir = $this->versionService->getPluginDir();
+            $backupDir = $this->versionService->getPluginsDir() . '/ReqserShopwarePlugin_backup';
 
             $this->writeLog("ReqserPlugin: Creating backup from $pluginDir to $backupDir");
 
@@ -326,8 +329,8 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
     private function cleanupBackup(): void
     {
         try {
-            $pluginDir = __DIR__ . '/../../';
-            $backupDir = dirname($pluginDir) . '/ReqserShopwarePlugin_backup';
+            $pluginDir = $this->versionService->getPluginDir();
+            $backupDir = $this->versionService->getPluginsDir() . '/ReqserShopwarePlugin_backup';
 
             if (is_dir($backupDir)) {
                 $this->writeLog("ReqserPlugin: Cleaning up backup directory at $backupDir");
@@ -345,8 +348,8 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
     private function rollbackFromBackup(): void
     {
         try {
-            $pluginDir = __DIR__ . '/../../';
-            $backupDir = dirname($pluginDir) . '/ReqserShopwarePlugin_backup';
+            $pluginDir = $this->versionService->getPluginDir();
+            $backupDir = $this->versionService->getPluginsDir() . '/ReqserShopwarePlugin_backup';
 
             if (!is_dir($backupDir)) {
                 $this->writeLog("ReqserPlugin: No backup directory found for rollback");

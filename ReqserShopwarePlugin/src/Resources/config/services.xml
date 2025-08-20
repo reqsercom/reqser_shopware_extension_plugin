@@ -88,6 +88,7 @@
         <service id="Reqser\Plugin\Service\ReqserVersionService"
                 class="Reqser\Plugin\Service\ReqserVersionService">
             <argument>%kernel.shopware_version%</argument>
+            <argument>%kernel.project_dir%</argument>
         </service>
 
         <service id="Reqser\Plugin\Subscriber\ReqserPluginUpdateSubscriber"

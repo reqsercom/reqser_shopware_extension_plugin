@@ -3,16 +3,20 @@
 namespace Reqser\Plugin\Service;
 
 use Symfony\Component\HttpClient\HttpClient;
+use Shopware\Core\Framework\Plugin\PluginEntity;
 
 class ReqserVersionService
 {
     private string $debugFile;
     private string $shopwareVersion;
+    private string $projectDir;
+    private ?PluginEntity $plugin = null;
 
-    public function __construct(string $shopwareVersion)
+    public function __construct(string $shopwareVersion, string $projectDir)
     {
         $this->shopwareVersion = $shopwareVersion;
-        $this->debugFile = __DIR__ . '/../../debug_version_service.log';
+        $this->projectDir = $projectDir;
+        $this->debugFile = $this->getPluginDir() . '/debug_version_service.log';
     }
 
     /**
@@ -89,7 +93,7 @@ class ReqserVersionService
     public function getCurrentPluginVersion(): string|null
     {
         try {
-            $composerFile = __DIR__ . '/../../composer.json';
+            $composerFile = $this->getPluginDir() . '/composer.json';
             if (file_exists($composerFile)) {
                 $composerData = json_decode(file_get_contents($composerFile), true);
                 $version = $composerData['version'] ?? false;
@@ -102,6 +106,40 @@ class ReqserVersionService
         
         $this->writeLog("Fallback to version 1.0.0");
         return null;
+    }
+
+    /**
+     * Set the plugin instance (used during update process)
+     */
+    public function setPlugin(PluginEntity $plugin): void
+    {
+        $this->plugin = $plugin;
+    }
+
+    /**
+     * Get the plugin directory path (uses Shopware standard getPath() when available)
+     */
+    public function getPluginDir(): string
+    {
+        if ($this->plugin) {
+            return $this->plugin->getPath();
+        }
+        
+        // Fallback to constructed path when plugin instance not available
+        return $this->projectDir . '/custom/plugins/ReqserShopwarePlugin';
+    }
+
+    /**
+     * Get the plugins directory path (parent of our plugin)
+     */
+    public function getPluginsDir(): string
+    {
+        if ($this->plugin) {
+            return dirname($this->plugin->getPath());
+        }
+        
+        // Fallback to constructed path when plugin instance not available
+        return $this->projectDir . '/custom/plugins';
     }
 
     /**
