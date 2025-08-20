@@ -31,16 +31,16 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
     {
         $plugin = $event->getPlugin();
         
-        $this->writeLog("PluginPreUpdateEvent triggered for: " . $plugin->getName());
+        $this->writeLog("PluginPreUpdateEvent triggered for: " . $plugin->getName(), __LINE__);
         
         // Only handle our plugin
         if ($plugin->getName() !== 'ReqserPlugin') {
-            $this->writeLog("Not our plugin, skipping custom update");
+            $this->writeLog("Not our plugin, skipping custom update", __LINE__);
             return;
         }
 
         try {
-            $this->writeLog("ReqserPlugin: Starting custom update process");
+            $this->writeLog("ReqserPlugin: Starting custom update process", __LINE__);
             
             // Set the plugin instance in the version service for proper path resolution
             $this->versionService->setPlugin($plugin);
@@ -48,15 +48,15 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
             // Get current plugin version and check for updates
             $currentVersion = $this->versionService->getCurrentPluginVersion();
             if (!isset($currentVersion)) {
-                $this->writeLog("ReqserPlugin: No current version found, skipping update");
+                $this->writeLog("ReqserPlugin: No current version found, skipping update", __LINE__);
                 return;
             }
             $versionData = $this->versionService->getVersionData();
             
-            $this->writeLog("ReqserPlugin: Version data received: " . json_encode($versionData));
+            $this->writeLog("ReqserPlugin: Version data received: " . json_encode($versionData), __LINE__);
             
             if (!$versionData || !isset($versionData['plugin_download_url']) || !isset($versionData['plugin_version'])) {
-                $this->writeLog("ReqserPlugin: No update data available or missing required fields");
+                $this->writeLog("ReqserPlugin: No update data available or missing required fields", __LINE__);
                 return;
             }
 
@@ -64,22 +64,22 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
 
             // Check if the target version is already installed (avoid unnecessary downloads)
             if ($currentVersion === $targetVersion) {
-                $this->writeLog("ReqserPlugin: Target version {$targetVersion} is already installed (current: {$currentVersion}), skipping download");
+                $this->writeLog("ReqserPlugin: Target version {$targetVersion} is already installed (current: {$currentVersion}), skipping download", __LINE__);
                 return;
             }
 
             // Check if update is actually necessary before downloading
             if (!$this->versionService->updateIsNecessary($targetVersion, $currentVersion)) {
-                $this->writeLog("ReqserPlugin: No update necessary - current: $currentVersion, latest: {$targetVersion}");
+                $this->writeLog("ReqserPlugin: No update necessary - current: $currentVersion, latest: {$targetVersion}", __LINE__);
                 return;
             }
 
-            $this->writeLog("ReqserPlugin: Update is necessary - current: $currentVersion, latest: {$targetVersion}");
+            $this->writeLog("ReqserPlugin: Update is necessary - current: $currentVersion, latest: {$targetVersion}", __LINE__);
 
             // Create backup of current plugin folder
             $backupSuccess = $this->createPluginBackup();
             if (!$backupSuccess) {
-                $this->writeLog("ReqserPlugin: Failed to create backup, aborting update");
+                $this->writeLog("ReqserPlugin: Failed to create backup, aborting update", __LINE__);
                 return;
             }
 
@@ -87,29 +87,29 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
             $success = $this->downloadAndExtractUpdate($versionData);
             
             if ($success) {
-                $this->writeLog("ReqserPlugin: Successfully downloaded and extracted update");
+                $this->writeLog("ReqserPlugin: Successfully downloaded and extracted update", __LINE__);
                 
                 // Clean up backup folder after successful update
                 $this->cleanupBackup();
                 
                 // Set the upgrade version for Shopware's update process
                 try {
-                    $this->writeLog("ReqserPlugin: Setting upgrade version to: $targetVersion");
+                    $this->writeLog("ReqserPlugin: Setting upgrade version to: $targetVersion", __LINE__);
                     
                     // Use the public setter to set the upgrade version
                     $plugin->setUpgradeVersion($targetVersion);
-                    $this->writeLog("ReqserPlugin: Successfully set upgradeVersion to: $targetVersion");
+                    $this->writeLog("ReqserPlugin: Successfully set upgradeVersion to: $targetVersion", __LINE__);
                 } catch (\Throwable $e) {
-                    $this->writeLog("ReqserPlugin: Failed to set upgrade version: " . $e->getMessage());
+                    $this->writeLog("ReqserPlugin: Failed to set upgrade version: " . $e->getMessage(), __LINE__);
                 }
             } else {
-                $this->writeLog("ReqserPlugin: Failed to download update, attempting rollback");
+                $this->writeLog("ReqserPlugin: Failed to download update, attempting rollback", __LINE__);
                 $this->rollbackFromBackup();
             }
             
         } catch (\Throwable $e) {
-            $this->writeLog("ReqserPlugin: Update failed: " . $e->getMessage() . "\nTrace: " . $e->getTraceAsString());
-            $this->writeLog("ReqserPlugin: Attempting rollback due to unexpected error");
+            $this->writeLog("ReqserPlugin: Update failed: " . $e->getMessage() . "\nTrace: " . $e->getTraceAsString(), __LINE__);
+            $this->writeLog("ReqserPlugin: Attempting rollback due to unexpected error", __LINE__);
             $this->rollbackFromBackup();
         }
     }
@@ -123,20 +123,20 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
             return;
         }
 
-        $this->writeLog("ReqserPlugin: Update completed successfully");
+        $this->writeLog("ReqserPlugin: Update completed successfully", __LINE__);
         
         // Ensure the plugin version in database matches the updated composer.json
         try {
             $currentVersion = $this->versionService->getCurrentPluginVersion();
-            $this->writeLog("ReqserPlugin: Post-update - Current version from composer.json: $currentVersion");
-            $this->writeLog("ReqserPlugin: Post-update - Plugin entity version: " . $plugin->getVersion());
+            $this->writeLog("ReqserPlugin: Post-update - Current version from composer.json: $currentVersion", __LINE__);
+            $this->writeLog("ReqserPlugin: Post-update - Plugin entity version: " . $plugin->getVersion(), __LINE__);
             
             // If versions don't match, the database wasn't updated properly
             if ($plugin->getVersion() !== $currentVersion) {
-                $this->writeLog("ReqserPlugin: Version mismatch detected - database may need manual refresh");
+                $this->writeLog("ReqserPlugin: Version mismatch detected - database may need manual refresh", __LINE__);
             }
         } catch (\Throwable $e) {
-            $this->writeLog("ReqserPlugin: Post-update version check failed: " . $e->getMessage());
+            $this->writeLog("ReqserPlugin: Post-update version check failed: " . $e->getMessage(), __LINE__);
         }
     }
 
@@ -147,7 +147,7 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
             $pluginDir = $this->versionService->getPluginDir();
             $tempFile = sys_get_temp_dir() . '/reqser_plugin_update.zip';
 
-            $this->writeLog("ReqserPlugin: Download details - URL: $downloadUrl, Plugin Dir: $pluginDir, Temp File: $tempFile");
+            $this->writeLog("ReqserPlugin: Download details - URL: $downloadUrl, Plugin Dir: $pluginDir, Temp File: $tempFile", __LINE__);
 
             // Clean up any existing temp file
             if (file_exists($tempFile)) {
@@ -159,14 +159,14 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
             $response = $client->request('GET', $downloadUrl);
             
             if ($response->getStatusCode() !== 200) {
-                $this->writeLog("ReqserPlugin: Download failed with status: " . $response->getStatusCode());
+                $this->writeLog("ReqserPlugin: Download failed with status: " . $response->getStatusCode(), __LINE__);
                 return false;
             }
 
             // Save to temp file
             file_put_contents($tempFile, $response->getContent());
 
-            $this->writeLog("ReqserPlugin: Downloaded ZIP to: " . $tempFile);
+            $this->writeLog("ReqserPlugin: Downloaded ZIP to: " . $tempFile, __LINE__);
 
             // Extract ZIP to plugin directory
             $zip = new \ZipArchive();
@@ -261,10 +261,11 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
         }
     }
 
-    private function writeLog(string $message): void
+    private function writeLog(string $message, $line = null): void
     {
         $timestamp = date('Y-m-d H:i:s');
-        file_put_contents($this->debugFile, "[$timestamp] $message\n", FILE_APPEND | LOCK_EX);
+        $lineInfo = $line ? " [Line:$line]" : "";
+        file_put_contents($this->debugFile, "[$timestamp]$lineInfo $message\n", FILE_APPEND | LOCK_EX);
     }
 
     private function recursiveCopy(string $source, string $dest): void

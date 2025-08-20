@@ -95,7 +95,7 @@ class ReqserVersionService
     public function getCurrentPluginVersion(): string|null
     {
         try {
-            $composerFile = $this->getPluginDir() . 'composer.json';
+            $composerFile = $this->getPluginDir() . '/composer.json';
             $this->writeLog("Looking for composer.json at: $composerFile");
             
             if (file_exists($composerFile)) {
