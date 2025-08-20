@@ -12,6 +12,7 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
 {
     private ReqserVersionService $versionService;
     private string $debugFile;
+    private bool $debugMode = false;
 
     public function __construct(ReqserVersionService $versionService)
     {
@@ -263,6 +264,10 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
 
     private function writeLog(string $message, $line = null): void
     {
+        if (!$this->debugMode) {
+            return;
+        }
+        
         $timestamp = date('Y-m-d H:i:s');
         $lineInfo = $line ? " [Line:$line]" : "";
         file_put_contents($this->debugFile, "[$timestamp]$lineInfo $message\n", FILE_APPEND | LOCK_EX);

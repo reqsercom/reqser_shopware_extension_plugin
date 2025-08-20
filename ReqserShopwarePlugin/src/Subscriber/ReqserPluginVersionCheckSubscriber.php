@@ -16,6 +16,8 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
     private ReqserVersionService $versionService;
     private TranslatorInterface $translator;
     private string $shopwareVersion;
+    private string $debugFile;
+    private bool $debugMode = false;
 
     public function __construct(ReqserVersionService $versionService, TranslatorInterface $translator)
     {
@@ -23,6 +25,7 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
         $this->versionService = $versionService;
         $this->translator = $translator;
         $this->shopwareVersion = $versionService->getShopwareVersion();
+        $this->debugFile = $this->versionService->getPluginDir() . '/debug_version_check.log';
     }
 
     public static function getSubscribedEvents(): array
@@ -34,9 +37,7 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
 
         public function onKernelResponse(ResponseEvent $event): void
     {
-        $debugFile = __DIR__ . '/../../debug_version_check.log';
-        $timestamp = date('Y-m-d H:i:s');
-        file_put_contents($debugFile, "\n=== DEBUG EXTENSION API [{$timestamp}] ===\n", FILE_APPEND | LOCK_EX);
+        $this->writeLog("=== DEBUG EXTENSION API ===", __LINE__);
         try {
             $request = $event->getRequest();
             $response = $event->getResponse();
@@ -45,7 +46,7 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
             $route = $request->attributes->get('_route');        
             // Check if this is an extension API call
             if (!$route || (strpos($route, 'extension') === false && strpos($request->getRequestUri(), 'extension') === false)) {
-                file_put_contents($debugFile, "Route not extension: " . $route . "\n", FILE_APPEND | LOCK_EX);
+                $this->writeLog("Route not extension: " . $route, __LINE__);
                 return;
             }
             
@@ -65,7 +66,7 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
             
             // Get version check data (cached for 24 hours)
             $versionData = $this->getVersionCheckData();
-            file_put_contents($debugFile, "Version data: " . json_encode($versionData, JSON_PRETTY_PRINT) . "\n", FILE_APPEND | LOCK_EX);
+            $this->writeLog("Version data: " . json_encode($versionData, JSON_PRETTY_PRINT), __LINE__);
             if (!$versionData) {
                 return;
             }
@@ -81,17 +82,17 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
                         && isset($versionData['plugin_version'])
                         && isset($versionData['plugin_download_url'])
                         ) {
-                            file_put_contents($debugFile, "Extension version: " . $extension['version'] . "\n", FILE_APPEND | LOCK_EX);
+                            $this->writeLog("Extension version: " . $extension['version'], __LINE__);
                             if ($this->versionService->updateIsNecessary($versionData['plugin_version'], $extension['version']) 
                                 && (!isset($extension['updateAvailable']) || $extension['updateAvailable'] !== true)){
-                                file_put_contents($debugFile, "Update is necessary\n", FILE_APPEND | LOCK_EX);
+                                $this->writeLog("Update is necessary", __LINE__);
 
                                 $extension['updateAvailable'] = true; 
                                 $extension['latestVersion'] = $versionData['plugin_version']; 
                                 $updateMessage = $this->translator->trans('reqser-plugin.update.clickTwiceToUpdate', ['%version%' => $versionData['plugin_version']]);
                                 $extension['label'] .= ' (' . $updateMessage . ')';
 
-                                file_put_contents($debugFile, "All Extension data after update: " . json_encode($extension, JSON_PRETTY_PRINT) . "\n", FILE_APPEND | LOCK_EX);
+                                $this->writeLog("All Extension data after update: " . json_encode($extension, JSON_PRETTY_PRINT), __LINE__);
                                 
                                 $data_changed = true;
                             } 
@@ -168,6 +169,17 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
         }
         
         return null;
+    }
+
+    private function writeLog(string $message, $line = null): void
+    {
+        if (!$this->debugMode) {
+            return;
+        }
+        
+        $timestamp = date('Y-m-d H:i:s');
+        $lineInfo = $line ? " [Line:$line]" : "";
+        file_put_contents($this->debugFile, "[$timestamp]$lineInfo $message\n", FILE_APPEND | LOCK_EX);
     }
 
 }

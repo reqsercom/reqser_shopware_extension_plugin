@@ -11,6 +11,7 @@ class ReqserVersionService
     private string $shopwareVersion;
     private string $projectDir;
     private ?PluginEntity $plugin = null;
+    private bool $debugMode = false;
 
     public function __construct(string $shopwareVersion, string $projectDir)
     {
@@ -30,19 +31,19 @@ class ReqserVersionService
             $client = HttpClient::create();
             $url = 'https://reqser.com/app/shopware/versioncheck/' . $this->shopwareVersion;
             
-            $this->writeLog("Requesting version data from: $url");
+            $this->writeLog("Requesting version data from: $url", __LINE__);
             
             $response = $client->request('GET', $url);
             
             if ($response->getStatusCode() === 200) {
                 $data = json_decode($response->getContent(), true);
-                $this->writeLog("Version data received: " . json_encode($data));
+                $this->writeLog("Version data received: " . json_encode($data), __LINE__);
                 return $data;
             } else {
-                $this->writeLog("API request failed with status: " . $response->getStatusCode());
+                $this->writeLog("API request failed with status: " . $response->getStatusCode(), __LINE__);
             }
         } catch (\Throwable $e) {
-            $this->writeLog("Failed to get version data: " . $e->getMessage());
+            $this->writeLog("Failed to get version data: " . $e->getMessage(), __LINE__);
         }
         
         return null;
@@ -58,17 +59,17 @@ class ReqserVersionService
             $latest = $this->parseVersion($latestVersion);
             $current = $this->parseVersion($currentVersion);
             
-            $this->writeLog("Comparing versions: latest={$latestVersion} vs current={$currentVersion}");
+            $this->writeLog("Comparing versions: latest={$latestVersion} vs current={$currentVersion}", __LINE__);
             
             // Compare major version
             if ($latest['major'] > $current['major']) {
-                $this->writeLog("Major version update available");
+                $this->writeLog("Major version update available", __LINE__);
                 return true;
             }
             
             // If major versions are equal, compare minor version
             if ($latest['major'] === $current['major'] && $latest['minor'] > $current['minor']) {
-                $this->writeLog("Minor version update available");
+                $this->writeLog("Minor version update available", __LINE__);
                 return true;
             }
             
@@ -76,14 +77,14 @@ class ReqserVersionService
             if ($latest['major'] === $current['major'] && 
                 $latest['minor'] === $current['minor'] && 
                 $latest['patch'] > $current['patch']) {
-                $this->writeLog("Patch version update available");
+                $this->writeLog("Patch version update available", __LINE__);
                 return true;
             }
             
-            $this->writeLog("No update necessary");
+            $this->writeLog("No update necessary", __LINE__);
             return false;
         } catch (\Throwable $e) {
-            $this->writeLog("Version comparison failed: " . $e->getMessage());
+            $this->writeLog("Version comparison failed: " . $e->getMessage(), __LINE__);
             // If version comparison fails, assume no update available
             return false;
         }
@@ -96,21 +97,21 @@ class ReqserVersionService
     {
         try {
             $composerFile = $this->getPluginDir() . '/composer.json';
-            $this->writeLog("Looking for composer.json at: $composerFile");
+            $this->writeLog("Looking for composer.json at: $composerFile", __LINE__);
             
             if (file_exists($composerFile)) {
                 $composerData = json_decode(file_get_contents($composerFile), true);
                 $version = $composerData['version'] ?? false;
-                $this->writeLog("Current plugin version from composer.json: $version");
+                $this->writeLog("Current plugin version from composer.json: $version", __LINE__);
                 return $version;
             } else {
-                $this->writeLog("composer.json file not found at: $composerFile");
+                $this->writeLog("composer.json file not found at: $composerFile", __LINE__);
             }
         } catch (\Throwable $e) {
-            $this->writeLog("Failed to get current plugin version: " . $e->getMessage());
+            $this->writeLog("Failed to get current plugin version: " . $e->getMessage(), __LINE__);
         }
         
-        $this->writeLog("No version found in composer.json, returning null");
+        $this->writeLog("No version found in composer.json, returning null", __LINE__);
         return null;
     }
 
@@ -120,7 +121,7 @@ class ReqserVersionService
     public function setPlugin(PluginEntity $plugin): void
     {
         $this->plugin = $plugin;
-        $this->writeLog("Plugin instance set - path: " . $plugin->getPath());
+        $this->writeLog("Plugin instance set - path: " . $plugin->getPath(), __LINE__);
     }
 
     /**
@@ -130,22 +131,22 @@ class ReqserVersionService
     {
         if ($this->plugin) {
             $pluginPath = $this->plugin->getPath();
-            $this->writeLog("Raw plugin->getPath(): $pluginPath");
+            $this->writeLog("Raw plugin->getPath(): $pluginPath", __LINE__);
             
             // Check if path is relative and make it absolute
             if (!str_starts_with($pluginPath, '/')) {
                 $absolutePath = $this->projectDir . '/' . rtrim($pluginPath, '/');
-                $this->writeLog("Converted relative to absolute: $absolutePath");
+                $this->writeLog("Converted relative to absolute: $absolutePath", __LINE__);
                 return $absolutePath;
             }
             
-            $this->writeLog("Using absolute plugin path: $pluginPath");
+            $this->writeLog("Using absolute plugin path: $pluginPath", __LINE__);
             return rtrim($pluginPath, '/');
         }
         
         // Fallback to constructed path when plugin instance not available
         $fallbackPath = $this->projectDir . '/custom/plugins/ReqserShopwarePlugin';
-        $this->writeLog("Using fallback path (no plugin instance): $fallbackPath");
+        $this->writeLog("Using fallback path (no plugin instance): $fallbackPath", __LINE__);
         return $fallbackPath;
     }
 
@@ -183,10 +184,15 @@ class ReqserVersionService
     /**
      * Write log message with timestamp
      */
-    public function writeLog(string $message): void
+    public function writeLog(string $message, $line = null): void
     {
+        if (!$this->debugMode) {
+            return;
+        }
+        
         $timestamp = date('Y-m-d H:i:s');
-        file_put_contents($this->debugFile, "[$timestamp] $message\n", FILE_APPEND | LOCK_EX);
+        $lineInfo = $line ? " [Line:$line]" : "";
+        file_put_contents($this->debugFile, "[$timestamp]$lineInfo $message\n", FILE_APPEND | LOCK_EX);
     }
 
     /**
