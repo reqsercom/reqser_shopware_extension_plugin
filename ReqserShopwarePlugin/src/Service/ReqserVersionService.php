@@ -4,29 +4,45 @@ namespace Reqser\Plugin\Service;
 
 use Symfony\Component\HttpClient\HttpClient;
 use Shopware\Core\Framework\Plugin\PluginEntity;
+use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 
 class ReqserVersionService
 {
+    private const CACHE_DURATION = 86400; // 24 hours in seconds
+    
     private string $debugFile;
     private string $shopwareVersion;
     private string $projectDir;
     private ?PluginEntity $plugin = null;
     private bool $debugMode = false;
+    private FilesystemAdapter $cache;
 
     public function __construct(string $shopwareVersion, string $projectDir)
     {
         $this->shopwareVersion = $shopwareVersion;
         $this->projectDir = $projectDir;
-        
-        // Initialize debug file with fallback path (no logging during construction to avoid circular dependency)
         $this->debugFile = $projectDir . '/custom/plugins/ReqserShopwarePlugin/debug_version_service.log';
+        $this->cache = new FilesystemAdapter('reqser_version_data');
     }
 
     /**
-     * Get version data from reqser.com API
+     * Get version data from reqser.com API (cached for 24 hours)
      */
     public function getVersionData(): ?array
     {
+        // Check cache first
+        $cacheKey = 'version_data_' . $this->shopwareVersion;
+        $cachedItem = $this->cache->getItem($cacheKey);
+        
+        if ($cachedItem->isHit()) {
+            $cachedData = $cachedItem->get();
+            $this->writeLog("Using cached version data (cached at: " . $cachedData['cached_at'] . ", status: " . $cachedData['status_code'] . ")", __LINE__);
+            return $cachedData['data'];
+        }
+        
+        // Cache miss - make API request
+        $this->writeLog("Cache miss - making fresh API request", __LINE__);
+        
         try {
             $client = HttpClient::create();
             $url = 'https://reqser.com/app/shopware/versioncheck/' . $this->shopwareVersion;
@@ -38,15 +54,53 @@ class ReqserVersionService
             if ($response->getStatusCode() === 200) {
                 $data = json_decode($response->getContent(), true);
                 $this->writeLog("Version data received: " . json_encode($data), __LINE__);
+                
+                // Cache the successful response
+                $this->cacheVersionData($cachedItem, $data, 200);
+                
                 return $data;
             } else {
-                $this->writeLog("API request failed with status: " . $response->getStatusCode(), __LINE__);
+                $statusCode = $response->getStatusCode();
+                $this->writeLog("API request failed with status: " . $statusCode, __LINE__);
+                
+                // Cache the failed response to avoid repeated requests
+                $this->cacheVersionData($cachedItem, null, $statusCode);
             }
         } catch (\Throwable $e) {
             $this->writeLog("Failed to get version data: " . $e->getMessage(), __LINE__);
+            
+            // Cache the exception to avoid repeated requests
+            $this->cacheVersionData($cachedItem, null, 'exception', $e->getMessage());
         }
         
         return null;
+    }
+
+    /**
+     * Cache version data with consistent structure and expiration
+     */
+    private function cacheVersionData($cachedItem, ?array $data, $statusCode, ?string $error = null): void
+    {
+        try {
+            $cacheData = [
+                'data' => $data,
+                'cached_at' => date('Y-m-d H:i:s'),
+                'status_code' => $statusCode
+            ];
+            
+            if ($error !== null) {
+                $cacheData['error'] = $error;
+            }
+            
+            $cachedItem->set($cacheData);
+            $cachedItem->expiresAfter(self::CACHE_DURATION);
+            $this->cache->save($cachedItem);
+            
+            $this->writeLog("Response cached for 24 hours (status: $statusCode)", __LINE__);
+        } catch (\Throwable $e) {
+            // Silently handle cache errors to prevent breaking the application
+            $this->writeLog("Failed to cache version data: " . $e->getMessage(), __LINE__);
+        }
     }
 
     /**

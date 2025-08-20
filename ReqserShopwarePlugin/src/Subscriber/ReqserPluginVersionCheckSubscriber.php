@@ -37,7 +37,6 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
 
         public function onKernelResponse(ResponseEvent $event): void
     {
-        $this->writeLog("=== DEBUG EXTENSION API ===", __LINE__);
         try {
             $request = $event->getRequest();
             $response = $event->getResponse();
@@ -46,7 +45,7 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
             $route = $request->attributes->get('_route');        
             // Check if this is an extension API call
             if (!$route || (strpos($route, 'extension') === false && strpos($request->getRequestUri(), 'extension') === false)) {
-                $this->writeLog("Route not extension: " . $route, __LINE__);
+                 $this->writeLog("Route not extension: " . $route, __LINE__);
                 return;
             }
             
