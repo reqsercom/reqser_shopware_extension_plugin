@@ -16,7 +16,9 @@ class ReqserVersionService
     {
         $this->shopwareVersion = $shopwareVersion;
         $this->projectDir = $projectDir;
-        $this->debugFile = $this->getPluginDir() . '/debug_version_service.log';
+        
+        // Initialize debug file with fallback path (no logging during construction to avoid circular dependency)
+        $this->debugFile = $projectDir . '/custom/plugins/ReqserShopwarePlugin/debug_version_service.log';
     }
 
     /**
@@ -93,18 +95,22 @@ class ReqserVersionService
     public function getCurrentPluginVersion(): string|null
     {
         try {
-            $composerFile = $this->getPluginDir() . '/composer.json';
+            $composerFile = $this->getPluginDir() . 'composer.json';
+            $this->writeLog("Looking for composer.json at: $composerFile");
+            
             if (file_exists($composerFile)) {
                 $composerData = json_decode(file_get_contents($composerFile), true);
                 $version = $composerData['version'] ?? false;
                 $this->writeLog("Current plugin version from composer.json: $version");
                 return $version;
+            } else {
+                $this->writeLog("composer.json file not found at: $composerFile");
             }
         } catch (\Throwable $e) {
             $this->writeLog("Failed to get current plugin version: " . $e->getMessage());
         }
         
-        $this->writeLog("Fallback to version 1.0.0");
+        $this->writeLog("No version found in composer.json, returning null");
         return null;
     }
 
@@ -114,6 +120,7 @@ class ReqserVersionService
     public function setPlugin(PluginEntity $plugin): void
     {
         $this->plugin = $plugin;
+        $this->writeLog("Plugin instance set - path: " . $plugin->getPath());
     }
 
     /**
@@ -122,11 +129,24 @@ class ReqserVersionService
     public function getPluginDir(): string
     {
         if ($this->plugin) {
-            return $this->plugin->getPath();
+            $pluginPath = $this->plugin->getPath();
+            $this->writeLog("Raw plugin->getPath(): $pluginPath");
+            
+            // Check if path is relative and make it absolute
+            if (!str_starts_with($pluginPath, '/')) {
+                $absolutePath = $this->projectDir . '/' . rtrim($pluginPath, '/');
+                $this->writeLog("Converted relative to absolute: $absolutePath");
+                return $absolutePath;
+            }
+            
+            $this->writeLog("Using absolute plugin path: $pluginPath");
+            return rtrim($pluginPath, '/');
         }
         
         // Fallback to constructed path when plugin instance not available
-        return $this->projectDir . '/custom/plugins/ReqserShopwarePlugin';
+        $fallbackPath = $this->projectDir . '/custom/plugins/ReqserShopwarePlugin';
+        $this->writeLog("Using fallback path (no plugin instance): $fallbackPath");
+        return $fallbackPath;
     }
 
     /**
