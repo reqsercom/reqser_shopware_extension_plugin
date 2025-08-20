@@ -86,13 +86,13 @@ class ReqserVersionService
     /**
      * Get current plugin version from composer.json
      */
-    public function getCurrentPluginVersion(): string
+    public function getCurrentPluginVersion(): string|null
     {
         try {
             $composerFile = __DIR__ . '/../../composer.json';
             if (file_exists($composerFile)) {
                 $composerData = json_decode(file_get_contents($composerFile), true);
-                $version = $composerData['version'] ?? '1.0.0';
+                $version = $composerData['version'] ?? false;
                 $this->writeLog("Current plugin version from composer.json: $version");
                 return $version;
             }
@@ -101,7 +101,7 @@ class ReqserVersionService
         }
         
         $this->writeLog("Fallback to version 1.0.0");
-        return '1.0.0';
+        return null;
     }
 
     /**

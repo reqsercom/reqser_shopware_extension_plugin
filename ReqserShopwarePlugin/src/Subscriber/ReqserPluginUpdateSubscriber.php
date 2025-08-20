@@ -44,6 +44,10 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
             
             // Get current plugin version and check for updates
             $currentVersion = $this->versionService->getCurrentPluginVersion();
+            if (!isset($currentVersion)) {
+                $this->writeLog("ReqserPlugin: No current version found, skipping update");
+                return;
+            }
             $versionData = $this->versionService->getVersionData();
             
             $this->writeLog("ReqserPlugin: Version data received: " . json_encode($versionData));

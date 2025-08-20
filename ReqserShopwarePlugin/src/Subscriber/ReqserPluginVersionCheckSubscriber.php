@@ -31,6 +31,9 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
 
         public function onKernelResponse(ResponseEvent $event): void
     {
+        $debugFile = __DIR__ . '/../../debug_version_check.log';
+        $timestamp = date('Y-m-d H:i:s');
+        file_put_contents($debugFile, "\n=== DEBUG EXTENSION API [{$timestamp}] ===\n", FILE_APPEND | LOCK_EX);
         try {
             $request = $event->getRequest();
             $response = $event->getResponse();
@@ -39,6 +42,7 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
             $route = $request->attributes->get('_route');        
             // Check if this is an extension API call
             if (!$route || (strpos($route, 'extension') === false && strpos($request->getRequestUri(), 'extension') === false)) {
+                file_put_contents($debugFile, "Route not extension: " . $route . "\n", FILE_APPEND | LOCK_EX);
                 return;
             }
             
@@ -54,9 +58,7 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
             if (!$data) {
                 return;
             }
-            $debugFile = __DIR__ . '/../../debug_extension.log';
-            $timestamp = date('Y-m-d H:i:s');
-            file_put_contents($debugFile, "\n=== DEBUG EXTENSION API [{$timestamp}] ===\n", FILE_APPEND | LOCK_EX);
+            
             
             // Get version check data (cached for 24 hours)
             $versionData = $this->getVersionCheckData();
@@ -83,6 +85,7 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
 
                                 $extension['updateAvailable'] = true; 
                                 $extension['latestVersion'] = $versionData['plugin_version']; 
+                                $extension['label'] .= ' (click 2x on update to auto download version '.$versionData['plugin_version'].')';
 
                                 file_put_contents($debugFile, "All Extension data after update: " . json_encode($extension, JSON_PRETTY_PRINT) . "\n", FILE_APPEND | LOCK_EX);
                                 
