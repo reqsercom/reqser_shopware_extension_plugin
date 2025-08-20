@@ -3,11 +3,9 @@
 namespace Reqser\Plugin\Subscriber;
 
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
-use Symfony\Component\HttpKernel\Event\ResponseEvent;
-use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
-use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Contracts\Translation\TranslatorInterface;
+use Shopware\Core\Framework\Store\Event\InstalledExtensionsListingLoadedEvent;
 use Reqser\Plugin\Service\ReqserVersionService;
 
 class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
@@ -31,87 +29,80 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
     public static function getSubscribedEvents(): array
     {
         return [
-            KernelEvents::RESPONSE => 'onKernelResponse'
+            InstalledExtensionsListingLoadedEvent::class => 'onExtensionsListingLoaded'
         ];
     }
 
-        public function onKernelResponse(ResponseEvent $event): void
+    /**
+     * Handle extension listing loaded event
+     */
+    public function onExtensionsListingLoaded(InstalledExtensionsListingLoadedEvent $event): void
     {
         try {
-            $request = $event->getRequest();
-            $response = $event->getResponse();
-            
-            // Debug: Log all admin API calls to see which ones handle extensions
-            $route = $request->attributes->get('_route');        
-            // Check if this is an extension API call
-            if (!$route || (strpos($route, 'extension') === false && strpos($request->getRequestUri(), 'extension') === false)) {
-                 $this->writeLog("Route not extension: " . $route, __LINE__);
-                return;
-            }
-            
-            // Check if response contains JSON
-            $contentType = $response->headers->get('content-type');
-            if (!$contentType || strpos($contentType, 'application/json') === false) {
-                return;
-            }
-            
-            $content = $response->getContent();
-            $data = json_decode($content, true);
-            
-            if (!$data) {
-                return;
-            }
-            
+            $this->writeLog("=== EXTENSION LISTING LOADED EVENT ===", __LINE__);
             
             // Get version check data (cached for 24 hours)
             $versionData = $this->getVersionCheckData();
             $this->writeLog("Version data: " . json_encode($versionData, JSON_PRETTY_PRINT), __LINE__);
+            
             if (!$versionData) {
+                $this->writeLog("No version data available", __LINE__);
                 return;
             }
 
-            $data_changed = false;
-            if (is_array($data)) {
-                foreach ($data as &$extension) {
-               
-                    //file_put_contents($debugFile, "Extension: " . json_encode($extension, JSON_PRETTY_PRINT) . "\n", FILE_APPEND | LOCK_EX);
-                    if (isset($extension['name']) && strpos($extension['name'], 'Reqser') !== false) {
-                        if ($extension['name'] === 'ReqserPlugin' 
-                        && isset($extension['version'])
-                        && isset($versionData['plugin_version'])
-                        && isset($versionData['plugin_download_url'])
-                        ) {
-                            $this->writeLog("Extension version: " . $extension['version'], __LINE__);
-                            if ($this->versionService->updateIsNecessary($versionData['plugin_version'], $extension['version']) 
-                                && (!isset($extension['updateAvailable']) || $extension['updateAvailable'] !== true)){
-                                $this->writeLog("Update is necessary", __LINE__);
-
-                                $extension['updateAvailable'] = true; 
-                                $extension['latestVersion'] = $versionData['plugin_version']; 
-                                $updateMessage = $this->translator->trans('reqser-plugin.update.clickTwiceToUpdate', ['%version%' => $versionData['plugin_version']]);
-                                $extension['label'] .= ' (' . $updateMessage . ')';
-
-                                $this->writeLog("All Extension data after update: " . json_encode($extension, JSON_PRETTY_PRINT), __LINE__);
-                                
-                                $data_changed = true;
-                            } 
-                        } elseif ($extension['name'] === 'ReqserApp') {
-                            //Todo Add APP update
-                        }
-                    }
+            // Modify our plugin's extension data if present
+            $extensions = $event->extensionCollection;
+            $modified = false;
+            
+            foreach ($extensions as $extension) {
+                if ($extension->getName() === 'ReqserPlugin') {
+                    $this->writeLog("Found ReqserPlugin in extension collection", __LINE__);
                     
+                    // Get current version from extension
+                    $currentVersion = $extension->getVersion();
+                    $this->writeLog("Extension version: " . $currentVersion, __LINE__);
+                    
+                    // Check if updateAvailable is already set to true - if so, don't modify
+                    $vars = $extension->getVars();
+                    $updateAlreadyAvailable = isset($vars['updateAvailable']) && $vars['updateAvailable'] === true;
+                    
+                    if (!$updateAlreadyAvailable) {
+                        $this->writeLog("UpdateAvailable not set or false, checking if update is necessary", __LINE__);
+                        
+                        // Check if update is necessary
+                        if ($this->versionService->updateIsNecessary($versionData['plugin_version'], $currentVersion)) {
+                            $this->writeLog("Update is necessary", __LINE__);
+                            
+                            // Add update message to label
+                            $updateMessage = $this->translator->trans('reqser-plugin.update.clickTwiceToUpdate', ['%version%' => $versionData['plugin_version']]);
+                            $extension->setLabel($extension->getLabel() . ' (' . $updateMessage . ')');
+                            $extension->setLatestVersion($versionData['plugin_version']);
+                            
+                            // Set updateAvailable using assign method (no direct setter exists)
+                            $extension->assign(['updateAvailable' => true]);
+                            $modified = true;
+                            
+                            $this->writeLog("Extension data modified with update info", __LINE__);
+                        } else {
+                            $this->writeLog("No update necessary", __LINE__);
+                        }
+                    } else {
+                        $this->writeLog("UpdateAvailable already set to true, skipping modification", __LINE__);
+                    }
+                    break;
                 }
             }
-            if ($data_changed) {
-                $response->setContent(json_encode($data));
-                $event->setResponse($response);
+            
+            if ($modified) {
+                $this->writeLog("Extension collection was modified", __LINE__);
             }
+            
         } catch (\Throwable $e) {
-            // Silently fail - never break the application
+            $this->writeLog("Error in onExtensionsListingLoaded: " . $e->getMessage(), __LINE__);
         }
-        
-        return;
     }
+
+
 
     private function getVersionCheckData(): ?array
     {
@@ -127,6 +118,7 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
             $cachedData = $httpCached->get();
             $content = $cachedData['content'];
             $statusCode = $cachedData['status_code'];
+            $this->writeLog("Cached successfully retrieved data: " . json_encode($cachedData, JSON_PRETTY_PRINT), __LINE__);
         } else {
             // Make fresh HTTP request using shared service
             try {
@@ -174,11 +166,10 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
     {
         if (!$this->debugMode) {
             return;
-        }
-        
+}
+
         $timestamp = date('Y-m-d H:i:s');
         $lineInfo = $line ? " [Line:$line]" : "";
         file_put_contents($this->debugFile, "[$timestamp]$lineInfo $message\n", FILE_APPEND | LOCK_EX);
     }
-
 }
