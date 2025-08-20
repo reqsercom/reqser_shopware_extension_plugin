@@ -80,7 +80,7 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
                         && isset($versionData['plugin_download_url'])
                         ) {
                             file_put_contents($debugFile, "Extension version: " . $extension['version'] . "\n", FILE_APPEND | LOCK_EX);
-                            if ($this->versionService->updateIsNecessary($versionData['plugin_version'], $extension['version'])){
+                            if ($this->versionService->updateIsNecessary($versionData['plugin_version'], $extension['version']) && $extension['updateAvailable'] !== true){
                                 file_put_contents($debugFile, "Update is necessary\n", FILE_APPEND | LOCK_EX);
 
                                 $extension['updateAvailable'] = true; 
