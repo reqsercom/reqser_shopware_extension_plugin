@@ -17,7 +17,7 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
     private ReqserNotificationService $notificationService;
     private TranslatorInterface $translator;
     private LoggerInterface $logger;
-    private bool $debugMode = true;
+    private bool $debugMode = false;
     private static bool $updateInProgress = false;
 
     public function __construct(
