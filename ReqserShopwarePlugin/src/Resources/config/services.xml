@@ -78,5 +78,27 @@
             <argument type="service" id="request_stack"/>
         </service>
 
+        <service id="Reqser\Plugin\Subscriber\ReqserPluginVersionCheckSubscriber"
+                class="Reqser\Plugin\Subscriber\ReqserPluginVersionCheckSubscriber">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserVersionService" />
+            <argument type="service" id="translator" />
+            <tag name="kernel.event_subscriber" />
+        </service>
+
+        <service id="Reqser\Plugin\Service\ReqserVersionService"
+                class="Reqser\Plugin\Service\ReqserVersionService">
+            <argument>%kernel.shopware_version%</argument>
+            <argument>%kernel.project_dir%</argument>
+        </service>
+
+        <service id="Reqser\Plugin\Subscriber\ReqserPluginUpdateSubscriber"
+                class="Reqser\Plugin\Subscriber\ReqserPluginUpdateSubscriber">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserVersionService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserNotificationService" />
+            <argument type="service" id="translator" />
+            <argument type="service" id="logger" />
+            <tag name="kernel.event_subscriber" />
+        </service>
+
     </services>
 </container>
