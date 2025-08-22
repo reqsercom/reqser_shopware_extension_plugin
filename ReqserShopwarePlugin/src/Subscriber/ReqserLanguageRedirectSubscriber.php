@@ -97,7 +97,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             if ($this->debugMode) {
                 $this->webhookService->sendErrorToWebhook([
                     'type' => 'debug', 
-                    'info' => 'Debug mode activated', 
+                    'info' => 'Debug mode active', 
                     'domain_data' => $currentDomain, 
                     'session_data' => $session->all(),
                     'custom_fields' => $customFields,
