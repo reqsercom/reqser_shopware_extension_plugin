@@ -6,12 +6,12 @@ use Reqser\Plugin\Service\ReqserWebhookService;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
-use Symfony\Component\HttpKernel\KernelEvents;
 
 class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
 {
     private $requestStack;
     private $webhookService;
+    private bool $debugMode;
     
     public function __construct(
         RequestStack $requestStack,
@@ -20,37 +20,32 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
     {
         $this->requestStack = $requestStack;
         $this->webhookService = $webhookService;
+        $this->debugMode = false;
     }
 
     public static function getSubscribedEvents(): array
     {
         return [
-            KernelEvents::RESPONSE => 'onKernelResponse'
+            'frontend.checkout.switch-language.response' => 'onLanguageSwitchResponse'
         ];
     }
 
-    public function onKernelResponse(ResponseEvent $event): void
+    public function onLanguageSwitchResponse(ResponseEvent $event): void
     {
         try {
-            $request = $event->getRequest();
-            $domainId = $request->attributes->get('sw-domain-id');
-            $currentRoute = $request->attributes->get('_route');
-
-            if ($currentRoute !== 'frontend.checkout.switch-language' || $domainId === null) {
-                return;
-            }
-
-            $this->requestStack->getSession()->set('reqser_redirect_domain_user_override', $domainId);
+            $this->requestStack->getSession()->set('reqser_redirect_domain_user_override', time());
         } catch (\Throwable $e) {
-            $this->webhookService->sendErrorToWebhook([
-                'type' => 'error',
-                'function' => 'onKernelResponse',
-                'message' => $e->getMessage() ?? 'unknown',
-                'trace' => $e->getTraceAsString() ?? 'unknown',
-                'timestamp' => date('Y-m-d H:i:s'),
-                'file' => __FILE__, 
-                'line' => __LINE__,
-            ]);
+            if ($this->debugMode) {
+                $this->webhookService->sendErrorToWebhook([
+                    'type' => 'error',
+                    'function' => 'onLanguageSwitchResponse',
+                    'message' => $e->getMessage() ?? 'unknown',
+                    'trace' => $e->getTraceAsString() ?? 'unknown',
+                    'timestamp' => date('Y-m-d H:i:s'),
+                    'file' => __FILE__, 
+                    'line' => __LINE__,
+                ]);
+            }
             return;
         }
     }
