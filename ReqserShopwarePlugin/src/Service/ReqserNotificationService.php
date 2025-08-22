@@ -16,7 +16,7 @@ class ReqserNotificationService
         $this->notificationRepository = $notificationRepository;
     }
 
-    public function sendAdminNotification(string $message): void
+    public function sendAdminNotification(string $message, string $title = 'ReqserPlugin', string $status = 'success'): void
     {
         //use this
         //$this->notificationService->sendAdminNotification('StorefrontRenderEvent triggered');
@@ -26,10 +26,13 @@ class ReqserNotificationService
         $this->notificationRepository->create([
             [
                 'id' => Uuid::randomHex(),
-                'status' => 'info',
+                'status' => $status,
+                'title' => $title,
                 'message' => $message,
                 'adminOnly' => true,
                 'requiredPrivileges' => [],
+                'createdByIntegrationId' => null,
+                'createdByUserId' => null,
             ]
         ], $context);
     }

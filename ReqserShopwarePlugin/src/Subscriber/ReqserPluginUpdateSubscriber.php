@@ -17,7 +17,7 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
     private ReqserNotificationService $notificationService;
     private TranslatorInterface $translator;
     private LoggerInterface $logger;
-    private bool $debugMode = true;
+    private bool $debugMode = false;
     private static bool $updateInProgress = false;
 
     public function __construct(
@@ -98,6 +98,16 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
 
             $this->writeLog("Update is necessary - current: $currentVersion, latest: {$targetVersion}", __LINE__);
 
+            // Get translated message BEFORE replacing plugin files (so snippets are still available)
+            $successMessage = $this->translator->trans('reqser-plugin.update.downloadSuccessful');
+            $this->writeLog("Pre-update translated message: $successMessage", __LINE__);
+            
+            // If translation failed (returns the key), use fallback English text
+            if ($successMessage === 'reqser-plugin.update.downloadSuccessful') {
+                $successMessage = 'Download was successful. Please click update again to complete the process.';
+                $this->writeLog("Translation failed, using fallback message: $successMessage", __LINE__);
+            }
+
             // Create backup of current plugin folder
             $backupSuccess = $this->createPluginBackup();
             if (!$backupSuccess) {
@@ -114,32 +124,15 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
                 // Clean up backup folder after successful update
                 $this->cleanupBackup();
 
-                // Send translated message to user that download was successful and they need to click update again
-                $message = $this->translator->trans('reqser-plugin.update.downloadSuccessful');
-                $this->writeLog("Translated message: $message", __LINE__);
-                
-                // If translation failed (returns the key), use fallback English text
-                if ($message === 'reqser-plugin.update.downloadSuccessful') {
-                    $message = 'Download was successful. Please click update again to complete the process.';
-                    $this->writeLog("Translation failed, using fallback message: $message", __LINE__);
-                }
+                // Send pre-fetched translated message to user
+                $this->writeLog("Sending notification with message: $successMessage", __LINE__);
                 
                 $this->notificationService->sendAdminNotification(
-                    $message, 
+                    $successMessage, 
                     'ReqserPlugin Update',
                     'success'
                 );
-                
-                // Set the upgrade version for Shopware's update process
-                /*try {
-                    $this->writeLog("Setting upgrade version to: $targetVersion", __LINE__);
-                    
-                    // Use the public setter to set the upgrade version
-                    $plugin->setUpgradeVersion($targetVersion);
-                    $this->writeLog("Successfully set upgradeVersion to: $targetVersion", __LINE__);
-                } catch (\Throwable $e) {
-                    $this->writeLog("Failed to set upgrade version: " . $e->getMessage(), __LINE__);
-                }*/
+
             } else {
                 $this->writeLog("Failed to download update, attempting rollback", __LINE__);
                 $this->rollbackFromBackup();
