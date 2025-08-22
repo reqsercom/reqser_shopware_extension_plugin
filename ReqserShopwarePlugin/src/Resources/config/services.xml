@@ -94,6 +94,9 @@
         <service id="Reqser\Plugin\Subscriber\ReqserPluginUpdateSubscriber"
                 class="Reqser\Plugin\Subscriber\ReqserPluginUpdateSubscriber">
             <argument type="service" id="Reqser\Plugin\Service\ReqserVersionService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserNotificationService" />
+            <argument type="service" id="translator" />
+            <argument type="service" id="logger" />
             <tag name="kernel.event_subscriber" />
         </service>
 
