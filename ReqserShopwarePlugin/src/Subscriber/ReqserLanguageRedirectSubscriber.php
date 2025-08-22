@@ -571,18 +571,18 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             return false;
         }
 
-        // Check if debugModeIP is set and validate the request IP
-        if (isset($customFields['ReqserRedirect']['debugModeIP'])) {
+        // Check if debugModeIp is set and validate the request IP
+        if (isset($customFields['ReqserRedirect']['debugModeIp'])) {
             $clientIp = $request->getClientIp();
-            $debugModeIP = $customFields['ReqserRedirect']['debugModeIP'];
+            $debugModeIp = $customFields['ReqserRedirect']['debugModeIp'];
             
-            if ($clientIp == $debugModeIP) {
+            if ($clientIp == $debugModeIp) {
                             // IP matches, activate debug mode
             $this->webhookService->sendErrorToWebhook([
                 'type' => 'debug', 
                 'info' => 'Debug mode activated - IP match', 
                 'clientIp' => $clientIp, 
-                'debugModeIP' => $debugModeIP, 
+                'debugModeIp' => $debugModeIp, 
                 'sessionValues' => $session->all(), 
                 'domain_id' => $currentDomain->getId(), 
                 'file' => __FILE__, 
