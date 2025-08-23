@@ -477,8 +477,8 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         $userOverrideEnabled = $customFields['ReqserRedirect']['userOverrideEnabled'] ?? false;
         
         // Check if user override conditions are met
-        if ($userOverrideEnabled === true && $advancedRedirectEnabled === true && $session->get('reqser_redirect_domain_user_override', false)) {
-            $overrideTimestamp = $session->get('reqser_redirect_domain_user_override');
+        if ($userOverrideEnabled === true && $advancedRedirectEnabled === true && $session->get('reqser_redirect_user_override_timestamp', false)) {
+            $overrideTimestamp = $session->get('reqser_redirect_user_override_timestamp');
             
             if (isset($customFields['ReqserRedirect']['overrideIgnorePeriodS'])) {
                 // Check if the override timestamp is younger than the overrideIgnorePeriodS
