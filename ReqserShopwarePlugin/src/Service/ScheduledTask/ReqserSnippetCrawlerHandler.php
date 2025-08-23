@@ -5,14 +5,13 @@ namespace Reqser\Plugin\Service\ScheduledTask;
 use Doctrine\DBAL\Connection;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTaskHandler;
-use Symfony\Component\Messenger\Attribute\AsMessageHandler;
+
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\App\ShopId\ShopIdProvider;
 use Shopware\Core\Framework\Context;
 
-#[AsMessageHandler(handles: ReqserSnippetCrawler::class)]
 class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
 {
     private Connection $connection;
@@ -36,6 +35,12 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
         $this->logger = $logger;
         $this->container = $container;
         $this->shopIdProvider = $shopIdProvider;
+    }
+
+    //Needed for Shopware <=6.5 support, not necessary from 6.6+
+    public static function getHandledMessages(): iterable
+    {
+        return [ReqserSnippetCrawler::class];
     }
 
     public function run(): void

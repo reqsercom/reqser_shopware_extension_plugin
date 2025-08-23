@@ -1,4 +1,6 @@
 # Changelog
+## 1.5.65.0
+- Version based on 1.5.0 only for Shopware <=6.5
 
 ## 1.5.0
 - Improved redirect settings
