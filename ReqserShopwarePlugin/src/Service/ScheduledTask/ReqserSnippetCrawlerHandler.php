@@ -299,7 +299,7 @@ class ReqserSnippetCrawlerHandler extends ScheduledTaskHandler
      * @param string $filePath
      * @return array|null
      */
-    private function getSnippetSetIdFromFilePath(string $filePath): array|null
+    private function getSnippetSetIdFromFilePath(string $filePath): ?array
     {
         $fileName = pathinfo($filePath, PATHINFO_BASENAME); // Get the basename of the file
         $parts = explode('.', $fileName); // Split by periods
