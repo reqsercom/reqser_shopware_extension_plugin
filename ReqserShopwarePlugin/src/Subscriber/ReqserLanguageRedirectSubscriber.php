@@ -77,14 +77,13 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
      */
     public function onStorefrontRender(StorefrontRenderEvent $event): void
     {
-        try{
-            // Store the event globally for use in other methods
-            $this->currentEvent = $event;
-           
+        try{           
             // Check if the app is active
             if (!$this->appService->isAppActive()) {
-                //return;
+                return;
             }
+
+            $this->currentEvent = $event;
           
             $request = $event->getRequest();
             $domainId = $request->attributes->get('sw-domain-id');
@@ -103,7 +102,6 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             $this->debugMode = true;
             $this->debugEchoMode = true;
             if ($this->debugMode) {
-                
                 $this->webhookService->sendErrorToWebhook([
                     'type' => 'debug', 
                     'info' => 'Debug mode active', 
