@@ -567,6 +567,8 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 }
                 return true; // Skip redirect (no period restriction)
             }
+        } else {
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'User override not active - skipping redirect', 'userOverrideEnabled' => $userOverrideEnabled, 'advancedRedirectEnabled' => $advancedRedirectEnabled, 'overrideTimestamp' => $session->get('reqser_redirect_user_override_timestamp', false),  'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
         }
         
         return false; // Don't skip redirect
