@@ -18,14 +18,21 @@ class ReqserWebhookService
         $this->logger = $logger;
     }
 
-    public function sendErrorToWebhook(array $data): void
+    public function sendErrorToWebhook(array $data, bool $echoData = false): void
     {
+        
         $url = $this->webhookUrl;
         // Add standard data (host and shop_id)
         $data['host'] = $_SERVER['HTTP_HOST'] ?? 'unknown';
         $data['shopId'] = $this->shopIdProvider->getShopId() ?? 'unknown';
 
         $payload = json_encode($data);
+
+        // Echo data if requested
+        if ($echoData) {
+            $this->echoWebhookData($url, $data, $payload);
+            return;
+        }
 
         if (
             function_exists('curl_init') &&
@@ -52,5 +59,31 @@ class ReqserWebhookService
 
             curl_close($ch);
         }
+    }
+
+    /**
+     * Echo webhook data for debug purposes
+     * Only works when debug mode is enabled
+     * 
+     * @param string $url The webhook URL
+     * @param array $data The webhook data
+     * @param string $payload The JSON payload
+     */
+    private function echoWebhookData(string $url, array $data, string $payload): void
+    {
+        // Only echo if this is a debug webhook (indicating debug mode is active)
+        if (($data['type'] ?? '') !== 'debug') {
+            return;
+        }
+
+        echo "<div style='background: #e3f2fd; padding: 15px; margin: 10px; border: 1px solid #90caf9; font-family: monospace; border-radius: 5px;'>";
+        echo "<h3>📡 WEBHOOK DEBUG ECHO</h3>";
+        echo "<strong>URL:</strong> " . htmlspecialchars($url) . "<br>";
+        echo "<strong>Timestamp:</strong> " . date('Y-m-d H:i:s') . "<br>";
+        echo "<strong>Data Type:</strong> " . htmlspecialchars($data['type'] ?? 'unknown') . "<br>";
+        echo "<strong>Info:</strong> " . htmlspecialchars($data['info'] ?? 'no info') . "<br>";
+        echo "<strong>Raw Payload:</strong><br>";
+        echo "<pre style='background: #f5f5f5; padding: 10px; border-radius: 3px; overflow-x: auto;'>" . htmlspecialchars($payload) . "</pre>";
+        echo "</div>";
     }
 }
