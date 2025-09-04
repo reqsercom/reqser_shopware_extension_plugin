@@ -99,8 +99,10 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             $customFields = $currentDomain->getCustomFields();
             
             //Debug Mode Check - update global property if actually active
-            $this->debugMode = true;
-            $this->debugEchoMode = true;
+            $this->debugMode = $this->isDebugModeActive($customFields, $request, $session, $currentDomain);
+            if ($this->debugMode) {
+                $this->debugEchoMode = isset($customFields['ReqserRedirect']['debugEchoMode']) && $customFields['ReqserRedirect']['debugEchoMode'] === true;
+            }
             if ($this->debugMode) {
                 $this->webhookService->sendErrorToWebhook([
                     'type' => 'debug', 
@@ -108,6 +110,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                     'domain_data' => $currentDomain, 
                     'session_data' => $session->all(),
                     'custom_fields' => $customFields,
+                    'current_server_time' => time(),
                     'file' => __FILE__, 
                     'line' => __LINE__
                 ], $this->debugEchoMode);
@@ -142,6 +145,8 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             if ($this->shouldSkipDueToUserOverride($customFields, $session, $advancedRedirectEnabled, $currentDomain)) {
                 if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Skipping redirect - user override active', 'domain_id' => $domainId, 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
                 return;
+            } else {
+                if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'User override not found within timeframe, continuing', 'domain_id' => $domainId, 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             }
             
             //Session Redirect Validation
@@ -527,9 +532,11 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         
         // Check if user override conditions are met
         if ($userOverrideEnabled === true && $advancedRedirectEnabled === true && $session->get('reqser_redirect_user_override_timestamp', false)) {
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'User override active - checking conditions', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             $overrideTimestamp = $session->get('reqser_redirect_user_override_timestamp');
             
             if (isset($customFields['ReqserRedirect']['overrideIgnorePeriodS'])) {
+                if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'overrideIgnorePeriodS isset', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
                 // Check if the override timestamp is younger than the overrideIgnorePeriodS
                 if ($overrideTimestamp > time() - $customFields['ReqserRedirect']['overrideIgnorePeriodS']) {
                     if ($this->debugMode) {
@@ -544,6 +551,8 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                         ]);
                     }
                     return true; // Skip redirect
+                } else {
+                    if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Override Timestamp '.$overrideTimestamp.' is not bigger than time(): '.time().' minus overrideIgnorePeriodS: '.$customFields['ReqserRedirect']['overrideIgnorePeriodS'], 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
                 }
             } else {
                 if ($this->debugMode) {
