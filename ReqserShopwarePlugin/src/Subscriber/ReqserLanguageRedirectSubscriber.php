@@ -31,6 +31,8 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
     private $webhookService;
     private LoggerInterface $logger;
     private bool $debugMode;
+    private ?StorefrontRenderEvent $currentEvent = null;
+    private ?string $primaryBrowserLanguage = null;
 
     public function __construct(
         RequestStack $requestStack, 
@@ -51,6 +53,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         $this->logger = $logger;
         $this->debugMode = false; // Initialize debug mode as false by default
     }
+
 
     /**
      * Get the events this subscriber listens to
@@ -73,6 +76,8 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
     public function onStorefrontRender(StorefrontRenderEvent $event): void
     {
         try{
+            // Store the event globally for use in other methods
+            $this->currentEvent = $event;
            
             // Check if the app is active
             if (!$this->appService->isAppActive()) {
@@ -105,9 +110,11 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                     'line' => __LINE__
                 ]);
             }
+
+            $javaScriptRedirect = isset($customFields['ReqserRedirect']['javaScriptRedirect']) && $customFields['ReqserRedirect']['javaScriptRedirect'] === true;
             
             //Universal Check if Header was already sent, then we can't redirect anymore
-            if (headers_sent()) {
+            if (headers_sent() && !$javaScriptRedirect) {
                 if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Headers already sent - redirect not possible', 'domain_id' => $domainId, 'file' => __FILE__, 'line' => __LINE__]);
                 return;
             }
@@ -118,6 +125,12 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             //Domain Configuration Validation
             if (!$this->isDomainValidForRedirect($customFields, $currentDomain)) {
                 if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Domain validation failed - stopping redirect', 'domain_id' => $domainId, 'file' => __FILE__, 'line' => __LINE__]);
+                return;
+            }
+
+            //Early Exit Check - if browser language matches current domain, no redirect needed
+            if ($this->isBrowserLanguageMatchingCurrentDomain($request, $currentDomain)) {
+                if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Browser language matches current domain - no redirect needed', 'domain_id' => $domainId, 'file' => __FILE__, 'line' => __LINE__]);
                 return;
             }
       
@@ -153,7 +166,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             $jumpSalesChannels = $this->isJumpSalesChannelsEnabled($customFields);
 
             //Process Browser Language Redirects
-            $this->processBrowserLanguageRedirects($customFields, $salesChannelDomains, $currentDomain, $jumpSalesChannels);
+            $this->processBrowserLanguageRedirects($customFields, $salesChannelDomains, $currentDomain, $jumpSalesChannels, $javaScriptRedirect);
             
         } catch (\Throwable $e) {
             if (method_exists($this->logger, 'error')) {
@@ -184,8 +197,9 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
      * @param SalesChannelDomainCollection $salesChannelDomains Collection of available domains
      * @param object $currentDomain Current domain object
      * @param bool $jumpSalesChannels Whether cross sales channel jumping is enabled
+     * @param bool $javaScriptRedirect Whether JavaScript redirect is enabled
      */
-    private function handleLanguageRedirect(string $preferred_browser_language, SalesChannelDomainCollection $salesChannelDomains, $currentDomain, bool $jumpSalesChannels): void
+    private function handleLanguageRedirect(string $preferred_browser_language, SalesChannelDomainCollection $salesChannelDomains, $currentDomain, bool $jumpSalesChannels, bool $javaScriptRedirect): void
     {
         if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'All Sales Channel Domains to check', 'salesChannelDomains' => $salesChannelDomains, 'file' => __FILE__, 'line' => __LINE__]);
         foreach ($salesChannelDomains as $salesChannelDomain) {
@@ -211,11 +225,23 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             // Check if ReqserRedirect exists and has a languageRedirect array
             if (isset($customFields['ReqserRedirect']['languageRedirect']) && is_array($customFields['ReqserRedirect']['languageRedirect'])) {
                 if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Checking language redirect configuration', 'languageRedirect' => $customFields['ReqserRedirect']['languageRedirect'], 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__]);
-                if (in_array($preferred_browser_language, $customFields['ReqserRedirect']['languageRedirect'])) {
+                if (in_array($preferred_browser_language, $customFields['ReqserRedirect']['languageRedirect'])) {                    
                     if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Redirecting now', 'file' => __FILE__, 'line' => __LINE__]);
-                        $response = new RedirectResponse($salesChannelDomain->getUrl());
-                        $response->send();
-                        exit;
+                    if (headers_sent()) {
+                        if ($javaScriptRedirect){
+                            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Headers already sent - using JavaScript redirect fallback', 'url' => $salesChannelDomain->getUrl(), 'file' => __FILE__, 'line' => __LINE__]);
+                            try {
+                                $this->injectJavaScriptRedirect($this->currentEvent, $salesChannelDomain->getUrl());
+                                exit;
+                            } catch (\Throwable $e) {
+                                if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Error injecting JavaScript redirect', 'message' => $e->getMessage(), 'file' => __FILE__, 'line' => __LINE__]);
+                            }
+                        }
+                    }
+
+                    $response = new RedirectResponse($salesChannelDomain->getUrl());
+                    $response->send();
+                    exit;
                 }
             }
         }
@@ -252,9 +278,10 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
      * @param object $salesChannelDomains Collection of sales channel domains
      * @param object $currentDomain Current domain object
      * @param bool $jumpSalesChannels Whether cross sales channel jumping is enabled
+     * @param bool $javaScriptRedirect Whether JavaScript redirect is enabled
 
      */
-    private function processBrowserLanguageRedirects(?array $customFields, $salesChannelDomains, $currentDomain, bool $jumpSalesChannels): void
+    private function processBrowserLanguageRedirects(?array $customFields, $salesChannelDomains, $currentDomain, bool $jumpSalesChannels, bool $javaScriptRedirect): void
     {
         $browserLanguages = explode(',', (!empty($_SERVER['HTTP_ACCEPT_LANGUAGE']) ? $_SERVER['HTTP_ACCEPT_LANGUAGE'] : ''));
         
@@ -294,7 +321,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 ]);
             }
             
-            $this->handleLanguageRedirect($preferred_browser_language, $salesChannelDomains, $currentDomain, $jumpSalesChannels);
+            $this->handleLanguageRedirect($preferred_browser_language, $salesChannelDomains, $currentDomain, $jumpSalesChannels, $javaScriptRedirect);
             
             if (isset($customFields['ReqserRedirect']['redirectOnDefaultBrowserLanguageOnly']) && 
                 $customFields['ReqserRedirect']['redirectOnDefaultBrowserLanguageOnly'] === true) {
@@ -311,7 +338,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 $languageCode = explode(';', $browserLanguage)[0];
                 $preferred_browser_language = strtolower(trim(explode('-', $languageCode)[0]));
                 
-                $this->handleLanguageRedirect($preferred_browser_language, $salesChannelDomains, $currentDomain, $jumpSalesChannels);
+                $this->handleLanguageRedirect($preferred_browser_language, $salesChannelDomains, $currentDomain, $jumpSalesChannels, $javaScriptRedirect);
                 
                 if (isset($customFields['ReqserRedirect']['redirectOnDefaultBrowserLanguageOnly']) && 
                     $customFields['ReqserRedirect']['redirectOnDefaultBrowserLanguageOnly'] === true) {
@@ -608,6 +635,34 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
     }
 
     /**
+     * Check if the user's main browser language matches the current domain's language
+     * This allows for early exit optimization when no redirect is needed
+     * 
+     * @param object $request The current request object
+     * @param object $currentDomain The current domain object
+     * @return bool Returns true if there is no redirect needed or possible
+     */
+    private function isBrowserLanguageMatchingCurrentDomain($request, $currentDomain): bool
+    {
+        // Get primary browser language (simple and cached)
+        $primaryBrowserLanguage = $this->getPrimaryBrowserLanguage($request);
+        
+        if (empty($primaryBrowserLanguage)) {
+            return true; //if empty no redirect possible
+        }
+
+        //check on Custom Fields for definition of the language code
+        $customFields = $currentDomain->getCustomFields();
+        if (isset($customFields['ReqserRedirect']['languageCode'])) {
+            if ($primaryBrowserLanguage == $customFields['ReqserRedirect']['languageCode']) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Retrieve sales channel domains with ReqserRedirect custom fields
      * 
      * @param SalesChannelContext $context The sales channel context
@@ -627,5 +682,64 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         return $this->domainRepository->search($criteria, $context->getContext())->getEntities();
     }
 
+    /**
+     * Inject JavaScript redirect when headers are already sent
+     * 
+     * @param StorefrontRenderEvent $event The storefront render event
+     * @param string $redirectUrl The URL to redirect to
+     */
+    private function injectJavaScriptRedirect(StorefrontRenderEvent $event, string $redirectUrl): void
+    {
+        $escapedUrl = htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8');
+        
+        // Since we can't use setParameters, we'll output JavaScript directly
+        echo "
+        <script type='text/javascript'>
+            // Reqser Language Redirect - JavaScript fallback
+            (function() {
+                var redirectUrl = '{$escapedUrl}';
+                console.log('Reqser: Headers already sent, using JavaScript redirect to:', redirectUrl);
+                
+                // Small delay to ensure page elements are loaded
+                setTimeout(function() {
+                    window.location.href = redirectUrl;
+                }, 100);
+                
+                // Backup: If setTimeout doesn't work, try immediate redirect
+                if (document.readyState === 'complete') {
+                    window.location.href = redirectUrl;
+                }
+            })();
+        </script>";
+    }
 
+    /**
+     * Get the primary browser language (simple and cached)
+     * 
+     * @param object $request The current request object
+     * @return string|null The primary browser language code (e.g., 'en', 'de') or null if not available
+     */
+    private function getPrimaryBrowserLanguage($request): ?string
+    {
+        if ($this->primaryBrowserLanguage !== null) {
+            return $this->primaryBrowserLanguage;
+        }
+
+        // Get the Accept-Language header
+        $acceptLanguage = $request->headers->get('Accept-Language');
+        
+        if (empty($acceptLanguage)) {
+            $this->primaryBrowserLanguage = null;
+            return null;
+        }
+
+        // Get the first (most preferred) language
+        $primaryLanguage = explode(',', $acceptLanguage)[0];
+        // Remove quality values (q=0.8) and get language code
+        $languageCode = explode(';', $primaryLanguage)[0];
+        // Extract just the language part (remove country code: en-US -> en)
+        $this->primaryBrowserLanguage = strtolower(trim(explode('-', $languageCode)[0]));
+        
+        return $this->primaryBrowserLanguage;
+    }
 }

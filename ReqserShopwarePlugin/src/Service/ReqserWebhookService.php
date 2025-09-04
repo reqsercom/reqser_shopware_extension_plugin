@@ -27,6 +27,7 @@ class ReqserWebhookService
 
         $payload = json_encode($data);
 
+
         if (
             function_exists('curl_init') &&
             function_exists('curl_setopt') &&
