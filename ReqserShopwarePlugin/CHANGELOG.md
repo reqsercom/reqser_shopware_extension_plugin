@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.6.0
+- Reduce Loading Time on Redirect
+
 ## 1.5.0
 - Improved redirect settings
 
