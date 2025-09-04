@@ -155,6 +155,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                     return;
                 }
             }
+
             //Front Page Only Validation
             if (isset($customFields['ReqserRedirect']['onlyRedirectFrontPage']) && $customFields['ReqserRedirect']['onlyRedirectFrontPage'] === true) {
                 if (!$this->isCurrentPageFrontPage($request, $currentDomain)) {
@@ -171,8 +172,6 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 $salesChannelDomains = $this->getSalesChannelDomains($event->getSalesChannelContext(), $jumpSalesChannels);
                 if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Jump Sales Channels enabled - calling getSalesChannelDomains again', 'salesChannelDomains' => $salesChannelDomains, 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             } 
-
-            
 
             //Check if we have multiple domains available for redirect
             if ($salesChannelDomains->count() <= 1) {
@@ -310,68 +309,11 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
      */
     private function processBrowserLanguageRedirects(?array $customFields, $salesChannelDomains, $currentDomain, bool $jumpSalesChannels, bool $javaScriptRedirect): void
     {
-        $browserLanguages = explode(',', (!empty($_SERVER['HTTP_ACCEPT_LANGUAGE']) ? $_SERVER['HTTP_ACCEPT_LANGUAGE'] : ''));
-        
-        if ($this->debugMode) {
-            $this->webhookService->sendErrorToWebhook([
-                'type' => 'debug', 
-                'info' => 'Processing browser languages for redirect',
-                'browserLanguages' => $browserLanguages, 
-                'domain_id' => $currentDomain->getId(), 
-                'file' => __FILE__, 
-                'line' => __LINE__
-            ]);
-        }
-        
-        if (empty($browserLanguages)) {
+        if (isset($this->primaryBrowserLanguage)){
+            $this->handleLanguageRedirect($this->primaryBrowserLanguage, $salesChannelDomains, $currentDomain, $jumpSalesChannels, $javaScriptRedirect);
+        } else {
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Primary browser language not set - getting browser languages', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return;
-        }
-
-        $region_code_exist = false;
-
-        // First pass: Try full language codes (e.g., en-US, de-DE)
-        foreach ($browserLanguages as $browserLanguage) {
-            $languageCode = explode(';', $browserLanguage)[0];
-            if (!$region_code_exist && strpos($languageCode, '-') !== false) {
-                $region_code_exist = true;
-            }
-            $preferred_browser_language = strtolower(trim($languageCode));
-            
-            if ($this->debugMode) {
-                $this->webhookService->sendErrorToWebhook([
-                    'type' => 'debug', 
-                    'info' => 'Calling language redirect handler', 
-                    'preferred_browser_language' => $preferred_browser_language, 
-                    'domain_id' => $currentDomain->getId(), 
-                    'file' => __FILE__, 
-                    'line' => __LINE__
-                ]);
-            }
-            
-            $this->handleLanguageRedirect($preferred_browser_language, $salesChannelDomains, $currentDomain, $jumpSalesChannels, $javaScriptRedirect);
-            
-            if (isset($customFields['ReqserRedirect']['redirectOnDefaultBrowserLanguageOnly']) && 
-                $customFields['ReqserRedirect']['redirectOnDefaultBrowserLanguageOnly'] === true) {
-                break;
-            }
-        }
-
-        // Second pass: Try language-only codes (e.g., en, de) if enabled and region codes existed
-        if ($region_code_exist && 
-            isset($customFields['ReqserRedirect']['redirectOnLanguageOnly']) && 
-            $customFields['ReqserRedirect']['redirectOnLanguageOnly'] === true) {
-            
-            foreach ($browserLanguages as $browserLanguage) {
-                $languageCode = explode(';', $browserLanguage)[0];
-                $preferred_browser_language = strtolower(trim(explode('-', $languageCode)[0]));
-                
-                $this->handleLanguageRedirect($preferred_browser_language, $salesChannelDomains, $currentDomain, $jumpSalesChannels, $javaScriptRedirect);
-                
-                if (isset($customFields['ReqserRedirect']['redirectOnDefaultBrowserLanguageOnly']) && 
-                    $customFields['ReqserRedirect']['redirectOnDefaultBrowserLanguageOnly'] === true) {
-                    break;
-                }
-            }
         }
     }
 
@@ -419,21 +361,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
      */
     private function validateAndManageSessionRedirects(?array $customFields, $session, bool $advancedRedirectEnabled, $currentDomain): bool
     {
-        if ($session->get('reqser_redirect_done', false)) {
-            // Advanced redirect validation for subsequent redirects
-            if ($advancedRedirectEnabled === false) {
-                if ($this->debugMode) {
-                    $this->webhookService->sendErrorToWebhook([
-                        'type' => 'debug', 
-                        'info' => 'Advanced redirect disabled - stopping', 
-                        'domain_id' => $currentDomain->getId(), 
-                        'file' => __FILE__, 
-                        'line' => __LINE__
-                    ]);
-                }
-                return false;
-            }
-
+        if ($session->get('reqser_redirect_done', false) && $advancedRedirectEnabled === true) {
             $lastRedirectTime = $session->get('reqser_last_redirect_at');
             $gracePeriodMs = $customFields['ReqserRedirect']['gracePeriodMs'] ?? null;
             $blockPeriodMs = $customFields['ReqserRedirect']['blockPeriodMs'] ?? null;
