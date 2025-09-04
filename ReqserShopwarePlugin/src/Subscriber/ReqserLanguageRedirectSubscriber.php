@@ -83,7 +83,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
            
             // Check if the app is active
             if (!$this->appService->isAppActive()) {
-                return;
+                //return;
             }
           
             $request = $event->getRequest();
@@ -100,9 +100,10 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             $customFields = $currentDomain->getCustomFields();
             
             //Debug Mode Check - update global property if actually active
-            $this->debugMode = $this->isDebugModeActive($customFields, $request, $session, $currentDomain);
-            $this->debugEchoMode = $this->debugMode && isset($customFields['ReqserRedirect']['debugEchoMode']) && $customFields['ReqserRedirect']['debugEchoMode'] === true;
+            $this->debugMode = true;
+            $this->debugEchoMode = true;
             if ($this->debugMode) {
+                
                 $this->webhookService->sendErrorToWebhook([
                     'type' => 'debug', 
                     'info' => 'Debug mode active', 
@@ -111,7 +112,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                     'custom_fields' => $customFields,
                     'file' => __FILE__, 
                     'line' => __LINE__
-                ]);
+                ], $this->debugEchoMode);
             }
 
             $javaScriptRedirect = isset($customFields['ReqserRedirect']['javaScriptRedirect']) && $customFields['ReqserRedirect']['javaScriptRedirect'] === true;
@@ -159,14 +160,22 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 }
             }
 
+            //Cross Sales Channel Jump Configuration
+            $jumpSalesChannels = $this->isJumpSalesChannelsEnabled($customFields);
+            
+            // IF we allow Jump Sales Channels what is not common, we will call again for all domains
+            if ($jumpSalesChannels === true){
+                $salesChannelDomains = $this->getSalesChannelDomains($event->getSalesChannelContext(), $jumpSalesChannels);
+                if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Jump Sales Channels enabled - calling getSalesChannelDomains again', 'salesChannelDomains' => $salesChannelDomains, 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
+            } 
+
+            
+
             //Check if we have multiple domains available for redirect
             if ($salesChannelDomains->count() <= 1) {
                 if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Only one domain available - stopping redirect', 'domain_id' => $domainId, 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
                 return;
             }
-
-            //Cross Sales Channel Jump Configuration
-            $jumpSalesChannels = $this->isJumpSalesChannelsEnabled($customFields);
 
             //Process Browser Language Redirects
             $this->processBrowserLanguageRedirects($customFields, $salesChannelDomains, $currentDomain, $jumpSalesChannels, $javaScriptRedirect);
@@ -683,15 +692,19 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
      * @param SalesChannelContext $context The sales channel context
      * @return mixed Collection of sales channel domains
      */
-    private function getSalesChannelDomains(SalesChannelContext $context)
+    private function getSalesChannelDomains(SalesChannelContext $context, ?bool $jumpSalesChannels = null)
     {
-        // Retrieve the full collection without limiting to the current sales channel
         $criteria = new Criteria();
         
         // Ensure we're only retrieving domains that have the 'ReqserRedirect' custom field set
         $criteria->addFilter(new NotFilter(NotFilter::CONNECTION_AND, [
             new EqualsFilter('customFields.ReqserRedirect', null)
         ]));
+        
+        // If cross-sales channel jumping is disabled, filter to current sales channel only
+        if ($jumpSalesChannels !== true) {
+            $criteria->addFilter(new EqualsFilter('salesChannelId', $context->getSalesChannel()->getId()));
+        }
     
         // Get the collection from the repository
         return $this->domainRepository->search($criteria, $context->getContext())->getEntities();
