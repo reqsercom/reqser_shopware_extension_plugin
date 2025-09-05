@@ -94,7 +94,7 @@ class ReqserVersionService
     /**
      * Get current plugin version from composer.json
      */
-    public function getCurrentPluginVersion(): string|null
+    public function getCurrentPluginVersion(): ?string
     {
         try {
             $composerFile = $this->getPluginDir() . '/composer.json';
