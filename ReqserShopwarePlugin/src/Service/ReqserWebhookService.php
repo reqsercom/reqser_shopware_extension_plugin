@@ -48,6 +48,10 @@ class ReqserWebhookService
                 'Content-Length: ' . strlen($payload)
             ]);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            
+            // Critical timeout protection to prevent 504 gateway timeouts
+            curl_setopt($ch, CURLOPT_TIMEOUT, 3);        // Maximum 3 seconds total
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2); // Maximum 2 seconds to connect
 
             $result = curl_exec($ch);
 

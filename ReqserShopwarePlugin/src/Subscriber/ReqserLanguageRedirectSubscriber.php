@@ -35,6 +35,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
     private ?StorefrontRenderEvent $currentEvent = null;
     private ?string $primaryBrowserLanguage = null;
     private ?int $redirectCount = null;
+    private bool $sessionIgnoreMode = false;
 
     public function __construct(
         RequestStack $requestStack, 
@@ -120,8 +121,8 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 return;
             }
            
-            //Session Ignore Mode Check
-            $sessionIgnoreMode = $this->customFieldBool($customFields, 'sessionIgnoreMode');
+            //Session Ignore Mode Check - Set global property
+            $this->sessionIgnoreMode = $this->customFieldBool($customFields, 'sessionIgnoreMode');
 
             //Domain Configuration Validation
             if (!$this->isDomainValidForRedirect($customFields, $currentDomain)) {
@@ -140,7 +141,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             }
             
             //Session Redirect Validation
-            if ($sessionIgnoreMode === false) {
+            if ($this->sessionIgnoreMode === false) {
                 if (!$this->validateAndManageSessionRedirects($customFields, $session, $advancedRedirectEnabled, $currentDomain)) {
                     return;
                 }
@@ -228,10 +229,10 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                                 if ($this->debugMode && $this->debugEchoMode) {
                                     $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'JAVASCRIPT REDIRECT PREVENTED - Echo mode active', 'would_redirect_to' => $salesChannelDomain->getUrl(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
                                     exit; // Stop execution without redirecting
+                                } else {
+                                    // Prepare session variables before redirect
+                                    $this->prepareRedirectSession($session);
                                 }
-                                
-                                // Prepare session variables before redirect
-                                $this->prepareRedirectSession($session);
                                 
                                 $this->injectJavaScriptRedirect($this->currentEvent, $salesChannelDomain->getUrl());
                                 exit;
@@ -245,10 +246,10 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                     if ($this->debugMode && $this->debugEchoMode) {
                         $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'REDIRECT PREVENTED - Echo mode active', 'would_redirect_to' => $salesChannelDomain->getUrl(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
                         exit; // Stop execution without redirecting
+                    } else {
+                        // Prepare session variables before redirect
+                        $this->prepareRedirectSession($session);
                     }
-                    
-                    // Prepare session variables before redirect
-                    $this->prepareRedirectSession($session);
                     
                     $response = new RedirectResponse($salesChannelDomain->getUrl());
                     $response->send();
@@ -330,13 +331,17 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
      */
     private function validateAndManageSessionRedirects(?array $customFields, $session, bool $advancedRedirectEnabled, $currentDomain): bool
     {
-        if ($session->get('reqser_redirect_done', false) && $advancedRedirectEnabled === true) {
+        if ($session->get('reqser_redirect_called', false) && $advancedRedirectEnabled === true) {
+            // Set redirect done flag
+            $session->set('reqser_redirect_called', true);
             $lastRedirectTime = $session->get('reqser_last_redirect_at', null);
-            $gracePeriodMs = $customFields['ReqserRedirect']['gracePeriodMs'] ?? null;
-            $blockPeriodMs = $customFields['ReqserRedirect']['blockPeriodMs'] ?? null;
-            $maxRedirects = $customFields['ReqserRedirect']['maxRedirects'] ?? null;
+            
+            $gracePeriodMs = $this->getCustomFieldValue($customFields, 'gracePeriodMs');
+            $blockPeriodMs = $this->getCustomFieldValue($customFields, 'blockPeriodMs');
+            $maxRedirects = $this->getCustomFieldValue($customFields, 'maxRedirects');
+            $maxScriptCalls = $this->getCustomFieldValue($customFields, 'maxScriptCalls');
 
-            if ($maxRedirects === null && $gracePeriodMs === null && $blockPeriodMs === null) {
+            if ($maxRedirects === null && $gracePeriodMs === null && $blockPeriodMs === null && $maxScriptCalls === null) {
                 if ($this->debugMode) {
                     $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'No redirect settings configured', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
                 }
@@ -352,6 +357,18 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 return false;
             }
 
+            $scriptCallCount = $session->get('reqser_script_call_count', 0);
+
+            if ($maxScriptCalls !== null && $scriptCallCount >= $maxScriptCalls) {
+                if ($this->debugMode) {
+                    $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Max script calls reached - stopping', 'scriptCallCount' => $scriptCallCount, 'maxScriptCalls' => $maxScriptCalls, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
+                }
+                return false;
+            }
+
+            // Update script call count for validation tracking
+            $this->incrementScriptCallCount($session, $scriptCallCount);
+
             // Check if the last redirect was done after the grace period but within the block period
             $currentTimestamp = microtime(true) * 1000;
             if ($gracePeriodMs !== null && $lastRedirectTime !== null && 
@@ -366,7 +383,9 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             if ($this->debugMode) {
                 $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Redirect timing validation passed', 'currentTimestamp' => $currentTimestamp, 'lastRedirectTime' => $lastRedirectTime, 'gracePeriodMs' => $gracePeriodMs, 'blockPeriodMs' => $blockPeriodMs, 'maxRedirects' => $maxRedirects, 'redirectCount' => $redirectCount, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             }
-        } 
+        } elseif ($advancedRedirectEnabled === false) {
+            $session->set('reqser_redirect_called', true);
+        }
 
         return true; // Redirect can proceed
     }
@@ -390,16 +409,17 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'User override active - checking conditions', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             $overrideTimestamp = $session->get('reqser_redirect_user_override_timestamp');
             
-            if (isset($customFields['ReqserRedirect']['overrideIgnorePeriodS'])) {
+            $overrideIgnorePeriodS = $this->getCustomFieldValue($customFields, 'overrideIgnorePeriodS');
+            if ($overrideIgnorePeriodS !== null) {
                 if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'overrideIgnorePeriodS isset', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
                 // Check if the override timestamp is younger than the overrideIgnorePeriodS
-                if ($overrideTimestamp > time() - $customFields['ReqserRedirect']['overrideIgnorePeriodS']) {
+                if ($overrideTimestamp > time() - $overrideIgnorePeriodS) {
                     if ($this->debugMode) {
-                        $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'User override active - within ignore period', 'overrideTimestamp' => $overrideTimestamp, 'overrideIgnorePeriodS' => $customFields['ReqserRedirect']['overrideIgnorePeriodS'], 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
+                        $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'User override active - within ignore period', 'overrideTimestamp' => $overrideTimestamp, 'overrideIgnorePeriodS' => $overrideIgnorePeriodS, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
                     }
                     return true; // Skip redirect
                 } else {
-                    if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Override Timestamp '.$overrideTimestamp.' is not bigger than time(): '.time().' minus overrideIgnorePeriodS: '.$customFields['ReqserRedirect']['overrideIgnorePeriodS'], 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
+                    if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Override Timestamp '.$overrideTimestamp.' is not bigger than time(): '.time().' minus overrideIgnorePeriodS: '.$overrideIgnorePeriodS, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
                 }
             } else {
                 if ($this->debugMode) {
@@ -460,9 +480,9 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         }
 
         // Check if debugModeIp is set and validate the request IP
-        if (isset($customFields['ReqserRedirect']['debugModeIp'])) {
+        $debugModeIp = $this->getCustomFieldValue($customFields, 'debugModeIp');
+        if ($debugModeIp !== null) {
             $clientIp = $request->getClientIp();
-            $debugModeIp = $customFields['ReqserRedirect']['debugModeIp'];
             
             if ($clientIp == $debugModeIp) {
                             // IP matches, activate debug mode
@@ -498,8 +518,9 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
 
         //check on Custom Fields for definition of the language code
         $customFields = $currentDomain->getCustomFields();
-        if (isset($customFields['ReqserRedirect']['languageCode'])) {
-            if ($primaryBrowserLanguage == $customFields['ReqserRedirect']['languageCode']) {
+        $languageCode = $this->getCustomFieldValue($customFields, 'languageCode');
+        if ($languageCode !== null) {
+            if ($primaryBrowserLanguage == $languageCode) {
                 return true;
             }
         }
@@ -624,6 +645,18 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
     }
 
     /**
+     * Universal function to retrieve data from ReqserRedirect custom fields
+     * 
+     * @param array|null $customFields The custom fields array
+     * @param string $fieldName The field name (e.g., 'debugMode', 'gracePeriodMs', 'maxRedirects')
+     * @return mixed Returns the field value or null if not found
+     */
+    private function getCustomFieldValue(?array $customFields, string $fieldName)
+    {
+        return $customFields['ReqserRedirect'][$fieldName] ?? null;
+    }
+
+    /**
      * Check if a ReqserRedirect custom field is set and true
      * 
      * @param array|null $customFields The custom fields array
@@ -632,7 +665,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
      */
     private function customFieldBool(?array $customFields, string $fieldName): bool
     {
-        return ($customFields['ReqserRedirect'][$fieldName] ?? false) === true;
+        return $this->getCustomFieldValue($customFields, $fieldName) === true;
     }
 
     /**
@@ -656,16 +689,16 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
      * @return void
      */
     private function prepareRedirectSession($session): void
-    {
-        // Set redirect done flag
-        $session->set('reqser_redirect_done', true);
-        
-        // Set last redirect timestamp in milliseconds
-        $currentTimestamp = microtime(true) * 1000;
-        $session->set('reqser_last_redirect_at', $currentTimestamp);
-        
-        // Increment and update redirect count
-        $this->incrementRedirectCount($session);
+    {   
+        // Only write session data if sessionIgnoreMode is false
+        if ($this->sessionIgnoreMode === false) {
+            // Set last redirect timestamp in milliseconds
+            $currentTimestamp = microtime(true) * 1000;
+            $session->set('reqser_last_redirect_at', $currentTimestamp);
+            
+            // Increment and update redirect count
+            $this->incrementRedirectCount($session);
+        }
     }
 
     /**
@@ -681,5 +714,19 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         $this->redirectCount = $redirectCount;
         $session->set('reqser_redirect_count', $redirectCount);
         return $redirectCount;
+    }
+
+    /**
+     * Increment the script call count in session
+     * 
+     * @param object $session The session object
+     * @param int $currentCount The current script call count
+     * @return int The new script call count
+     */
+    private function incrementScriptCallCount($session, int $currentCount): int
+    {
+        $scriptCallCount = $currentCount + 1;
+        $session->set('reqser_script_call_count', $scriptCallCount);
+        return $scriptCallCount;
     }
 }
