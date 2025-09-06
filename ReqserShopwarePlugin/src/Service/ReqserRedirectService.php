@@ -177,7 +177,7 @@ class ReqserRedirectService
         }
 
         // Check if redirectFrom is enabled
-        if (!($redirectConfig['redirect_from'] ?? false)) {
+        if (!($redirectConfig['redirectFrom'] ?? false)) {
             if ($this->debugMode) {
                 $this->webhookService->sendErrorToWebhook([
                     'type' => 'debug', 

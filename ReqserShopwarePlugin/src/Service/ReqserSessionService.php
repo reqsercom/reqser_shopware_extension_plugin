@@ -2,18 +2,28 @@
 
 namespace Reqser\Plugin\Service;
 
+use Reqser\Plugin\Service\ReqserWebhookService;
+
 class ReqserSessionService
 {
     private $session = null;
     private ?int $redirectCount = null;
     private bool $sessionIgnoreMode = false;
+    private $webhookService;
+    private ?array $redirectConfig = null;
+
+    public function __construct(ReqserWebhookService $webhookService)
+    {
+        $this->webhookService = $webhookService;
+    }
 
     /**
-     * Initialize the service with a session
+     * Initialize the service with a session and redirect configuration
      */
-    public function initialize($session): void
+    public function initialize($session, ?array $redirectConfig = null): void
     {
         $this->session = $session;
+        $this->redirectConfig = $redirectConfig;
         $this->redirectCount = null; // Reset cache when session changes
     }
 
@@ -209,11 +219,15 @@ class ReqserSessionService
     /**
      * Check if redirect should be skipped due to user override settings
      */
-    public function shouldSkipDueToUserOverride(bool $userOverrideEnabled, bool $advancedRedirectEnabled, ?int $overrideIgnorePeriodS): bool
+    public function shouldSkipDueToUserOverride(): bool
     {
+        $userOverrideEnabled = $this->redirectConfig['userOverrideEnabled'] ?? false;
+        $advancedRedirectEnabled = $this->redirectConfig['advancedRedirectEnabled'] ?? false;
+        
         // Check if user override conditions are met
         if ($userOverrideEnabled === true && $advancedRedirectEnabled === true && $this->getUserOverrideTimestamp()) {
             $overrideTimestamp = $this->getUserOverrideTimestamp();
+            $overrideIgnorePeriodS = $this->redirectConfig['overrideIgnorePeriodS'] ?? null;
             
             if ($overrideIgnorePeriodS !== null) {
                 // Check if the override timestamp is younger than the overrideIgnorePeriodS
@@ -231,18 +245,25 @@ class ReqserSessionService
     /**
      * Validate and manage session redirects
      */
-    public function validateAndManageSessionRedirects(bool $advancedRedirectEnabled, ?int $gracePeriodMs, ?int $blockPeriodMs, ?int $maxRedirects, ?int $maxScriptCalls): bool
+    public function validateAndManageSessionRedirects(): bool
     {
-        if ($this->getRedirectCount() > 0 && $advancedRedirectEnabled === true) {
+        $advancedRedirectEnabled = $this->redirectConfig['advancedRedirectEnabled'] ?? false;
+        $sessionIgnoreMode = $this->redirectConfig['sessionIgnoreMode'] ?? false;
+        $redirectCount = $this->getRedirectCount();
+        
+        if ($redirectCount > 0 && $advancedRedirectEnabled === true && $sessionIgnoreMode === false) {
             // Set redirect done flag
             $this->prepareRedirectSession();
             $lastRedirectTime = $this->getLastRedirectAt();
             
+            $gracePeriodMs = $this->redirectConfig['gracePeriodMs'] ?? null;
+            $blockPeriodMs = $this->redirectConfig['blockPeriodMs'] ?? null;
+            $maxRedirects = $this->redirectConfig['maxRedirects'] ?? null;
+            $maxScriptCalls = $this->redirectConfig['maxScriptCalls'] ?? null;
+            
             if ($maxRedirects === null && $gracePeriodMs === null && $blockPeriodMs === null && $maxScriptCalls === null) {
                 return true;
             }
-
-            $redirectCount = $this->getRedirectCount();
             
             if ($maxRedirects !== null && $redirectCount >= $maxRedirects) {
                 return false;
@@ -264,11 +285,9 @@ class ReqserSessionService
                 $lastRedirectTime > $currentTimestamp - $blockPeriodMs) {
                 return false;
             }
-        } elseif ($advancedRedirectEnabled === false) {
-            $this->prepareRedirectSession();
-        }
+        } 
 
-        return true; // Redirect can proceed
+        return true; 
     }
 
     /**
@@ -294,4 +313,5 @@ class ReqserSessionService
         
         return null; // No redirect needed
     }
+
 }

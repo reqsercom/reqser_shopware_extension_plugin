@@ -29,6 +29,7 @@ class ReqserLanguageRedirectService
     private bool $debugMode = false;
     private bool $debugEchoMode = false;
     private ?array $redirectConfig = null;
+    private ?string $primaryBrowserLanguage = null;
 
     public function __construct(
         EntityRepository $domainRepository,
@@ -52,7 +53,6 @@ class ReqserLanguageRedirectService
     public function initialize(StorefrontRenderEvent $event, $session, array $customFields, $request, $currentDomain): void
     {
         $this->currentEvent = $event;
-        $this->sessionService->initialize($session);
         $this->currentCustomFields = $customFields;
         
         // Load all redirect configuration once
@@ -60,20 +60,17 @@ class ReqserLanguageRedirectService
         
         // Determine debug modes once and store globally using pre-loaded config
         $this->debugMode = $this->customFieldService->isDebugModeActive($this->redirectConfig, $request, $currentDomain, $this->sessionService);
-        $this->debugEchoMode = $this->debugMode && ($this->redirectConfig['debug_echo_mode'] ?? false);
+        $this->debugEchoMode = $this->debugMode && ($this->redirectConfig['debugEchoMode'] ?? false);
+        
+        // Initialize session service with redirect config
+        $this->sessionService->initialize($session, $this->redirectConfig);
         
         // Initialize redirect service with debug modes
         $this->redirectService->setDebugModes($this->debugMode, $this->debugEchoMode);
+        
+        // Calculate primary browser language once
+        $this->primaryBrowserLanguage = $this->getPrimaryBrowserLanguage($request);
     }
-
-    /**
-     * Check if the app is active
-     */
-    public function isAppActive(): bool
-    {
-        return $this->appService->isAppActive();
-    }
-
 
     /**
      * Process redirect logic for the given context
@@ -87,124 +84,52 @@ class ReqserLanguageRedirectService
         
         // Check if headers are already sent
         if (headers_sent() && !($this->redirectConfig['javascript_redirect'] ?? false)) {
-            if ($this->debugMode) {
-                $this->webhookService->sendErrorToWebhook([
-                    'type' => 'debug', 
-                    'info' => 'Headers already sent - redirect not possible', 
-                    'domain_id' => $currentDomain->getId(), 
-                    'file' => __FILE__, 
-                    'line' => __LINE__
-                ], $this->debugEchoMode);
-            }
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Headers already sent - redirect not possible', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return false;
         }
 
-        // Early exit checks
-        if (!$this->shouldProcessRedirect($currentDomain, $request)) {
+        // Domain configuration validation
+        if (!$this->redirectService->isDomainValidForRedirect($this->redirectConfig, $currentDomain)) {
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Domain validation failed - stopping redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return false;
         }
 
-        // Advanced redirect validation
-        $advancedRedirectEnabled = $this->redirectConfig['advanced_redirect_enabled'] ?? false;
+        // More checks if the redirect has to be continued
+        if (!$this->shouldProcessRedirect($currentDomain)) {
+            return false;
+        }
         
         // User override check
-        $userOverrideEnabled = $this->redirectConfig['user_override_enabled'] ?? false;
-        $overrideIgnorePeriodS = $this->redirectConfig['override_ignore_period_s'] ?? null;
-        
-        if ($this->sessionService->shouldSkipDueToUserOverride($userOverrideEnabled, $advancedRedirectEnabled, $overrideIgnorePeriodS)) {
-            if ($this->debugMode) {
-                $this->webhookService->sendErrorToWebhook([
-                    'type' => 'debug', 
-                    'info' => 'Skipping redirect - user override active', 
-                    'domain_id' => $currentDomain->getId(), 
-                    'file' => __FILE__, 
-                    'line' => __LINE__
-                ], $this->debugEchoMode);
-            }
+        if ($this->sessionService->shouldSkipDueToUserOverride()) {
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Skipping redirect - user override active', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return false;
         }
 
-        // User domain override check
-        if ($this->redirectConfig['redirect_if_user_override_domain_id_exists'] ?? false) {
-            $overrideDomainId = $this->sessionService->shouldRedirectToUserOverrideDomain($currentDomain->getId(), $salesChannelDomains);
-            if ($overrideDomainId) {
-                $sessionDomain = $salesChannelDomains->get($overrideDomainId);
-                if ($sessionDomain) {
-                    if ($this->debugMode) {
-                        $this->webhookService->sendErrorToWebhook([
-                            'type' => 'debug', 
-                            'info' => 'User override language redirect handled', 
-                            'domain_id' => $currentDomain->getId(), 
-                            'file' => __FILE__, 
-                            'line' => __LINE__
-                        ], $this->debugEchoMode);
-                    }
-                    $this->handleDirectDomainRedirect($sessionDomain);
-                    return true;
-                }
-            }
+        if (!$this->sessionService->validateAndManageSessionRedirects()) {
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Session validation failed - stopping redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
+            return false;
         }
 
-        // Session redirect validation
-        // Note: sessionIgnoreMode logic will be handled in SessionService
-        if ($advancedRedirectEnabled) {
-            $gracePeriodMs = $this->redirectConfig['grace_period_ms'] ?? null;
-            $blockPeriodMs = $this->redirectConfig['block_period_ms'] ?? null;
-            $maxRedirects = $this->redirectConfig['max_redirects'] ?? null;
-            $maxScriptCalls = $this->redirectConfig['max_script_calls'] ?? null;
-            
-            if (!$this->sessionService->validateAndManageSessionRedirects($advancedRedirectEnabled, $gracePeriodMs, $blockPeriodMs, $maxRedirects, $maxScriptCalls)) {
-                if ($this->debugMode) {
-                    $this->webhookService->sendErrorToWebhook([
-                        'type' => 'debug', 
-                        'info' => 'Session validation failed - stopping redirect', 
-                        'domain_id' => $currentDomain->getId(), 
-                        'file' => __FILE__, 
-                        'line' => __LINE__
-                    ], $this->debugEchoMode);
-                }
-                return false;
-            }
-        }
-
-        // Front page validation
-        if ($this->redirectConfig['only_redirect_front_page'] ?? false) {
-            if (!$this->isCurrentPageFrontPage($request, $currentDomain)) {
-                if ($this->debugMode) {
-                    $this->webhookService->sendErrorToWebhook([
-                        'type' => 'debug', 
-                        'info' => 'Not front page - stopping redirect', 
-                        'domain_id' => $currentDomain->getId(), 
-                        'file' => __FILE__, 
-                        'line' => __LINE__
-                    ], $this->debugEchoMode);
-                }
-                return false;
-            }
+        if (!$this->isCurrentPageFrontPage($request, $currentDomain)) {
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Not front page - stopping redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
+            return false;
         }
 
         // Check cross sales channel jumping configuration and get appropriate domains
-        $jumpSalesChannels = $this->redirectConfig['jump_sales_channels'] ?? false;
+        $jumpSalesChannels = $this->redirectConfig['jumpSalesChannels'] ?? false;
         if ($jumpSalesChannels === true) {
-            $salesChannelDomains = $this->getSalesChannelDomains($event->getSalesChannelContext());
+            $salesChannelDomains = $this->getSalesChannelDomains($event->getSalesChannelContext(), $jumpSalesChannels);
         }
 
         // Check multiple domains availability
         if ($salesChannelDomains->count() <= 1) {
-            if ($this->debugMode) {
-                $this->webhookService->sendErrorToWebhook([
-                    'type' => 'debug', 
-                    'info' => 'Only one domain available - stopping redirect', 
-                    'domain_id' => $currentDomain->getId(), 
-                    'file' => __FILE__, 
-                    'line' => __LINE__
-                ], $this->debugEchoMode);
-            }
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Only one domain available - stopping redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return false;
         }
 
         // Process browser language redirects
-        return $this->processBrowserLanguageRedirects($salesChannelDomains, $currentDomain, $jumpSalesChannels, $request);
+        $this->processBrowserLanguageRedirects($salesChannelDomains, $currentDomain, $jumpSalesChannels, $request);
+        return true;
     }
 
     /**
@@ -212,21 +137,12 @@ class ReqserLanguageRedirectService
      */
     public function handleDirectDomainRedirect($targetDomain): void
     {
-        if ($this->debugMode) {
-            $this->webhookService->sendErrorToWebhook([
-                'type' => 'debug', 
-                'info' => 'Direct domain redirect - user previously chose this domain', 
-                'target_url' => $targetDomain->getUrl(), 
-                'domain_id' => $targetDomain->getId(),
-                'file' => __FILE__, 
-                'line' => __LINE__
-            ], $this->debugEchoMode);
-        }
+        if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Direct domain redirect - user previously chose this domain', 'target_url' => $targetDomain->getUrl(), 'domain_id' => $targetDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
 
         // Delegate to the redirect service
         $this->redirectService->handleDirectDomainRedirect(
             $targetDomain->getUrl(),
-            ($this->redirectConfig['javascript_redirect'] ?? false),
+            ($this->redirectConfig['javaScriptRedirect'] ?? false),
             $this->currentEvent
         );
     }
@@ -258,22 +174,11 @@ class ReqserLanguageRedirectService
     /**
      * Check if redirect should be processed
      */
-    private function shouldProcessRedirect($currentDomain, $request): bool
+    private function shouldProcessRedirect($currentDomain): bool
     {
         // Early exit check - if browser language matches current domain, no redirect needed
-        $primaryBrowserLanguage = $this->getPrimaryBrowserLanguage($request);
-        
-        if ($this->userBrowserLanguageMatchesCurrentDomainLanguage($primaryBrowserLanguage, $currentDomain)) {
-            if ($this->debugMode) {
-                $this->webhookService->sendErrorToWebhook([
-                    'type' => 'debug', 
-                    'info' => 'User browser language matches current domain language - no redirect needed', 
-                    'primaryBrowserLanguage' => $primaryBrowserLanguage, 
-                    'domain_id' => $currentDomain->getId(), 
-                    'file' => __FILE__, 
-                    'line' => __LINE__
-                ], $this->debugEchoMode);
-            }
+        if ($this->userBrowserLanguageMatchesCurrentDomainLanguage($currentDomain)) {
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'User browser language matches current domain language - no redirect needed', 'primaryBrowserLanguage' => $this->primaryBrowserLanguage, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return false;
         }
 
@@ -286,56 +191,49 @@ class ReqserLanguageRedirectService
      */
     private function isCurrentPageFrontPage($request, $currentDomain): bool
     {
-        $currentUrl = rtrim($request->getUri(), '/');
-        $domainUrl = rtrim($currentDomain->getUrl(), '/');
-        
-        if ($domainUrl !== $currentUrl) {
-            // Check if URL sanitization is enabled
-            if ($this->redirectConfig['sanitize_url_on_front_page_check'] ?? false) {
-                $sanitizedCurrentUrl = $this->redirectService->sanitizeUrl($currentUrl);
-                if ($domainUrl === $sanitizedCurrentUrl) {
-                    return true;
-                }
-            }
+        $onlyRedirectFrontPage = $this->redirectConfig['onlyRedirectFrontPage'] ?? false;
+        if ($onlyRedirectFrontPage === true) {
+            $currentUrl = rtrim($request->getUri(), '/');
+            $domainUrl = rtrim($currentDomain->getUrl(), '/');
             
-            if ($this->debugMode) {
-                $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Not on front page - only front page redirects allowed', 'currentUrl' => $currentUrl, 'domainUrl' => $domainUrl, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
+            if ($domainUrl !== $currentUrl) {
+                // Check if URL sanitization is enabled
+                if ($this->redirectConfig['sanatizeUrlOnFrontPageCheck'] ?? false) {
+                    $sanitizedCurrentUrl = $this->redirectService->sanitizeUrl($currentUrl);
+                    if ($domainUrl === $sanitizedCurrentUrl) {
+                        return true;
+                    }
+                }
+                
+                if ($this->debugMode) {
+                    $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Not on front page - only front page redirects allowed', 'currentUrl' => $currentUrl, 'domainUrl' => $domainUrl, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
+                }
+                return false;
             }
-            return false;
         }
-        
+
         return true;
     }
 
     /**
      * Process browser language redirects
      */
-    private function processBrowserLanguageRedirects($salesChannelDomains, $currentDomain, bool $jumpSalesChannels, $request): bool
+    private function processBrowserLanguageRedirects($salesChannelDomains, $currentDomain, bool $jumpSalesChannels, $request): void
     {
-        $primaryBrowserLanguage = $this->getPrimaryBrowserLanguage($request);
-        
-        if (isset($primaryBrowserLanguage)){
-            $this->handleLanguageRedirect($primaryBrowserLanguage, $salesChannelDomains, $currentDomain, $jumpSalesChannels, $request);
+        if (isset($this->primaryBrowserLanguage)){
+            $this->handleLanguageRedirect($this->primaryBrowserLanguage, $salesChannelDomains, $currentDomain, $jumpSalesChannels, $request);
         } else {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Primary browser language not set - should not be possible', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-            //try again to get primary browser language
-            $primaryBrowserLanguage = $this->getPrimaryBrowserLanguage($request);
-            if (isset($primaryBrowserLanguage)){
-                $this->handleLanguageRedirect($primaryBrowserLanguage, $salesChannelDomains, $currentDomain, $jumpSalesChannels, $request);
-            } else {
-                return false;
-            }
+            return;
         }
 
-        if (!($this->redirectConfig['redirect_on_default_browser_language_only'] ?? false)) {
+        if (!($this->redirectConfig['redirectOnDefaultBrowserLanguageOnly'] ?? false)) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Redirect on default browser language only is disabled - getting browser languages', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             $alternativeBrowserLanguages = $this->getAlternativeBrowserLanguages($request);
             foreach ($alternativeBrowserLanguages as $browserLanguage) {
                 $this->handleLanguageRedirect($browserLanguage, $salesChannelDomains, $currentDomain, $jumpSalesChannels, $request);
             }
         }
-        
-        return true;
     }
 
 
@@ -393,9 +291,9 @@ class ReqserLanguageRedirectService
     /**
      * Check if user's browser language matches current domain language
      */
-    private function userBrowserLanguageMatchesCurrentDomainLanguage(?string $primaryBrowserLanguage, $currentDomain): bool
+    private function userBrowserLanguageMatchesCurrentDomainLanguage($currentDomain): bool
     {
-        if ($primaryBrowserLanguage === null) {
+        if ($this->primaryBrowserLanguage === null) {
             return false;
         }
 
@@ -412,7 +310,7 @@ class ReqserLanguageRedirectService
         // Extract language code from locale (e.g., en-GB -> en)
         $language = strtolower(explode('-', $languageCode)[0]);
         
-        if ($primaryBrowserLanguage == $language) {
+        if ($this->primaryBrowserLanguage == $language) {
             return true;
         }
 
@@ -457,31 +355,11 @@ class ReqserLanguageRedirectService
                 if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Checking language redirect configuration', 'languageRedirect' => $customFields['ReqserRedirect']['languageRedirect'], 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
                 if (in_array($preferred_browser_language, $customFields['ReqserRedirect']['languageRedirect'])) {                    
                     if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Redirecting now', 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-                    if (headers_sent()) {
-                        if (($this->redirectConfig['javascript_redirect'] ?? false)){
-                            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Headers already sent - using JavaScript redirect fallback', 'url' => $salesChannelDomain->getUrl(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-                            try {
-                                // Prevent JavaScript redirect if echo mode is active
-                                if ($this->debugMode && $this->debugEchoMode) {
-                                    $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'JAVASCRIPT REDIRECT PREVENTED - Echo mode active', 'would_redirect_to' => $salesChannelDomain->getUrl(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-                                    exit; // Stop execution without redirecting
-                                } else {
-                                    // Prepare session variables before redirect
-                                    $this->sessionService->prepareRedirectSession();
-                                }
-                                
-                                $this->redirectService->injectJavaScriptRedirect($this->currentEvent, $salesChannelDomain->getUrl());
-                                exit;
-                            } catch (\Throwable $e) {
-                                if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Error injecting JavaScript redirect', 'message' => $e->getMessage(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-                            }
-                        }
-                    }
-
-                    // Use redirect service for the actual redirect
+                    
+                    // Use redirect service for the actual redirect (handles all cases: headers sent, JavaScript, echo mode, etc.)
                     $this->redirectService->handleDirectDomainRedirect(
                         $salesChannelDomain->getUrl(),
-                        ($this->redirectConfig['javascript_redirect'] ?? false),
+                        ($this->redirectConfig['javaScriptRedirect'] ?? false),
                         $this->currentEvent
                     );
                 }

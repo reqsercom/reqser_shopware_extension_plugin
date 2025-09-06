@@ -186,34 +186,39 @@ class ReqserCustomFieldService
     {
         return [
             // Basic redirect settings
-            'advanced_redirect_enabled' => $this->getBool($customFields, 'advancedRedirectEnabled'),
-            'javascript_redirect' => $this->getBool($customFields, 'javaScriptRedirect'),
-            'jump_sales_channels' => $this->getBool($customFields, 'jumpSalesChannels'),
-            'redirect_into' => $this->getBool($customFields, 'redirectInto'),
+            'active' => $this->getBool($customFields, 'active'),
+            'redirectFrom' => $this->getBool($customFields, 'redirectFrom'),
+            'advancedRedirectEnabled' => $this->getBool($customFields, 'advancedRedirectEnabled'),
+            'javaScriptRedirect' => $this->getBool($customFields, 'javaScriptRedirect'),
+            'jumpSalesChannels' => $this->getBool($customFields, 'jumpSalesChannels'),
+            'redirectInto' => $this->getBool($customFields, 'redirectInto'),
             
             // Page restrictions
-            'only_redirect_front_page' => $this->getBool($customFields, 'onlyRedirectFrontPage'),
-            'sanitize_url_on_front_page_check' => $this->getBool($customFields, 'sanatizeUrlOnFrontPageCheck'),
+            'onlyRedirectFrontPage' => $this->getBool($customFields, 'onlyRedirectFrontPage'),
+            'sanatizeUrlOnFrontPageCheck' => $this->getBool($customFields, 'sanatizeUrlOnFrontPageCheck'),
             
             // Language settings
-            'redirect_on_default_browser_language_only' => $this->getBool($customFields, 'redirectOnDefaultBrowserLanguageOnly'),
-            'language_redirect' => $this->getArray($customFields, 'languageRedirect'),
+            'languageCode' => $this->getString($customFields, 'languageCode'),
+            'redirectOnDefaultBrowserLanguageOnly' => $this->getBool($customFields, 'redirectOnDefaultBrowserLanguageOnly'),
+            'languageRedirect' => $this->getArray($customFields, 'languageRedirect'),
             
             // User override settings
-            'user_override_enabled' => $this->getBool($customFields, 'userOverrideEnabled'),
-            'redirect_if_user_override_domain_id_exists' => $this->getBool($customFields, 'redirectIfUserOverrideDomainIdExists'),
-            'override_ignore_period_s' => $this->getInt($customFields, 'overrideIgnorePeriodS'),
+            'userOverrideEnabled' => $this->getBool($customFields, 'userOverrideEnabled'),
+            'overrideIgnorePeriodS' => $this->getInt($customFields, 'overrideIgnorePeriodS'),
+            
+            // Session settings
+            'sessionIgnoreMode' => $this->getBool($customFields, 'sessionIgnoreMode'),
             
             // Timing and limits
-            'grace_period_ms' => $this->getInt($customFields, 'gracePeriodMs'),
-            'block_period_ms' => $this->getInt($customFields, 'blockPeriodMs'),
-            'max_redirects' => $this->getInt($customFields, 'maxRedirects'),
-            'max_script_calls' => $this->getInt($customFields, 'maxScriptCalls'),
+            'gracePeriodMs' => $this->getInt($customFields, 'gracePeriodMs'),
+            'blockPeriodMs' => $this->getInt($customFields, 'blockPeriodMs'),
+            'maxRedirects' => $this->getInt($customFields, 'maxRedirects'),
+            'maxScriptCalls' => $this->getInt($customFields, 'maxScriptCalls'),
             
             // Debug settings
-            'debug_mode' => $this->getBool($customFields, 'debugMode'),
-            'debug_echo_mode' => $this->getBool($customFields, 'debugEchoMode'),
-            'debug_mode_ip' => $this->getString($customFields, 'debugModeIp'),
+            'debugMode' => $this->getBool($customFields, 'debugMode'),
+            'debugEchoMode' => $this->getBool($customFields, 'debugEchoMode'),
+            'debugModeIp' => $this->getString($customFields, 'debugModeIp'),
         ];
     }
 
