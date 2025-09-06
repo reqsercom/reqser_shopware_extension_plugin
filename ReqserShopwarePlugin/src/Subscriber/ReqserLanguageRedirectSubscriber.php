@@ -149,7 +149,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
 
             //Front Page Only Validation
             if ($this->customFieldBool($customFields, 'onlyRedirectFrontPage')) {
-                if (!$this->isCurrentPageFrontPage($request, $currentDomain)) {
+                if (!$this->isCurrentPageFrontPage($request, $currentDomain, $customFields)) {
                     if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Not on front page - stopping redirect', 'domain_id' => $domainId, 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
                     return;
                 }
@@ -300,23 +300,45 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
      * 
      * @param object $request Current request object
      * @param object $currentDomain Current domain object
-
+     * @param array|null $customFields Domain custom fields
      * @return bool Returns true if current page is front page, false otherwise
      */
-    private function isCurrentPageFrontPage($request, $currentDomain): bool
+    private function isCurrentPageFrontPage($request, $currentDomain, ?array $customFields): bool
     {
-        // Check if the current page is the sales channel domain front page, not a product or category page
         $currentUrl = rtrim($request->getUri(), '/');
         $domainUrl = rtrim($currentDomain->url, '/');
         
         if ($domainUrl !== $currentUrl) {
+            // Check if URL sanitization is enabled
+            if ($this->customFieldBool($customFields, 'sanatizeUrlOnFrontPageCheck')) {
+                $sanitizedCurrentUrl = $this->sanitizeUrl($currentUrl);
+                if ($domainUrl === $sanitizedCurrentUrl) {
+                    return true;
+                }
+            }
+            
             if ($this->debugMode) {
                 $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Not on front page - only front page redirects allowed', 'currentUrl' => $currentUrl, 'domainUrl' => $domainUrl, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             }
-            return false; // Not on front page
+            return false;
         }
         
-        return true; // Is front page
+        return true;
+    }
+
+    /**
+     * Sanitize URL by removing query parameters and applying rtrim
+     * 
+     * @param string $url The URL to sanitize
+     * @return string The sanitized URL
+     */
+    private function sanitizeUrl(string $url): string
+    {
+        // Remove query parameters (everything after ?)
+        $urlWithoutParams = strpos($url, '?') !== false ? substr($url, 0, strpos($url, '?')) : $url;
+        
+        // Apply rtrim to remove trailing slashes
+        return rtrim($urlWithoutParams, '/');
     }
 
     /**
