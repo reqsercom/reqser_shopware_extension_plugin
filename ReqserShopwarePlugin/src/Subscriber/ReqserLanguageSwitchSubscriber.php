@@ -33,7 +33,11 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
     public function onLanguageSwitchResponse(ResponseEvent $event): void
     {
         try {
+            $request = $event->getRequest();
+            $domainId = $request->attributes->get('sw-domain-id');
+            
             $this->requestStack->getSession()->set('reqser_redirect_user_override_timestamp', time());
+            $this->requestStack->getSession()->set('reqser_user_override_domain_id', $domainId);
         } catch (\Throwable $e) {
             if ($this->debugMode) {
                 $this->webhookService->sendErrorToWebhook([
