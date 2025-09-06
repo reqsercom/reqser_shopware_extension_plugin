@@ -99,6 +99,18 @@ class ReqserLanguageRedirectService
             return false;
         }
         
+        //Check if the current Page we are on is allowed to be redirected
+        if (!$this->isCurrentPageFrontPage($request, $currentDomain)) {
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Not front page - stopping redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
+            return false;
+        }
+
+        //Check if the user has manualy choosen a langauge, if so we will redirect to this domain and ignore the browser language
+        if ($this->handleUserOverrideLanguageRedirect($currentDomain, $salesChannelDomains)) {
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'User override language redirect handled', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
+            return true;
+        }
+
         // User override check
         if ($this->sessionService->shouldSkipDueToUserOverride()) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Skipping redirect - user override active', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
@@ -110,10 +122,7 @@ class ReqserLanguageRedirectService
             return false;
         }
 
-        if (!$this->isCurrentPageFrontPage($request, $currentDomain)) {
-            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Not front page - stopping redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-            return false;
-        }
+       
 
         // Check cross sales channel jumping configuration and get appropriate domains
         $jumpSalesChannels = $this->redirectConfig['jumpSalesChannels'] ?? false;
@@ -131,23 +140,6 @@ class ReqserLanguageRedirectService
         $this->processBrowserLanguageRedirects($salesChannelDomains, $currentDomain, $jumpSalesChannels, $request);
         return true;
     }
-
-    /**
-     * Handle direct redirect to a specific domain (bypassing language checks)
-     */
-    public function handleDirectDomainRedirect($targetDomain): void
-    {
-        if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Direct domain redirect - user previously chose this domain', 'target_url' => $targetDomain->getUrl(), 'domain_id' => $targetDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-
-        // Delegate to the redirect service
-        $this->redirectService->handleDirectDomainRedirect(
-            $targetDomain->getUrl(),
-            ($this->redirectConfig['javaScriptRedirect'] ?? false),
-            $this->currentEvent
-        );
-    }
-
-    // [Continue with other private methods...]
 
 
     /**
@@ -239,26 +231,40 @@ class ReqserLanguageRedirectService
 
 
     /**
-     * Handle user override language redirect based on stored domain ID
+     * If the User has choosen via Langauge Switch a domain, we will ignore browser language and redirect to this domain
      */
     private function handleUserOverrideLanguageRedirect($currentDomain, SalesChannelDomainCollection $salesChannelDomains): bool
     {
-        // Get the stored domain ID from session
-        $sessionDomainId = $this->sessionService->getUserOverrideDomainId();
-        
-        // Check if session domain ID exists and matches current domain ID
-        if ($sessionDomainId) {
-            if ($sessionDomainId === $currentDomain->getId()) {
-                return true;
-            } else {
-                // Check if the domain is in the sales channel domains
-                $sessionDomain = $salesChannelDomains->get($sessionDomainId);
-                if ($sessionDomain) {
-                    // Redirect to this domain as the user has chosen it once already
-                    $this->handleDirectDomainRedirect($sessionDomain);
+        $redirectBasedOnUserLanguageSwitch = $this->redirectConfig['redirectBasedOnUserLanguageSwitch'] ?? false;
+
+        if ($redirectBasedOnUserLanguageSwitch === true) {
+            // Get the stored domain ID from session
+            $sessionDomainId = $this->sessionService->getUserOverrideDomainId();
+            // Check if session domain ID exists and matches current domain ID
+            if ($sessionDomainId) {
+                if ($sessionDomainId === $currentDomain->getId()) {
+                    return true;
+                } else {
+                    // Check if the domain is in the sales channel domains
+                    $sessionDomain = $salesChannelDomains->get($sessionDomainId);
+                    if ($sessionDomain) {
+                        //Check if the Domain is active and allowed to be redirected into
+                        $sessionDomainConfig = $this->customFieldService->getRedirectConfiguration($sessionDomain->getCustomFields());
+                        if (!$this->redirectService->isDomainValidForRedirectInto($sessionDomainConfig, $sessionDomain)) {
+                            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Target domain validation failed - stopping redirect', 'domain_id' => $sessionDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
+                            return false;
+                        }
+                         // Delegate to the redirect service
+                        $this->redirectService->handleDirectDomainRedirect(
+                            $sessionDomain->getUrl(),
+                            ($this->redirectConfig['javaScriptRedirect'] ?? false),
+                            $this->currentEvent
+                        );
+                    }
                 }
             }
-        }   
+        }
+           
         
         return false;
     }

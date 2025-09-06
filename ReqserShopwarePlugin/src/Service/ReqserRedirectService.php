@@ -160,7 +160,7 @@ class ReqserRedirectService
      * @param object $currentDomain Current domain object
      * @return bool Returns true if domain is valid for redirect, false otherwise
      */
-    public function isDomainValidForRedirect(array $redirectConfig, $currentDomain): bool
+    public function isDomainValidForRedirectFrom(array $redirectConfig, $currentDomain): bool
     {
         // Check if domain is active
         if (!($redirectConfig['active'] ?? false)) {
@@ -183,6 +183,42 @@ class ReqserRedirectService
                     'type' => 'debug', 
                     'info' => 'Domain redirectFrom disabled - stopping redirect', 
                     'domain_id' => $currentDomain->getId(), 
+                    'file' => __FILE__, 
+                    'line' => __LINE__
+                ], $this->debugEchoMode);
+            }
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Check if domain is valid for redirect INTO (target domain)
+     */
+    public function isDomainValidForRedirectFromInto(array $redirectConfig, $targetDomain): bool
+    {
+        // Check if domain is active
+        if (!($redirectConfig['active'] ?? false)) {
+            if ($this->debugMode) {
+                $this->webhookService->sendErrorToWebhook([
+                    'type' => 'debug', 
+                    'info' => 'Target domain is not active - stopping redirect', 
+                    'domain_id' => $targetDomain->getId(), 
+                    'file' => __FILE__, 
+                    'line' => __LINE__
+                ], $this->debugEchoMode);
+            }
+            return false;
+        }
+
+        // Check if redirectInto is enabled
+        if (!($redirectConfig['redirectInto'] ?? false)) {
+            if ($this->debugMode) {
+                $this->webhookService->sendErrorToWebhook([
+                    'type' => 'debug', 
+                    'info' => 'Target domain redirectInto disabled - stopping redirect', 
+                    'domain_id' => $targetDomain->getId(), 
                     'file' => __FILE__, 
                     'line' => __LINE__
                 ], $this->debugEchoMode);

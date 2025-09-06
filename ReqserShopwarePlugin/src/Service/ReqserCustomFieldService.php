@@ -204,6 +204,7 @@ class ReqserCustomFieldService
             
             // User override settings
             'userOverrideEnabled' => $this->getBool($customFields, 'userOverrideEnabled'),
+            'redirectBasedOnUserLanguageSwitch' => $this->getBool($customFields, 'redirectBasedOnUserLanguageSwitch'),
             'overrideIgnorePeriodS' => $this->getInt($customFields, 'overrideIgnorePeriodS'),
             
             // Session settings
