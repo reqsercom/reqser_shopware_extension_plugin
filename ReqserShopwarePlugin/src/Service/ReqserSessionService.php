@@ -149,19 +149,11 @@ class ReqserSessionService
     }
 
     /**
-     * Get user override domain ID
+     * Get user override language ID from session
      */
-    public function getUserOverrideDomainId(): ?string
+    public function getUserOverrideLanguageId(): ?string
     {
-        return $this->session->get('reqser_user_override_domain_id', null);
-    }
-
-    /**
-     * Set user override domain ID
-     */
-    public function setUserOverrideDomainId(?string $domainId): void
-    {
-        $this->session->set('reqser_user_override_domain_id', $domainId);
+        return $this->session->get('reqser_user_override_language_id', null);
     }
 
     /**
@@ -195,6 +187,7 @@ class ReqserSessionService
         $this->session->remove('reqser_script_call_count');
         $this->session->remove('reqser_redirect_user_override_timestamp');
         $this->session->remove('reqser_user_override_domain_id');
+        $this->session->remove('reqser_user_override_language_id');
         
         // Reset cache
         $this->redirectCount = null;
@@ -212,6 +205,7 @@ class ReqserSessionService
             'script_call_count' => $this->getScriptCallCount(),
             'user_override_timestamp' => $this->getUserOverrideTimestamp(),
             'user_override_domain_id' => $this->getUserOverrideDomainId(),
+            'user_override_language_id' => $this->getUserOverrideLanguageId(),
             'session_ignore_mode' => $this->sessionIgnoreMode,
         ];
     }

@@ -26,7 +26,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
     private LoggerInterface $logger;
 
     public function __construct(
-        RequestStack $requestStack,
+        RequestStack $requestStack, 
         ReqserLanguageRedirectService $languageRedirectService,
         EntityRepository $domainRepository,
         ReqserWebhookService $webhookService,
@@ -63,9 +63,9 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         try {
             // Check if the app is active
             if (!$this->appService->isAppActive()) {
-                //return; //todo Remove
+                return;
             }
-           
+
             // Extract basic request data
             $request = $event->getRequest();
             $domainId = $request->attributes->get('sw-domain-id');
@@ -78,7 +78,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             if (!$currentDomain) {
                 return;
             }
-
+           
             $customFields = $currentDomain->getCustomFields();
             
             // Initialize the service with event context and current domain configuration
@@ -90,7 +90,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
                 $currentDomain,
                 $salesChannelDomains
             );
-
+            
         } catch (\Throwable $e) {
             if (method_exists($this->logger, 'error')) {
                 $this->logger->error('Reqser Plugin Error onStorefrontRender', [

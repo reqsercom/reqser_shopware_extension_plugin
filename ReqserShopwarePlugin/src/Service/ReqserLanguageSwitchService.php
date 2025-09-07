@@ -51,7 +51,6 @@ class ReqserLanguageSwitchService
                     return false; // Skip redirect
                 }
             }
-
             // Then check if we should redirect to user's previously chosen domain
             $redirectToUserPreviouslyChosenDomain = $redirectConfig['redirectToUserPreviouslyChosenDomain'] ?? false;
             if ($redirectToUserPreviouslyChosenDomain === true) {
@@ -105,27 +104,32 @@ class ReqserLanguageSwitchService
         bool $debugEchoMode,
         $currentEvent
     ): bool {
-        // Get the stored domain ID from session
-        $sessionDomainId = $this->sessionService->getUserOverrideDomainId();
-        
-        // Check if session domain ID exists and matches current domain ID
-        if ($sessionDomainId) {
-            if ($sessionDomainId === $currentDomain->getId()) {
+        // Get the stored language ID from session
+        $sessionLanguageId = $this->sessionService->getUserOverrideLanguageId();
+     
+        // Check if session language ID exists and if it matches current domain language
+        if ($sessionLanguageId) {
+            if ($sessionLanguageId === $currentDomain->getLanguageId()) {
+                // User wants to stay on current language/domain - no redirect needed
                 return true;
             } else {
-                // Check if the domain is in the sales channel domains
-                $sessionDomain = $salesChannelDomains->get($sessionDomainId);
-                if ($sessionDomain) {
-                    // Check if the Domain is active and allowed to be redirected into
-                    $sessionDomainConfig = $this->customFieldService->getRedirectConfiguration($sessionDomain->getCustomFields());
-                    if (!$this->redirectService->isDomainValidForRedirectFromInto($sessionDomainConfig, $sessionDomain)) {
-                        if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Target domain validation failed - stopping redirect', 'domain_id' => $sessionDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $debugEchoMode);
-                        return false;
+                // Find domain that matches the target language ID
+                $targetDomain = null;
+                foreach ($salesChannelDomains as $domain) {
+                    if ($domain->getLanguageId() === $sessionLanguageId) {
+                        $targetDomainConfig = $this->customFieldService->getRedirectConfiguration($domain->getCustomFields());
+                        if (!$this->redirectService->isDomainValidForRedirectFromInto($targetDomainConfig, $targetDomain)) {
+                            continue;
+                        } else {
+                            $targetDomain = $domain;
+                            break;
+                        }
                     }
-                    
-                    // Delegate to the redirect service
+                }
+                
+                if ($targetDomain) {
                     $this->redirectService->handleDirectDomainRedirect(
-                        $sessionDomain->getUrl(),
+                        $targetDomain->getUrl(),
                         ($redirectConfig['javaScriptRedirect'] ?? false),
                         $currentEvent
                     );
