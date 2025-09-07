@@ -122,6 +122,7 @@ class ReqserLanguageSwitchService
                             continue;
                         } else {
                             $targetDomain = $domain;
+                            if ($debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Target Domain Found based on last manual language switch', 'domain_id' => $targetDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $debugEchoMode);
                             break;
                         }
                     }

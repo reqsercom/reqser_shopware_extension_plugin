@@ -87,36 +87,36 @@ class ReqserLanguageRedirectService
         StorefrontRenderEvent $event,
         $currentDomain,
         SalesChannelDomainCollection $salesChannelDomains
-    ): void {
+    ): bool {
         $request = $event->getRequest();
         
         // Check if headers are already sent
         if (headers_sent() && !($this->redirectConfig['javascript_redirect'] ?? false)) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Headers already sent - redirect not possible', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-            exit;
+            return true;
         }
 
         //Checks if the redirect on current domain should even be processed or not
         if (!$this->shouldProcessRedirect($currentDomain, $request, $event)) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Should not process redirect - stopping redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-            exit;
+            return true;
         }
 
         // Check if the user has changed the language manually
         if (!$this->languageSwitchService->checkForManualLanguageSwitchEvent($currentDomain, $salesChannelDomains, $this->redirectConfig, $this->debugMode, $this->debugEchoMode, $this->currentEvent)) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Language switch event stopped redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-            exit;
+            return true;
         }
 
         // Check the Session if there were already redirects happening
         if (!$this->sessionService->validateAndManageSessionRedirects()) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Session validation failed - stopping redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-            exit;
+            return true;
         }
 
         // Find the right domain where to redirect to
         $this->processBrowserLanguageRedirects($salesChannelDomains, $currentDomain, $request);
-        exit;
+        return true;
     }
 
 

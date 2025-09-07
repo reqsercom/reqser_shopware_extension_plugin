@@ -63,11 +63,17 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         try {
             // Check if the app is active
             if (!$this->appService->isAppActive()) {
-                return;
+                return; 
             }
 
             // Extract basic request data
             $request = $event->getRequest();
+            
+            // Skip redirect logic for ESI fragments and internal routes
+            if (!$this->routeIsAllowedForRedirect($request)) {
+                return;
+            }
+            
             $domainId = $request->attributes->get('sw-domain-id');
             $session = $request->getSession();
 
@@ -78,7 +84,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             if (!$currentDomain) {
                 return;
             }
-           
+
             $customFields = $currentDomain->getCustomFields();
             
             // Initialize the service with event context and current domain configuration
@@ -112,6 +118,34 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         }
     }
 
+    /**
+     * Check if redirect logic should be skipped for this route
+     */
+    private function routeIsAllowedForRedirect($request): bool
+    {
+        $routeName = $request->attributes->get('_route');
+        
+        // First check: Only process frontend routes
+        if (!$routeName) {
+            return false;
+        }
+        
+        // Second check: Only process GET requests
+        if (!$request->isMethod('GET')) {
+            return false;
+        }
+        
+        // Third check: Only allow specific main page patterns for redirect processing
+        if (strpos($routeName, 'frontend.home.') !== 0 &&
+            strpos($routeName, 'frontend.navigation.') !== 0 &&
+            strpos($routeName, 'frontend.detail.') !== 0 &&
+            strpos($routeName, 'frontend.cms.') !== 0) {
+            return false; 
+        }
+        
+        // Route is allowed so we can proceed
+        return true;
+    }
 
     /**
      * Retrieve sales channel domains with ReqserRedirect custom fields
