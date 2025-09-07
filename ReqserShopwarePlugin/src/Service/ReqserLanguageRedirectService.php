@@ -8,6 +8,7 @@ use Reqser\Plugin\Service\ReqserAppService;
 use Reqser\Plugin\Service\ReqserSessionService;
 use Reqser\Plugin\Service\ReqserCustomFieldService;
 use Reqser\Plugin\Service\ReqserRedirectService;
+use Reqser\Plugin\Service\ReqserLanguageSwitchService;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
@@ -24,6 +25,7 @@ class ReqserLanguageRedirectService
     private $sessionService;
     private $customFieldService;
     private $redirectService;
+    private $languageSwitchService;
     private ?StorefrontRenderEvent $currentEvent = null;
     private ?array $currentCustomFields = null;
     private bool $debugMode = false;
@@ -37,7 +39,8 @@ class ReqserLanguageRedirectService
         ReqserWebhookService $webhookService,
         ReqserSessionService $sessionService,
         ReqserCustomFieldService $customFieldService,
-        ReqserRedirectService $redirectService
+        ReqserRedirectService $redirectService,
+        ReqserLanguageSwitchService $languageSwitchService
     ) {
         $this->domainRepository = $domainRepository;
         $this->appService = $appService;
@@ -45,6 +48,7 @@ class ReqserLanguageRedirectService
         $this->sessionService = $sessionService;
         $this->customFieldService = $customFieldService;
         $this->redirectService = $redirectService;
+        $this->languageSwitchService = $languageSwitchService;
     }
 
     /**
@@ -59,8 +63,8 @@ class ReqserLanguageRedirectService
         $this->redirectConfig = $this->customFieldService->getRedirectConfiguration($customFields);
         
         // Determine debug modes once and store globally using pre-loaded config
-        $this->debugMode = $this->customFieldService->isDebugModeActive($this->redirectConfig, $request, $currentDomain, $this->sessionService);
-        $this->debugEchoMode = $this->debugMode && ($this->redirectConfig['debugEchoMode'] ?? false);
+        $this->debugMode = false; //$this->customFieldService->isDebugModeActive($this->redirectConfig, $request, $currentDomain, $this->sessionService);
+        $this->debugEchoMode = false; //$this->customFieldService->isDebugEchoModeActive($this->debugMode, $this->redirectConfig);
         
         // Initialize session service with redirect config
         $this->sessionService->initialize($session, $this->redirectConfig);
@@ -89,7 +93,7 @@ class ReqserLanguageRedirectService
         }
 
         // Domain configuration validation
-        if (!$this->redirectService->isDomainValidForRedirect($this->redirectConfig, $currentDomain)) {
+        if (!$this->redirectService->isDomainValidForRedirectFrom($this->redirectConfig, $currentDomain)) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Domain validation failed - stopping redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return false;
         }
@@ -98,31 +102,23 @@ class ReqserLanguageRedirectService
         if (!$this->shouldProcessRedirect($currentDomain)) {
             return false;
         }
-        
+
         //Check if the current Page we are on is allowed to be redirected
         if (!$this->isCurrentPageFrontPage($request, $currentDomain)) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Not front page - stopping redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return false;
         }
 
-        //Check if the user has manualy choosen a langauge, if so we will redirect to this domain and ignore the browser language
-        if ($this->handleUserOverrideLanguageRedirect($currentDomain, $salesChannelDomains)) {
-            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'User override language redirect handled', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-            return true;
-        }
-
-        // User override check
-        if ($this->sessionService->shouldSkipDueToUserOverride()) {
-            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Skipping redirect - user override active', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
+        // Check for manual language switch events (user override, previous domain choice, etc.)
+        if (!$this->languageSwitchService->checkForManualLanguageSwitchEvent($currentDomain, $salesChannelDomains, $this->redirectConfig, $this->debugMode, $this->debugEchoMode, $this->currentEvent)) {
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Language switch event stopped redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return false;
         }
 
         if (!$this->sessionService->validateAndManageSessionRedirects()) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Session validation failed - stopping redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-            return false;
+                return false;
         }
-
-       
 
         // Check cross sales channel jumping configuration and get appropriate domains
         $jumpSalesChannels = $this->redirectConfig['jumpSalesChannels'] ?? false;
@@ -185,25 +181,25 @@ class ReqserLanguageRedirectService
     {
         $onlyRedirectFrontPage = $this->redirectConfig['onlyRedirectFrontPage'] ?? false;
         if ($onlyRedirectFrontPage === true) {
-            $currentUrl = rtrim($request->getUri(), '/');
-            $domainUrl = rtrim($currentDomain->getUrl(), '/');
-            
-            if ($domainUrl !== $currentUrl) {
-                // Check if URL sanitization is enabled
+        $currentUrl = rtrim($request->getUri(), '/');
+        $domainUrl = rtrim($currentDomain->getUrl(), '/');
+        
+        if ($domainUrl !== $currentUrl) {
+            // Check if URL sanitization is enabled
                 if ($this->redirectConfig['sanatizeUrlOnFrontPageCheck'] ?? false) {
                     $sanitizedCurrentUrl = $this->redirectService->sanitizeUrl($currentUrl);
-                    if ($domainUrl === $sanitizedCurrentUrl) {
-                        return true;
-                    }
+                if ($domainUrl === $sanitizedCurrentUrl) {
+                    return true;
                 }
-                
-                if ($this->debugMode) {
-                    $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Not on front page - only front page redirects allowed', 'currentUrl' => $currentUrl, 'domainUrl' => $domainUrl, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-                }
-                return false;
+            }
+            
+            if ($this->debugMode) {
+                $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Not on front page - only front page redirects allowed', 'currentUrl' => $currentUrl, 'domainUrl' => $domainUrl, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
+            }
+            return false;
             }
         }
-
+        
         return true;
     }
 
@@ -238,19 +234,19 @@ class ReqserLanguageRedirectService
         $redirectBasedOnUserLanguageSwitch = $this->redirectConfig['redirectBasedOnUserLanguageSwitch'] ?? false;
 
         if ($redirectBasedOnUserLanguageSwitch === true) {
-            // Get the stored domain ID from session
-            $sessionDomainId = $this->sessionService->getUserOverrideDomainId();
-            // Check if session domain ID exists and matches current domain ID
-            if ($sessionDomainId) {
-                if ($sessionDomainId === $currentDomain->getId()) {
-                    return true;
-                } else {
-                    // Check if the domain is in the sales channel domains
-                    $sessionDomain = $salesChannelDomains->get($sessionDomainId);
-                    if ($sessionDomain) {
+        // Get the stored domain ID from session
+        $sessionDomainId = $this->sessionService->getUserOverrideDomainId();
+        // Check if session domain ID exists and matches current domain ID
+        if ($sessionDomainId) {
+            if ($sessionDomainId === $currentDomain->getId()) {
+                return true;
+            } else {
+                // Check if the domain is in the sales channel domains
+                $sessionDomain = $salesChannelDomains->get($sessionDomainId);
+                if ($sessionDomain) {
                         //Check if the Domain is active and allowed to be redirected into
                         $sessionDomainConfig = $this->customFieldService->getRedirectConfiguration($sessionDomain->getCustomFields());
-                        if (!$this->redirectService->isDomainValidForRedirectInto($sessionDomainConfig, $sessionDomain)) {
+                         if (!$this->redirectService->isDomainValidForRedirectFromInto($sessionDomainConfig, $sessionDomain)) {
                             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Target domain validation failed - stopping redirect', 'domain_id' => $sessionDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
                             return false;
                         }

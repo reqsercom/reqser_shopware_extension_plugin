@@ -206,6 +206,8 @@ class ReqserCustomFieldService
             'userOverrideEnabled' => $this->getBool($customFields, 'userOverrideEnabled'),
             'redirectBasedOnUserLanguageSwitch' => $this->getBool($customFields, 'redirectBasedOnUserLanguageSwitch'),
             'overrideIgnorePeriodS' => $this->getInt($customFields, 'overrideIgnorePeriodS'),
+            'skipRedirectAfterManualLanguageSwitch' => $this->getBool($customFields, 'skipRedirectAfterManualLanguageSwitch'),
+            'redirectToUserPreviouslyChosenDomain' => $this->getBool($customFields, 'redirectToUserPreviouslyChosenDomain'),
             
             // Session settings
             'sessionIgnoreMode' => $this->getBool($customFields, 'sessionIgnoreMode'),
@@ -229,6 +231,20 @@ class ReqserCustomFieldService
     public function isEchoModeActive(bool $debugMode, ?array $customFields): bool
     {
         return $debugMode && $this->getBool($customFields, 'debugEchoMode');
+    }
+
+    /**
+     * Check if debug echo mode is active (requires debug mode to be active first)
+     */
+    public function isDebugEchoModeActive(bool $debugMode, ?array $redirectConfig): bool
+    {
+        // If debug mode is not active, echo mode cannot be active
+        if (!$debugMode) {
+            return false;
+        }
+        
+        // Check if debug echo mode is enabled in configuration
+        return $this->getBool($redirectConfig, 'debugEchoMode');
     }
 
     /**

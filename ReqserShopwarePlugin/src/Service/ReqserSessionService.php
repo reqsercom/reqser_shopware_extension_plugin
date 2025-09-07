@@ -217,32 +217,6 @@ class ReqserSessionService
     }
 
     /**
-     * Check if redirect should be skipped due to user override settings
-     */
-    public function shouldSkipDueToUserOverride(): bool
-    {
-        $userOverrideEnabled = $this->redirectConfig['userOverrideEnabled'] ?? false;
-        $advancedRedirectEnabled = $this->redirectConfig['advancedRedirectEnabled'] ?? false;
-        
-        // Check if user override conditions are met
-        if ($userOverrideEnabled === true && $advancedRedirectEnabled === true && $this->getUserOverrideTimestamp()) {
-            $overrideTimestamp = $this->getUserOverrideTimestamp();
-            $overrideIgnorePeriodS = $this->redirectConfig['overrideIgnorePeriodS'] ?? null;
-            
-            if ($overrideIgnorePeriodS !== null) {
-                // Check if the override timestamp is younger than the overrideIgnorePeriodS
-                if ($overrideTimestamp > time() - $overrideIgnorePeriodS) {
-                    return true; // Skip redirect
-                }
-            } else {
-                return true; // Skip redirect (no period restriction)
-            }
-        }
-        
-        return false; // Don't skip redirect
-    }
-
-    /**
      * Validate and manage session redirects
      */
     public function validateAndManageSessionRedirects(): bool

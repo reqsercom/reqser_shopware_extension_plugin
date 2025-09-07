@@ -8,6 +8,7 @@ use Symfony\Component\HttpFoundation\RequestStack;
 use Reqser\Plugin\Service\ReqserLanguageRedirectService;
 use Reqser\Plugin\Service\ReqserWebhookService;
 use Reqser\Plugin\Service\ReqserCustomFieldService;
+use Reqser\Plugin\Service\ReqserAppService;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
@@ -21,6 +22,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
     private $domainRepository;
     private $webhookService;
     private $customFieldService;
+    private $appService;
     private LoggerInterface $logger;
 
     public function __construct(
@@ -29,6 +31,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         EntityRepository $domainRepository,
         ReqserWebhookService $webhookService,
         ReqserCustomFieldService $customFieldService,
+        ReqserAppService $appService,
         LoggerInterface $logger
     ) {
         $this->requestStack = $requestStack;
@@ -36,6 +39,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         $this->domainRepository = $domainRepository;
         $this->webhookService = $webhookService;
         $this->customFieldService = $customFieldService;
+        $this->appService = $appService;
         $this->logger = $logger;
     }
 
@@ -55,12 +59,13 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
      */
     public function onStorefrontRender(StorefrontRenderEvent $event): void
     {
+        
         try {
             // Check if the app is active
-            if (!$this->redirectService->isAppActive()) {
-                return;
+            if (!$this->appService->isAppActive()) {
+                //return; //todo Remove
             }
-
+           
             // Extract basic request data
             $request = $event->getRequest();
             $domainId = $request->attributes->get('sw-domain-id');
