@@ -162,13 +162,6 @@ class ReqserSessionService
         return $this->session?->get('reqser_user_override_language_id', null);
     }
 
-    /**
-     * Get user override domain ID from session
-     */
-    public function getUserOverrideDomainId(): ?string
-    {
-        return $this->session?->get('reqser_user_override_domain_id', null);
-    }
 
     /**
      * Prepare session variables before redirecting
@@ -202,7 +195,6 @@ class ReqserSessionService
             'redirect_count' => $this->getRedirectCount(),
             'script_call_count' => $this->getScriptCallCount(),
             'user_override_timestamp' => $this->getUserOverrideTimestamp(),
-            'user_override_domain_id' => $this->getUserOverrideDomainId(),
             'user_override_language_id' => $this->getUserOverrideLanguageId(),
             'session_ignore_mode' => $this->sessionIgnoreMode,
         ];
@@ -256,28 +248,5 @@ class ReqserSessionService
         return true; 
     }
 
-    /**
-     * Check if user has overridden to a specific domain and should redirect there
-     */
-    public function shouldRedirectToUserOverrideDomain($currentDomainId, $salesChannelDomains): ?string
-    {
-        // Get the stored domain ID from session
-        $sessionDomainId = $this->getUserOverrideDomainId();
-        
-        // Check if session domain ID exists and matches current domain ID
-        if ($sessionDomainId) {
-            if ($sessionDomainId === $currentDomainId) {
-                return null; // Already on the right domain
-            } else {
-                // Check if the domain is in the sales channel domains
-                $sessionDomain = $salesChannelDomains->get($sessionDomainId);
-                if ($sessionDomain) {
-                    return $sessionDomainId; // Return domain ID to redirect to
-                }
-            }
-        }
-        
-        return null; // No redirect needed
-    }
 
 }
