@@ -2,6 +2,7 @@
 
 namespace Reqser\Plugin\Subscriber;
 
+use Reqser\Plugin\Service\ReqserSessionService;
 use Reqser\Plugin\Service\ReqserWebhookService;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -35,8 +36,11 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
         try {
             $request = $event->getRequest();
             
-            $this->requestStack->getSession()->set('reqser_redirect_user_override_timestamp', time());
-            $this->requestStack->getSession()->set('reqser_user_override_language_id', $request->request->get('languageId'));
+            $session = ReqserSessionService::getSessionWithFallback($request, $this->requestStack);
+            if ($session) {
+                $session->set('reqser_redirect_user_override_timestamp', time());
+                $session->set('reqser_user_override_language_id', $request->request->get('languageId'));
+            }
             
         } catch (\Throwable $e) {
             if ($this->debugMode) {

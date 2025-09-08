@@ -9,6 +9,7 @@ use Reqser\Plugin\Service\ReqserLanguageRedirectService;
 use Reqser\Plugin\Service\ReqserWebhookService;
 use Reqser\Plugin\Service\ReqserCustomFieldService;
 use Reqser\Plugin\Service\ReqserAppService;
+use Reqser\Plugin\Service\ReqserSessionService;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
@@ -75,7 +76,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             }
             
             $domainId = $request->attributes->get('sw-domain-id');
-            $session = $request->getSession();
+            $session = ReqserSessionService::getSessionWithFallback($request, $this->requestStack);
 
             // Get sales channel domains and current domain
             $salesChannelDomains = $this->getSalesChannelDomains($event->getSalesChannelContext());

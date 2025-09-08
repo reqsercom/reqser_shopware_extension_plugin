@@ -3,6 +3,7 @@
 namespace Reqser\Plugin\Service;
 
 use Reqser\Plugin\Service\ReqserWebhookService;
+use Symfony\Component\HttpFoundation\RequestStack;
 
 class ReqserSessionService
 {
@@ -33,6 +34,27 @@ class ReqserSessionService
         return true; // Initialization successful
     }
 
+    /**
+     * Get session with fallback strategy
+     * First tries to get session from request, then falls back to requestStack
+     */
+    public static function getSessionWithFallback($request, RequestStack $requestStack)
+    {
+        // Try to get session from request first
+        $session = $request->getSession();
+        
+        // Try fallback to requestStack if request session is null
+        if (!$session) {
+            try {
+                $session = $requestStack->getSession();
+            } catch (\Throwable $e) {
+                // If both methods fail, session is truly unavailable
+                $session = null;
+            }
+        }
+        
+        return $session;
+    }
 
     /**
      * Check if redirect was already called
