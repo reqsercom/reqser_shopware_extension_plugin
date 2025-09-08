@@ -66,50 +66,6 @@ class ReqserCustomFieldService
         return $customFields[self::CUSTOM_FIELD_PREFIX] ?? null;
     }
 
-    /**
-     * Validate custom field configuration
-     */
-    public function validateConfiguration(?array $customFields): array
-    {
-        $errors = [];
-        $warnings = [];
-
-        $reqserFields = $this->getAllFields($customFields);
-        if ($reqserFields === null) {
-            $errors[] = 'No ReqserRedirect custom fields found';
-            return ['errors' => $errors, 'warnings' => $warnings];
-        }
-
-        // Validate timing configurations
-        $gracePeriodMs = $this->getInt($customFields, 'gracePeriodMs');
-        $blockPeriodMs = $this->getInt($customFields, 'blockPeriodMs');
-        
-        if ($gracePeriodMs !== null && $blockPeriodMs !== null) {
-            if ($gracePeriodMs >= $blockPeriodMs) {
-                $warnings[] = 'Grace period should be less than block period';
-            }
-        }
-
-        // Validate redirect limits
-        $maxRedirects = $this->getInt($customFields, 'maxRedirects');
-        $maxScriptCalls = $this->getInt($customFields, 'maxScriptCalls');
-
-        if ($maxRedirects !== null && $maxRedirects < 1) {
-            $errors[] = 'Max redirects must be greater than 0';
-        }
-
-        if ($maxScriptCalls !== null && $maxScriptCalls < 1) {
-            $errors[] = 'Max script calls must be greater than 0';
-        }
-
-        // Validate user override period
-        $overrideIgnorePeriodS = $this->getInt($customFields, 'overrideIgnorePeriodS');
-        if ($overrideIgnorePeriodS !== null && $overrideIgnorePeriodS < 0) {
-            $errors[] = 'Override ignore period cannot be negative';
-        }
-
-        return ['errors' => $errors, 'warnings' => $warnings];
-    }
 
     /**
      * Check if debug mode is active based on configuration

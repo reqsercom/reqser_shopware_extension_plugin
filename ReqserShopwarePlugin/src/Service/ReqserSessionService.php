@@ -33,13 +33,6 @@ class ReqserSessionService
         return true; // Initialization successful
     }
 
-    /**
-     * Set session ignore mode
-     */
-    public function setSessionIgnoreMode(bool $ignoreMode): void
-    {
-        $this->sessionIgnoreMode = $ignoreMode;
-    }
 
     /**
      * Check if redirect was already called
@@ -49,13 +42,6 @@ class ReqserSessionService
         return $this->session->get('reqser_redirect_called', false);
     }
 
-    /**
-     * Set redirect called flag
-     */
-    public function setRedirectCalled(bool $called = true): void
-    {
-        $this->session->set('reqser_redirect_called', $called);
-    }
 
     /**
      * Get last redirect timestamp
@@ -135,24 +121,7 @@ class ReqserSessionService
         return $this->session->get('reqser_redirect_user_override_timestamp', null);
     }
 
-    /**
-     * Set user override timestamp
-     */
-    public function setUserOverrideTimestamp(?int $timestamp = null): void
-    {
-        if ($timestamp === null) {
-            $timestamp = time();
-        }
-        $this->session->set('reqser_redirect_user_override_timestamp', $timestamp);
-    }
 
-    /**
-     * Check if user override timestamp exists
-     */
-    public function hasUserOverrideTimestamp(): bool
-    {
-        return $this->session->get('reqser_redirect_user_override_timestamp', false) !== false;
-    }
 
     /**
      * Get user override language ID from session
@@ -182,23 +151,7 @@ class ReqserSessionService
     {
         return $this->session?->all() ?? [];
     }
-
-
-    /**
-     * Get session statistics for debugging
-     */
-    public function getSessionStats(): array
-    {
-        return [
-            'redirect_called' => $this->isRedirectCalled(),
-            'last_redirect_time' => $this->getLastRedirectTime(),
-            'redirect_count' => $this->getRedirectCount(),
-            'script_call_count' => $this->getScriptCallCount(),
-            'user_override_timestamp' => $this->getUserOverrideTimestamp(),
-            'user_override_language_id' => $this->getUserOverrideLanguageId(),
-            'session_ignore_mode' => $this->sessionIgnoreMode,
-        ];
-    }
+    
 
     /**
      * Validate and manage session redirects
