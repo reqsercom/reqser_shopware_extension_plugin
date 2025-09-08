@@ -190,7 +190,7 @@ class ReqserCustomFieldService
         }
         
         // Check if debug echo mode is enabled in configuration
-        return $this->getBool($redirectConfig, 'debugEchoMode');
+        return $redirectConfig['debugEchoMode'] ?? false;
     }
 
 }
