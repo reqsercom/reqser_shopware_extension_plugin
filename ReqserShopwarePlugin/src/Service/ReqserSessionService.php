@@ -19,12 +19,18 @@ class ReqserSessionService
 
     /**
      * Initialize the service with a session and redirect configuration
+     * Returns false if session is null to indicate initialization failed
      */
-    public function initialize($session, ?array $redirectConfig = null): void
+    public function initialize($session, ?array $redirectConfig = null): bool
     {
+        if ($session === null) {
+            return false; // Initialization failed - no session available
+        }
+        
         $this->session = $session;
         $this->redirectConfig = $redirectConfig;
         $this->redirectCount = null; // Reset cache when session changes
+        return true; // Initialization successful
     }
 
     /**
@@ -153,7 +159,15 @@ class ReqserSessionService
      */
     public function getUserOverrideLanguageId(): ?string
     {
-        return $this->session->get('reqser_user_override_language_id', null);
+        return $this->session?->get('reqser_user_override_language_id', null);
+    }
+
+    /**
+     * Get user override domain ID from session
+     */
+    public function getUserOverrideDomainId(): ?string
+    {
+        return $this->session?->get('reqser_user_override_domain_id', null);
     }
 
     /**
@@ -173,25 +187,9 @@ class ReqserSessionService
      */
     public function getAllSessionData(): array
     {
-        return $this->session->all();
+        return $this->session?->all() ?? [];
     }
 
-    /**
-     * Clear all redirect-related session data
-     */
-    public function clearRedirectSessionData(): void
-    {
-        $this->session->remove('reqser_redirect_called');
-        $this->session->remove('reqser_last_redirect_at');
-        $this->session->remove('reqser_redirect_count');
-        $this->session->remove('reqser_script_call_count');
-        $this->session->remove('reqser_redirect_user_override_timestamp');
-        $this->session->remove('reqser_user_override_domain_id');
-        $this->session->remove('reqser_user_override_language_id');
-        
-        // Reset cache
-        $this->redirectCount = null;
-    }
 
     /**
      * Get session statistics for debugging

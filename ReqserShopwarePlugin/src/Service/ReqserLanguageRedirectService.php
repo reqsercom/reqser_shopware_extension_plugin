@@ -33,6 +33,8 @@ class ReqserLanguageRedirectService
     private ?array $redirectConfig = null;
     private ?string $primaryBrowserLanguage = null;
     private bool $jumpSalesChannels = false;
+    private bool $sessionAvailable = false;
+    private $salesChannelDomains = null;
 
     public function __construct(
         EntityRepository $domainRepository,
@@ -55,40 +57,41 @@ class ReqserLanguageRedirectService
     /**
      * Initialize redirect service with event context and current domain configuration
      */
-    public function initialize(StorefrontRenderEvent $event, $session, array $customFields, $request, $currentDomain): void
+    public function initialize(StorefrontRenderEvent $event, $session, array $customFields, $request, $currentDomain, $salesChannelDomains): void
     {
         $this->currentEvent = $event;
         $this->currentCustomFields = $customFields;
         
         // Load all redirect configuration once
         $this->redirectConfig = $this->customFieldService->getRedirectConfiguration($customFields);
+
+        // Initialize session service with redirect config
+        $this->sessionAvailable = $this->sessionService->initialize($session, $this->redirectConfig);
         
         // Determine debug modes once and store globally using pre-loaded config
-        $this->debugMode = $this->customFieldService->isDebugModeActive($this->redirectConfig, $request, $currentDomain, $this->sessionService);
+        // Only pass sessionService if session is available, otherwise pass null
+        $this->debugMode = $this->customFieldService->isDebugModeActive($this->redirectConfig, $request, $currentDomain, $this->sessionAvailable ? $this->sessionService : null);
         $this->debugEchoMode = $this->customFieldService->isDebugEchoModeActive($this->debugMode, $this->redirectConfig);
-        
-        // Initialize session service with redirect config
-        $this->sessionService->initialize($session, $this->redirectConfig);
-        
-        // Initialize redirect service with debug modes
-        $this->redirectService->setDebugModes($this->debugMode, $this->debugEchoMode);
+
+        // Initialize redirect service with debug modes and session availability
+        $this->redirectService->initialize($this->debugMode, $this->debugEchoMode, $this->sessionAvailable);
         
         // Calculate primary browser language once
         $this->primaryBrowserLanguage = $this->getPrimaryBrowserLanguage($request);
         
         // Set jumpSalesChannels configuration
         $this->jumpSalesChannels = $this->redirectConfig['jumpSalesChannels'] ?? false;
+        
+        // Get sales channel domains once for the entire redirect process
+        // Start with current sales channel only, expand later if jumpSalesChannels is true
+        $this->salesChannelDomains = $salesChannelDomains;
     }
 
     /**
      * Process redirect logic for the given context
      */
-    public function processRedirect(
-        StorefrontRenderEvent $event,
-        $currentDomain,
-        SalesChannelDomainCollection $salesChannelDomains
-    ): bool {
-        $request = $event->getRequest();
+    public function processRedirect($currentDomain): bool {
+        $request = $this->currentEvent->getRequest();
         
         // Check if headers are already sent
         if (headers_sent() && !($this->redirectConfig['javascript_redirect'] ?? false)) {
@@ -97,25 +100,25 @@ class ReqserLanguageRedirectService
         }
 
         //Checks if the redirect on current domain should even be processed or not
-        if (!$this->shouldProcessRedirect($currentDomain, $request, $event)) {
+        if (!$this->shouldProcessRedirect($currentDomain, $request)) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Should not process redirect - stopping redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return true;
         }
 
         // Check if the user has changed the language manually
-        if (!$this->languageSwitchService->checkForManualLanguageSwitchEvent($currentDomain, $salesChannelDomains, $this->redirectConfig, $this->debugMode, $this->debugEchoMode, $this->currentEvent)) {
+        if ($this->sessionAvailable && $this->languageSwitchService->checkForManualLanguageSwitchEvent($currentDomain, $this->salesChannelDomains, $this->redirectConfig, $this->debugMode, $this->debugEchoMode, $this->currentEvent, $this->sessionAvailable)) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Language switch event stopped redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return true;
         }
 
         // Check the Session if there were already redirects happening
-        if (!$this->sessionService->validateAndManageSessionRedirects()) {
+        if ($this->sessionAvailable && !$this->sessionService->validateAndManageSessionRedirects()) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Session validation failed - stopping redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return true;
         }
-
+        
         // Find the right domain where to redirect to
-        $this->processBrowserLanguageRedirects($salesChannelDomains, $currentDomain, $request);
+        $this->processBrowserLanguageRedirects($this->salesChannelDomains, $currentDomain, $request);
         return true;
     }
 
@@ -144,29 +147,40 @@ class ReqserLanguageRedirectService
     /**
      * Check if redirect should be processed
      */
-    private function shouldProcessRedirect($currentDomain, $request, $event): bool
+    private function shouldProcessRedirect($currentDomain, $request): bool
     {
+        // Check if session is required for redirects
+        if (!$this->shouldContinueRedirectWithoutSession()) {
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Redirect stopped - session required but not available', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
+            return false;
+        }
+
         // Domain configuration validation
         if (!$this->redirectService->isDomainValidForRedirectFrom($this->redirectConfig, $currentDomain)) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Domain validation failed - stopping redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return false;
         }
+
         // Early exit check - if browser language matches current domain, no redirect needed
         if ($this->userBrowserLanguageMatchesCurrentDomainLanguage($currentDomain)) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'User browser language matches current domain language - no redirect needed', 'primaryBrowserLanguage' => $this->primaryBrowserLanguage, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return false;
         }
+        
         //Check if the current Page we are on is allowed to be redirected
         if (!$this->isCurrentPageFrontPage($request, $currentDomain)) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Not front page - stopping redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return false;
         }
 
-        // Check cross sales channel jumping configuration and get appropriate domains
-        $salesChannelDomains = $this->getSalesChannelDomains($event->getSalesChannelContext(), $this->jumpSalesChannels);
+        // If jumpSalesChannels is true and we haven't fetched cross-channel domains yet, do it now
+        if ($this->jumpSalesChannels) {
+            $this->salesChannelDomains = $this->getSalesChannelDomains($this->currentEvent->getSalesChannelContext(), $this->jumpSalesChannels);
 
-        // Check multiple domains availability
-        if ($salesChannelDomains->count() <= 1) {
+        }
+
+        // Check multiple domains availability (using globally fetched domains)
+        if ($this->salesChannelDomains->count() <= 1) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Only one domain available - stopping redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return false;
         }
@@ -174,6 +188,27 @@ class ReqserLanguageRedirectService
         return true;
     }
 
+    /**
+     * Check if redirect should continue when session is not available
+     */
+    private function shouldContinueRedirectWithoutSession(): bool
+    {
+        // If session is available, always continue
+        if ($this->sessionAvailable) {
+            return true;
+        }
+
+        // If session is not available, check configuration
+        $onlyRedirectIfSessionIsAvailable = $this->redirectConfig['onlyRedirectIfSessionIsAvailable'] ?? false;
+        
+        // If configuration requires session, stop redirect
+        if ($onlyRedirectIfSessionIsAvailable) {
+            return false;
+        }
+
+        // Default: continue redirect even without session
+        return true;
+    }
 
     /**
      * Check if current page is front page

@@ -88,14 +88,10 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             $customFields = $currentDomain->getCustomFields();
             
             // Initialize the service with event context and current domain configuration
-            $this->languageRedirectService->initialize($event, $session, $customFields, $request, $currentDomain);
+            $this->languageRedirectService->initialize($event, $session, $customFields, $request, $currentDomain, $salesChannelDomains);
 
             // Delegate the complex redirect logic to the service
-            $this->languageRedirectService->processRedirect(
-                $event,
-                $currentDomain,
-                $salesChannelDomains
-            );
+            $this->languageRedirectService->processRedirect($currentDomain);
             
         } catch (\Throwable $e) {
             if (method_exists($this->logger, 'error')) {

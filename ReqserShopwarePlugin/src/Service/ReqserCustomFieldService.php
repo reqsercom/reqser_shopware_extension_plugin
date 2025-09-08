@@ -117,49 +117,63 @@ class ReqserCustomFieldService
      */
     public function isDebugModeActive(?array $redirectConfig, $request, $currentDomain, $sessionService = null): bool
     {
-        // Check if debug mode is enabled in domain configuration
-        if (!($redirectConfig['debugMode'] ?? false)) {
-            return false;
-        }
+        try {
+            // Check if debug mode is enabled in domain configuration
+            if (!($redirectConfig['debugMode'] ?? false)) {
+                return false;
+            }
 
-        // Check if debugModeIp is set and validate the request IP
-        $debugModeIp = $redirectConfig['debugModeIp'] ?? null;
-        if ($debugModeIp !== null) {
-            $clientIp = $request->getClientIp();
-            
-            if ($clientIp == $debugModeIp) {
-                // IP matches, activate debug mode
+            // Check if debugModeIp is set and validate the request IP
+            $debugModeIp = $redirectConfig['debugModeIp'] ?? null;
+            if ($debugModeIp !== null) {
+                $clientIp = $request->getClientIp();
+                
+                if ($clientIp == $debugModeIp) {
+                    // IP matches, activate debug mode
+                    $sessionValues = $sessionService ? $sessionService->getAllSessionData() : [];
+                    $debugEchoMode = $redirectConfig['debugEchoMode'] ?? false;
+                    $this->webhookService->sendErrorToWebhook([
+                        'type' => 'debug', 
+                        'info' => 'Debug mode activated - IP match', 
+                        'clientIp' => $clientIp, 
+                        'debugModeIp' => $debugModeIp, 
+                        'sessionValues' => $sessionValues,
+                        'domain_id' => $currentDomain->getId(), 
+                        'file' => __FILE__, 
+                        'line' => __LINE__
+                    ], $debugEchoMode);
+                    return true;
+                } else {
+                    // IP doesn't match, debug mode is not active
+                    return false;
+                }
+            } else {
+                // No IP restriction, activate debug mode
                 $sessionValues = $sessionService ? $sessionService->getAllSessionData() : [];
                 $debugEchoMode = $redirectConfig['debugEchoMode'] ?? false;
                 $this->webhookService->sendErrorToWebhook([
                     'type' => 'debug', 
-                    'info' => 'Debug mode activated - IP match', 
-                    'clientIp' => $clientIp, 
-                    'debugModeIp' => $debugModeIp, 
+                    'info' => 'Debug mode activated - no IP restriction', 
                     'sessionValues' => $sessionValues,
                     'domain_id' => $currentDomain->getId(), 
                     'file' => __FILE__, 
                     'line' => __LINE__
                 ], $debugEchoMode);
                 return true;
-            } else {
-                // IP doesn't match, debug mode is not active
-                return false;
             }
-        } else {
-            // No IP restriction, activate debug mode
-            $sessionValues = $sessionService ? $sessionService->getAllSessionData() : [];
-            $debugEchoMode = $redirectConfig['debugEchoMode'] ?? false;
+        } catch (\Throwable $e) {
             $this->webhookService->sendErrorToWebhook([
-                'type' => 'debug', 
-                'info' => 'Debug mode activated - no IP restriction', 
-                'sessionValues' => $sessionValues,
+                'type' => 'error', 
+                'info' => 'isDebugModeActive() Error', 
+                'message' => $e->getMessage(), 
+                'trace' => $e->getTraceAsString(), 
                 'domain_id' => $currentDomain->getId(), 
                 'file' => __FILE__, 
                 'line' => __LINE__
-            ], $debugEchoMode);
-            return true;
+            ]);
+            return false;
         }
+        
     }
 
     /**
@@ -194,6 +208,7 @@ class ReqserCustomFieldService
             
             // Session settings
             'sessionIgnoreMode' => $this->getBool($customFields, 'sessionIgnoreMode'),
+            'onlyRedirectIfSessionIsAvailable' => $this->getBool($customFields, 'onlyRedirectIfSessionIsAvailable'),
             
             // Timing and limits
             'gracePeriodMs' => $this->getInt($customFields, 'gracePeriodMs'),

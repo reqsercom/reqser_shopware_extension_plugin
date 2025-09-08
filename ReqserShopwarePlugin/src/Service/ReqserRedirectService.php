@@ -13,6 +13,7 @@ class ReqserRedirectService
     private $webhookService;
     private bool $debugMode = false;
     private bool $debugEchoMode = false;
+    private bool $sessionAvailable = true;
     
     public function __construct(
         ReqserSessionService $sessionService,
@@ -23,12 +24,13 @@ class ReqserRedirectService
     }
 
     /**
-     * Initialize debug modes
+     * Initialize the redirect service with debug modes and session availability
      */
-    public function setDebugModes(bool $debugMode, bool $debugEchoMode): void
+    public function initialize(bool $debugMode, bool $debugEchoMode, bool $sessionAvailable = true): void
     {
         $this->debugMode = $debugMode;
         $this->debugEchoMode = $debugEchoMode;
+        $this->sessionAvailable = $sessionAvailable;
     }
 
     /**
@@ -65,8 +67,10 @@ class ReqserRedirectService
                         ], $this->debugEchoMode);
                         exit;
                     } else {
-                        // Prepare session variables before redirect
-                        $this->sessionService->prepareRedirectSession();
+                        // Prepare session variables before redirect (only if session is available)
+                        if ($this->sessionAvailable) {
+                            $this->sessionService->prepareRedirectSession();
+                        }
                     }
                     
                     $this->injectJavaScriptRedirect($event, $redirectUrl);
@@ -97,8 +101,10 @@ class ReqserRedirectService
             ], $this->debugEchoMode);
             exit;
         } else {
-            // Prepare session variables before redirect
-            $this->sessionService->prepareRedirectSession();
+            // Prepare session variables before redirect (only if session is available)
+            if ($this->sessionAvailable) {
+                $this->sessionService->prepareRedirectSession();
+            }
         }
         
         // Execute the redirect
