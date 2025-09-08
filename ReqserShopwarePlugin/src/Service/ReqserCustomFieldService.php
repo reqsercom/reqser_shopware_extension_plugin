@@ -50,29 +50,12 @@ class ReqserCustomFieldService
     }
 
     /**
-     * Get float value from custom field
-     */
-    public function getFloat(?array $customFields, string $fieldName): ?float
-    {
-        $value = $this->getValue($customFields, $fieldName);
-        return is_numeric($value) ? (float)$value : null;
-    }
-
-    /**
      * Get array value from custom field
      */
     public function getArray(?array $customFields, string $fieldName): ?array
     {
         $value = $this->getValue($customFields, $fieldName);
         return is_array($value) ? $value : null;
-    }
-
-    /**
-     * Check if custom field exists
-     */
-    public function hasField(?array $customFields, string $fieldName): bool
-    {
-        return isset($customFields[self::CUSTOM_FIELD_PREFIX][$fieldName]);
     }
 
     /**
@@ -135,19 +118,19 @@ class ReqserCustomFieldService
     public function isDebugModeActive(?array $redirectConfig, $request, $currentDomain, $sessionService = null): bool
     {
         // Check if debug mode is enabled in domain configuration
-        if (!($redirectConfig['debug_mode'] ?? false)) {
+        if (!($redirectConfig['debugMode'] ?? false)) {
             return false;
         }
 
         // Check if debugModeIp is set and validate the request IP
-        $debugModeIp = $redirectConfig['debug_mode_ip'] ?? null;
+        $debugModeIp = $redirectConfig['debugModeIp'] ?? null;
         if ($debugModeIp !== null) {
             $clientIp = $request->getClientIp();
             
             if ($clientIp == $debugModeIp) {
                 // IP matches, activate debug mode
                 $sessionValues = $sessionService ? $sessionService->getAllSessionData() : [];
-                $debugEchoMode = $redirectConfig['debug_echo_mode'] ?? false;
+                $debugEchoMode = $redirectConfig['debugEchoMode'] ?? false;
                 $this->webhookService->sendErrorToWebhook([
                     'type' => 'debug', 
                     'info' => 'Debug mode activated - IP match', 
@@ -166,7 +149,7 @@ class ReqserCustomFieldService
         } else {
             // No IP restriction, activate debug mode
             $sessionValues = $sessionService ? $sessionService->getAllSessionData() : [];
-            $debugEchoMode = $redirectConfig['debug_echo_mode'] ?? false;
+            $debugEchoMode = $redirectConfig['debugEchoMode'] ?? false;
             $this->webhookService->sendErrorToWebhook([
                 'type' => 'debug', 
                 'info' => 'Debug mode activated - no IP restriction', 
@@ -226,14 +209,6 @@ class ReqserCustomFieldService
     }
 
     /**
-     * Check if echo mode is active (both debug mode and debug echo mode must be true)
-     */
-    public function isEchoModeActive(bool $debugMode, ?array $customFields): bool
-    {
-        return $debugMode && $this->getBool($customFields, 'debugEchoMode');
-    }
-
-    /**
      * Check if debug echo mode is active (requires debug mode to be active first)
      */
     public function isDebugEchoModeActive(bool $debugMode, ?array $redirectConfig): bool
@@ -247,26 +222,4 @@ class ReqserCustomFieldService
         return $this->getBool($redirectConfig, 'debugEchoMode');
     }
 
-    /**
-     * Log configuration for debugging
-     */
-    public function logConfiguration(?array $customFields, $domainId): void
-    {
-        $debugMode = $this->getBool($customFields, 'debugMode');
-        if ($debugMode) {
-            $config = $this->getRedirectConfiguration($customFields);
-            $validation = $this->validateConfiguration($customFields);
-            $debugEchoMode = $redirectConfig['debug_echo_mode'] ?? false;
-            
-            $this->webhookService->sendErrorToWebhook([
-                'type' => 'debug',
-                'info' => 'Custom field configuration',
-                'domain_id' => $domainId,
-                'configuration' => $config,
-                'validation' => $validation,
-                'file' => __FILE__,
-                'line' => __LINE__
-            ], $debugEchoMode);
-        }
-    }
 }
