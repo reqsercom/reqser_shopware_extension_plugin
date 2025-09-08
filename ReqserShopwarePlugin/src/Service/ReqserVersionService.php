@@ -135,7 +135,7 @@ class ReqserVersionService
             $this->writeLog("Raw plugin->getPath(): $pluginPath", __LINE__);
             
             // Check if path is relative and make it absolute
-            if (!str_starts_with($pluginPath, '/')) {
+            if (strpos($pluginPath, '/') !== 0) {
                 $absolutePath = $this->projectDir . '/' . rtrim($pluginPath, '/');
                 $this->writeLog("Converted relative to absolute: $absolutePath", __LINE__);
                 return $absolutePath;
