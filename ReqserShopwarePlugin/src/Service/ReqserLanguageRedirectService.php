@@ -15,7 +15,8 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\NotFilter;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\System\SalesChannel\Aggregate\SalesChannelDomain\SalesChannelDomainCollection;
-use Shopware\Storefront\Event\StorefrontRenderEvent;
+use Shopware\Core\Framework\Context;
+use Symfony\Component\HttpKernel\Event\ControllerEvent;
 
 class ReqserLanguageRedirectService
 {
@@ -26,7 +27,8 @@ class ReqserLanguageRedirectService
     private $customFieldService;
     private $redirectService;
     private $languageSwitchService;
-    private ?StorefrontRenderEvent $currentEvent = null;
+    private $cache;
+    private ?ControllerEvent $currentEvent = null;
     private ?array $currentCustomFields = null;
     private bool $debugMode = false;
     private bool $debugEchoMode = false;
@@ -35,6 +37,7 @@ class ReqserLanguageRedirectService
     private bool $jumpSalesChannels = false;
     private bool $sessionAvailable = false;
     private $salesChannelDomains = null;
+    private ?string $salesChannelId = null;
 
     public function __construct(
         EntityRepository $domainRepository,
@@ -43,7 +46,8 @@ class ReqserLanguageRedirectService
         ReqserSessionService $sessionService,
         ReqserCustomFieldService $customFieldService,
         ReqserRedirectService $redirectService,
-        ReqserLanguageSwitchService $languageSwitchService
+        ReqserLanguageSwitchService $languageSwitchService,
+        $cache
     ) {
         $this->domainRepository = $domainRepository;
         $this->appService = $appService;
@@ -52,12 +56,13 @@ class ReqserLanguageRedirectService
         $this->customFieldService = $customFieldService;
         $this->redirectService = $redirectService;
         $this->languageSwitchService = $languageSwitchService;
+        $this->cache = $cache;
     }
 
     /**
      * Initialize redirect service with event context and current domain configuration
      */
-    public function initialize(StorefrontRenderEvent $event, $session, array $customFields, $request, $currentDomain, $salesChannelDomains): void
+    public function initialize(ControllerEvent $event, $session, array $customFields, $request, $currentDomain, $salesChannelDomains, string $salesChannelId): void
     {
         $this->currentEvent = $event;
         $this->currentCustomFields = $customFields;
@@ -82,9 +87,11 @@ class ReqserLanguageRedirectService
         // Set jumpSalesChannels configuration
         $this->jumpSalesChannels = $this->redirectConfig['jumpSalesChannels'] ?? false;
         
-        // Get sales channel domains once for the entire redirect process
-        // Start with current sales channel only, expand later if jumpSalesChannels is true
+        // Store the sales channel domains (start with current sales channel only, expand later if jumpSalesChannels is true)
         $this->salesChannelDomains = $salesChannelDomains;
+        
+        // Store the sales channel ID for later use
+        $this->salesChannelId = $salesChannelId;
     }
 
     /**
@@ -122,28 +129,6 @@ class ReqserLanguageRedirectService
         return true;
     }
 
-
-    /**
-     * Retrieve sales channel domains with ReqserRedirect custom fields
-     */
-    private function getSalesChannelDomains(SalesChannelContext $context, ?bool $jumpSalesChannels = null)
-    {
-        $criteria = new Criteria();
-        
-        // Ensure we're only retrieving domains that have the 'ReqserRedirect' custom field set
-        $criteria->addFilter(new NotFilter(NotFilter::CONNECTION_AND, [
-            new EqualsFilter('customFields.ReqserRedirect', null)
-        ]));
-        
-        // If cross-sales channel jumping is disabled, filter to current sales channel only
-        if ($jumpSalesChannels !== true) {
-            $criteria->addFilter(new EqualsFilter('salesChannelId', $context->getSalesChannel()->getId()));
-        }
-    
-        // Get the collection from the repository
-        return $this->domainRepository->search($criteria, $context->getContext())->getEntities();
-    }
-
     /**
      * Check if redirect should be processed
      */
@@ -173,10 +158,11 @@ class ReqserLanguageRedirectService
             return false;
         }
 
-        // If jumpSalesChannels is true and we haven't fetched cross-channel domains yet, do it now
+        // If jumpSalesChannels is true, get cross-channel domains using our static cached method
         if ($this->jumpSalesChannels) {
-            $this->salesChannelDomains = $this->getSalesChannelDomains($this->currentEvent->getSalesChannelContext(), $this->jumpSalesChannels);
-
+            // Use the globally stored sales channel ID - no need to extract from request again
+            // For jumpSalesChannels, pass all required parameters explicitly
+            $this->salesChannelDomains = self::getSalesChannelDomainsById($this->salesChannelId, $this->jumpSalesChannels, $this->domainRepository, $this->cache);
         }
 
         // Check multiple domains availability (using globally fetched domains)
@@ -389,5 +375,59 @@ class ReqserLanguageRedirectService
         }
         
         return $alternativeLanguages;
+    }
+
+    /**
+     * Retrieve sales channel domains with ReqserRedirect custom fields by sales channel ID (cached static method)
+     */
+    public static function getSalesChannelDomainsById(string $salesChannelId, ?bool $jumpSalesChannels = false, ?EntityRepository $domainRepository = null, $cache = null)
+    {
+        // Create cache key based on sales channel ID and jump setting
+        $cacheKey = 'reqser_domains_' . $salesChannelId . '_' . ($jumpSalesChannels ? 'jump' : 'nojump');
+        
+        // If cache is available, use it
+        if ($cache) {
+            try {
+                return $cache->get($cacheKey, function ($item) use ($salesChannelId, $jumpSalesChannels, $domainRepository) {
+                    // Cache for 1 hour (3600 seconds) - domain configs rarely change
+                    $item->expiresAfter(3600);
+                    
+                    // Query database only when cache expires
+                    return self::queryDomainsByChannelId($salesChannelId, $jumpSalesChannels, $domainRepository);
+                });
+                
+            } catch (\Throwable $e) {
+                // If cache fails, fall back to direct database query
+                return self::queryDomainsByChannelId($salesChannelId, $jumpSalesChannels, $domainRepository);
+            }
+        }
+        
+        // No cache available, query directly
+        return self::queryDomainsByChannelId($salesChannelId, $jumpSalesChannels, $domainRepository);
+    }
+
+    /**
+     * Query domains from database by sales channel ID (static method)
+     */
+    private static function queryDomainsByChannelId(string $salesChannelId, ?bool $jumpSalesChannels = false, ?EntityRepository $domainRepository = null)
+    {
+        if (!$domainRepository) {
+            throw new \InvalidArgumentException('Domain repository is required for querying domains');
+        }
+        
+        $criteria = new Criteria();
+        
+        // Ensure we're only retrieving domains that have the 'ReqserRedirect' custom field set
+        $criteria->addFilter(new NotFilter(NotFilter::CONNECTION_AND, [
+            new EqualsFilter('customFields.ReqserRedirect', null)
+        ]));
+        
+        // If cross-sales channel jumping is disabled, filter to current sales channel only
+        if ($jumpSalesChannels !== true) {
+            $criteria->addFilter(new EqualsFilter('salesChannelId', $salesChannelId));
+        }
+    
+        // Get the collection from the repository using default context
+        return $domainRepository->search($criteria, Context::createDefaultContext())->getEntities();
     }
 }
