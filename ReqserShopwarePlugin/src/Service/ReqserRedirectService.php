@@ -3,7 +3,7 @@
 namespace Reqser\Plugin\Service;
 
 use Symfony\Component\HttpFoundation\RedirectResponse;
-use Shopware\Storefront\Event\StorefrontRenderEvent;
+use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Reqser\Plugin\Service\ReqserSessionService;
 use Reqser\Plugin\Service\ReqserWebhookService;
 
@@ -38,9 +38,9 @@ class ReqserRedirectService
      * 
      * @param string $redirectUrl The URL to redirect to
      * @param bool $javaScriptRedirect Whether JavaScript redirect is enabled
-     * @param StorefrontRenderEvent|null $event The current event for JavaScript injection
+     * @param ControllerEvent|null $event The current event for JavaScript injection
      */
-    public function handleDirectDomainRedirect(string $redirectUrl, bool $javaScriptRedirect = false, ?StorefrontRenderEvent $event = null): void
+    public function handleDirectDomainRedirect(string $redirectUrl, bool $javaScriptRedirect = false, ?ControllerEvent $event = null): void
     {
         // Check if headers are already sent
         if (headers_sent()) {
@@ -116,10 +116,10 @@ class ReqserRedirectService
     /**
      * Inject JavaScript redirect when headers are already sent
      * 
-     * @param StorefrontRenderEvent $event The storefront render event
+     * @param ControllerEvent $event The controller event
      * @param string $redirectUrl The URL to redirect to
      */
-    public function injectJavaScriptRedirect(StorefrontRenderEvent $event, string $redirectUrl): void
+    public function injectJavaScriptRedirect(ControllerEvent $event, string $redirectUrl): void
     {
         $escapedUrl = htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8');
         
