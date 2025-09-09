@@ -113,7 +113,7 @@ class ReqserLanguageRedirectService
         }
 
         // Check if the user has changed the language manually
-        if ($this->sessionAvailable && $this->languageSwitchService->checkForManualLanguageSwitchEvent($currentDomain, $this->salesChannelDomains, $this->redirectConfig, $this->debugMode, $this->debugEchoMode, $this->currentEvent, $this->sessionAvailable)) {
+        if ($this->sessionAvailable && !$this->languageSwitchService->checkForManualLanguageSwitchEvent($currentDomain, $this->salesChannelDomains, $this->redirectConfig, $this->debugMode, $this->debugEchoMode, $this->currentEvent, $this->sessionAvailable)) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Language switch event stopped redirect', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return true;
         }
