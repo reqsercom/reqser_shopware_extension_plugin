@@ -38,13 +38,18 @@ class ReqserRedirectService
      * 
      * @param string $redirectUrl The URL to redirect to
      * @param bool $javaScriptRedirect Whether JavaScript redirect is enabled
-     * @param ControllerEvent|null $event The current event for JavaScript injection
+     * @param ControllerEvent $event The current event for redirect handling
      */
-    public function handleDirectDomainRedirect(string $redirectUrl, bool $javaScriptRedirect = false, ?ControllerEvent $event = null): void
+    public function handleDirectDomainRedirect(string $redirectUrl, bool $javaScriptRedirect, ControllerEvent $event): void
     {
+        // Prepare session variables before redirect (only if session is available)
+        if ($this->sessionAvailable) {
+            $this->sessionService->prepareRedirectSession();
+        }
+
         // Check if headers are already sent
         if (headers_sent()) {
-            if ($javaScriptRedirect && $event) {
+            if ($javaScriptRedirect) {
                 if ($this->debugMode) {
                     $this->webhookService->sendErrorToWebhook([
                         'type' => 'debug', 
@@ -89,6 +94,7 @@ class ReqserRedirectService
             }
             return;
         }
+        
 
         // Prevent redirect if echo mode is active so we can see the debug output
         if ($this->debugMode && $this->debugEchoMode) {
@@ -96,21 +102,17 @@ class ReqserRedirectService
                 'type' => 'debug', 
                 'info' => 'REDIRECT PREVENTED - Echo mode active', 
                 'would_redirect_to' => $redirectUrl, 
+                'session_available' => $this->sessionAvailable,
                 'file' => __FILE__, 
                 'line' => __LINE__
             ], $this->debugEchoMode);
             exit;
-        } else {
-            // Prepare session variables before redirect (only if session is available)
-            if ($this->sessionAvailable) {
-                $this->sessionService->prepareRedirectSession();
-            }
         }
         
-        // Execute the redirect
-        $response = new RedirectResponse($redirectUrl);
-        $response->send();
-        exit;
+        // Use the Shopware-native approach like LaenenMultiLanguageDetection
+        $event->setController(static function () use ($redirectUrl) {
+            return (new RedirectResponse($redirectUrl, 301))->setPrivate();
+        });
     }
 
     /**
