@@ -4,52 +4,39 @@ namespace Reqser\Plugin\Service;
 
 use Doctrine\DBAL\Connection;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 class ReqserAppService
 {
     private Connection $connection;
     private RequestStack $requestStack;
+    private CacheInterface $cache;
 
     public function __construct(
         Connection $connection,
-        RequestStack $requestStack
+        RequestStack $requestStack,
+        CacheInterface $cache
     ) {
         $this->connection = $connection;
         $this->requestStack = $requestStack;
+        $this->cache = $cache;
     }
 
     public function isAppActive(): bool
     {
         try {
-            $request = $this->requestStack->getCurrentRequest();
-            
-            if (!$request) {
-                // No request available (e.g., CLI context), query database directly
+            // Use server-side cache for all users (much more efficient)
+            return $this->cache->get('reqser_app_active', function (ItemInterface $item) {
+                // Cache for 1 hour (3600 seconds) - matches Shopware default TTL
+                $item->expiresAfter(3600);
+                
+                // Query database only when cache expires
                 return $this->queryDatabaseForAppStatus();
-            }
-            
-            $session = $request->getSession();
-            
-            if (!$session) {
-                // No session available, query database directly
-                return $this->queryDatabaseForAppStatus();
-            }
-            
-            // Check if app status is already stored in session
-            if ($session->has('reqser_app_active')) {
-                return $session->get('reqser_app_active');
-            }
-            
-            // Session miss - check database
-            $is_app_active = $this->queryDatabaseForAppStatus();
-            
-            // Store in session for future requests
-            $session->set('reqser_app_active', $is_app_active);
-            
-            return $is_app_active;
+            });
             
         } catch (\Throwable $e) {
-            // If anything goes wrong with session handling, fall back to database query
+            // If cache fails, fall back to direct database query
             return $this->queryDatabaseForAppStatus();
         }
     }

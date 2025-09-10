@@ -3,8 +3,9 @@
 namespace Reqser\Plugin\Subscriber;
 
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
-use Shopware\Storefront\Event\StorefrontRenderEvent;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpKernel\Event\ControllerEvent;
+use Symfony\Component\HttpKernel\KernelEvents;
 use Reqser\Plugin\Service\ReqserLanguageRedirectService;
 use Reqser\Plugin\Service\ReqserWebhookService;
 use Reqser\Plugin\Service\ReqserCustomFieldService;
@@ -14,6 +15,9 @@ use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\NotFilter;
+use Shopware\Core\Framework\Context;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 use Psr\Log\LoggerInterface;
 
 class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
@@ -24,6 +28,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
     private $webhookService;
     private $customFieldService;
     private $appService;
+    private $cache;
     private LoggerInterface $logger;
 
     public function __construct(
@@ -33,6 +38,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         ReqserWebhookService $webhookService,
         ReqserCustomFieldService $customFieldService,
         ReqserAppService $appService,
+        CacheInterface $cache,
         LoggerInterface $logger
     ) {
         $this->requestStack = $requestStack;
@@ -41,6 +47,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         $this->webhookService = $webhookService;
         $this->customFieldService = $customFieldService;
         $this->appService = $appService;
+        $this->cache = $cache;
         $this->logger = $logger;
     }
 
@@ -50,15 +57,15 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
     public static function getSubscribedEvents(): array
     {
         return [
-            StorefrontRenderEvent::class => 'onStorefrontRender'
+            KernelEvents::CONTROLLER => ['onController', -20]
         ];
     }
 
     /**
-     * Handle storefront render events for language-based redirects
+     * Handle controller events for language-based redirects
      * This is now a thin event handler that delegates to the service
      */
-    public function onStorefrontRender(StorefrontRenderEvent $event): void
+    public function onController(ControllerEvent $event): void
     {
         
         try {
@@ -76,10 +83,18 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             }
             
             $domainId = $request->attributes->get('sw-domain-id');
+            if (!$domainId) {
+                return; 
+            }
+            $salesChannelId = $request->attributes->get('sw-sales-channel-id');
+            if (!$salesChannelId) {
+                return; 
+            }
+            
             $session = ReqserSessionService::getSessionWithFallback($request, $this->requestStack);
 
-            // Get sales channel domains and current domain
-            $salesChannelDomains = $this->getSalesChannelDomains($event->getSalesChannelContext());
+            // Get sales channel domains and current domain using static cached method
+            $salesChannelDomains = ReqserLanguageRedirectService::getSalesChannelDomainsById($salesChannelId, false, $this->domainRepository, $this->cache);
             $currentDomain = $salesChannelDomains->get($domainId);
             
             if (!$currentDomain) {
@@ -89,14 +104,14 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             $customFields = $currentDomain->getCustomFields();
             
             // Initialize the service with event context and current domain configuration
-            $this->languageRedirectService->initialize($event, $session, $customFields, $request, $currentDomain, $salesChannelDomains);
+            $this->languageRedirectService->initialize($event, $session, $customFields, $request, $currentDomain, $salesChannelDomains, $salesChannelId);
 
             // Delegate the complex redirect logic to the service
             $this->languageRedirectService->processRedirect($currentDomain);
             
         } catch (\Throwable $e) {
             if (method_exists($this->logger, 'error')) {
-                $this->logger->error('Reqser Plugin Error onStorefrontRender', [
+                $this->logger->error('Reqser Plugin Error onController', [
                     'message' => $e->getMessage(), 
                     'file' => __FILE__, 
                     'line' => __LINE__
@@ -105,7 +120,7 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
             
             $this->webhookService->sendErrorToWebhook([
                 'type' => 'error',
-                'function' => 'onStorefrontRender',
+                'function' => 'onController',
                 'message' => $e->getMessage() ?? 'unknown',
                 'trace' => $e->getTraceAsString() ?? 'unknown',
                 'timestamp' => date('Y-m-d H:i:s'),
@@ -143,27 +158,4 @@ class ReqserLanguageRedirectSubscriber implements EventSubscriberInterface
         // Route is allowed so we can proceed
         return true;
     }
-
-    /**
-     * Retrieve sales channel domains with ReqserRedirect custom fields
-     */
-    private function getSalesChannelDomains($context, ?bool $jumpSalesChannels = null)
-    {
-        $criteria = new Criteria();
-        
-        // Ensure we're only retrieving domains that have the 'ReqserRedirect' custom field set
-        $criteria->addFilter(new NotFilter(NotFilter::CONNECTION_AND, [
-            new EqualsFilter('customFields.ReqserRedirect', null)
-        ]));
-        
-        // If cross-sales channel jumping is disabled, filter to current sales channel only
-        if ($jumpSalesChannels !== true) {
-            $criteria->addFilter(new EqualsFilter('salesChannelId', $context->getSalesChannel()->getId()));
-        }
-    
-        // Get the collection from the repository
-        return $this->domainRepository->search($criteria, $context->getContext())->getEntities();
-    }
-
-
 }

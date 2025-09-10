@@ -40,6 +40,7 @@
             <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserCustomFieldService" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserAppService" />
+            <argument type="service" id="cache.app" />
             <argument type="service" id="logger"/>
             <tag name="kernel.event_subscriber" />
         </service>
@@ -76,6 +77,7 @@
                 class="Reqser\Plugin\Service\ReqserAppService">
             <argument type="service" id="Doctrine\DBAL\Connection"/>
             <argument type="service" id="request_stack"/>
+            <argument type="service" id="cache.app"/>
         </service>
 
         <service id="Reqser\Plugin\Service\ReqserSessionService"
@@ -111,6 +113,7 @@
             <argument type="service" id="Reqser\Plugin\Service\ReqserCustomFieldService" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserRedirectService" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserLanguageSwitchService" />
+            <argument type="service" id="cache.app" />
         </service>
 
         <service id="Reqser\Plugin\Subscriber\ReqserPluginVersionCheckSubscriber"
