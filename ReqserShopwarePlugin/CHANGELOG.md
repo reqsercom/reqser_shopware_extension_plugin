@@ -1,7 +1,13 @@
 # Changelog
 
-## 1.6.0
-- Reduce Loading Time on Redirect
+## 2.0.0 - 09.2025
+- New Major Version only for Shopware >= 6.6
+- SEO Friendly Redirect
+- Improved performance and caching
+
+## 1.7.0 - 09.2025
+- Legacy Version for Shopware 6.4 and 6.5
+- Similar Logic to 2.0.0
 
 ## 1.5.0
 - Improved redirect settings
