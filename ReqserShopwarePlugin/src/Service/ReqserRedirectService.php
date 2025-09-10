@@ -40,7 +40,7 @@ class ReqserRedirectService
      * @param bool $javaScriptRedirect Whether JavaScript redirect is enabled
      * @param ControllerEvent $event The current event for redirect handling
      */
-    public function handleDirectDomainRedirect(string $redirectUrl, bool $javaScriptRedirect = false, ControllerEvent $event): void
+    public function handleDirectDomainRedirect(string $redirectUrl, bool $javaScriptRedirect, ControllerEvent $event): void
     {
         // Prepare session variables before redirect (only if session is available)
         if ($this->sessionAvailable) {
@@ -113,9 +113,6 @@ class ReqserRedirectService
         $event->setController(static function () use ($redirectUrl) {
             return (new RedirectResponse($redirectUrl, 301))->setPrivate();
         });
-        
-        // Exit to ensure no further code execution after redirect is set
-        exit;
     }
 
     /**
