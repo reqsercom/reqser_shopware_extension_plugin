@@ -42,6 +42,11 @@ class ReqserRedirectService
      */
     public function handleDirectDomainRedirect(string $redirectUrl, bool $javaScriptRedirect = false, ControllerEvent $event): void
     {
+        // Prepare session variables before redirect (only if session is available)
+        if ($this->sessionAvailable) {
+            $this->sessionService->prepareRedirectSession();
+        }
+
         // Check if headers are already sent
         if (headers_sent()) {
             if ($javaScriptRedirect) {
@@ -89,13 +94,7 @@ class ReqserRedirectService
             }
             return;
         }
-
-     
-
-        // Prepare session variables before redirect (only if session is available)
-        if ($this->sessionAvailable) {
-            $this->sessionService->prepareRedirectSession();
-        }
+        
 
         // Prevent redirect if echo mode is active so we can see the debug output
         if ($this->debugMode && $this->debugEchoMode) {
