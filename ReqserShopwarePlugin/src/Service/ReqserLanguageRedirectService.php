@@ -101,7 +101,7 @@ class ReqserLanguageRedirectService
         $request = $this->currentEvent->getRequest();
         
         // Check if headers are already sent
-        if (headers_sent() && !($this->redirectConfig['javascript_redirect'] ?? false)) {
+        if (headers_sent() && !($this->redirectConfig['javaScriptRedirect'] ?? false)) {
             if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Headers already sent - redirect not possible', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return true;
         }
