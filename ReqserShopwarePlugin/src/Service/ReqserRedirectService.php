@@ -161,45 +161,7 @@ class ReqserRedirectService
         return rtrim($urlWithoutParams, '/');
     }
 
-    /**
-     * Check if domain is valid for redirect operations
-     * 
-     * @param array $redirectConfig Pre-parsed redirect configuration
-     * @param object $currentDomain Current domain object
-     * @return bool Returns true if domain is valid for redirect, false otherwise
-     */
-    public function isDomainValidForRedirectFrom(array $redirectConfig, $currentDomain): bool
-    {
-        // Check if domain is active
-        if (!($redirectConfig['active'] ?? false)) {
-            if ($this->debugMode) {
-                $this->webhookService->sendErrorToWebhook([
-                    'type' => 'debug', 
-                    'info' => 'Domain is not active - stopping redirect', 
-                    'domain_id' => $currentDomain->getId(), 
-                    'file' => __FILE__, 
-                    'line' => __LINE__
-                ], $this->debugEchoMode);
-            }
-            return false;
-        }
-
-        // Check if redirectFrom is enabled
-        if (!($redirectConfig['redirectFrom'] ?? false)) {
-            if ($this->debugMode) {
-                $this->webhookService->sendErrorToWebhook([
-                    'type' => 'debug', 
-                    'info' => 'Domain redirectFrom disabled - stopping redirect', 
-                    'domain_id' => $currentDomain->getId(), 
-                    'file' => __FILE__, 
-                    'line' => __LINE__
-                ], $this->debugEchoMode);
-            }
-            return false;
-        }
-
-        return true;
-    }
+  
 
     /**
      * Check if domain is valid for redirect INTO (target domain)

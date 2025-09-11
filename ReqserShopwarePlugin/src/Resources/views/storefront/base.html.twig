@@ -1,0 +1,130 @@
+{% sw_extends '@Storefront/storefront/base.html.twig' %}
+
+{% block base_body_script %}
+    {{ parent() }}
+
+    <script>
+        // Reqser Language Detection - Inline JavaScript (no build required)
+        (function() {
+            'use strict';
+            
+            console.log('🚀 Reqser Language Detection: Script loaded');
+            
+            // Simple cookie helper
+            const CookieHelper = {
+                setItem: function(name, value, minutes) {
+                    const date = new Date();
+                    date.setTime(date.getTime() + (minutes * 60 * 1000));
+                    document.cookie = name + "=" + value + ";expires=" + date.toUTCString() + ";path=/";
+                },
+                getItem: function(name) {
+                    const nameEQ = name + "=";
+                    const ca = document.cookie.split(';');
+                    for(let i = 0; i < ca.length; i++) {
+                        let c = ca[i];
+                        while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                        if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+                    }
+                    return null;
+                }
+            };
+
+            // Check if user has a preferred language cookie (like Laenen plugin does)
+    // const preferredLanguageCookie = CookieHelper.getItem('reqser-preferred-language');
+    // console.log('🍪 Preferred language cookie:', preferredLanguageCookie);
+            
+            // Always run the check - let the server decide based on configuration and cookies
+
+            // Perform language detection check
+            async function checkLanguage() {
+                console.log('🔍 Starting language detection check...');
+                
+                try {
+                    console.log('📡 Making AJAX request to:', '/reqser/language-detection/check');
+                    
+                    // Include preferred language cookie in request
+                    const headers = {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                    };
+                    
+                    // Add preferred language info if available - COMMENTED OUT FOR NOW
+                    // if (preferredLanguageCookie) {
+                    //     headers['X-Reqser-Preferred-Language'] = preferredLanguageCookie;
+                    // }
+                    
+                    const response = await fetch('/reqser/language-detection/check', {
+                        method: 'GET',
+                        credentials: 'same-origin',
+                        headers: headers,
+                    });
+
+                    console.log('📥 Response status:', response.status, response.statusText);
+
+                    if (!response.ok) {
+                        console.warn('❌ Reqser Language Detection: Request failed with status:', response.status);
+                        const errorText = await response.text();
+                        console.warn('❌ Error response:', errorText);
+                        return;
+                    }
+
+                    const data = await response.json();
+                    console.log('📊 Response data:', data);
+                    
+                    // Show configuration for debugging
+                    console.log('🎯 Primary browser language:', data.browserLanguage || 'unknown');
+                    console.log('🏠 Current domain language code:', data.currentLanguageCode || 'unknown');
+                    if (data.availableDomains) {
+                        console.log('🌐 Available domains:', data.availableDomains);
+                    }
+                    if (data.config) {
+                        console.log('⚙️ Plugin Configuration:', data.config);
+                        console.log('🔧 Session Ignore Mode:', data.sessionIgnoreMode);
+                        console.log('✅ Already Checked in Session:', data.alreadyCheckedInSession);
+                    }
+
+                    if (data.success && data.shouldRedirect && data.redirectUrl) {
+                        // Log the redirect for debugging
+                        console.log('🚀 Reqser Language Detection: Redirecting to', data.redirectUrl, 'Reason:', data.reason);
+                        
+                        // Set preferred language cookie before redirect (like Laenen plugin) - COMMENTED OUT FOR NOW
+                        // if (data.targetLanguageId) {
+                        //     CookieHelper.setItem('reqser-preferred-language', data.targetLanguageId, 60 * 24 * 7); // 1 week
+                        //     console.log('🍪 Set preferred language cookie:', data.targetLanguageId);
+                        // }
+                        
+                        // Perform the redirect
+                        window.location.href = data.redirectUrl;
+                    } else if (data.success) {
+                        // No redirect needed - set current language as preferred - COMMENTED OUT FOR NOW
+                        // if (data.currentLanguageId) {
+                        //     CookieHelper.setItem('reqser-preferred-language', data.currentLanguageId, 60 * 24 * 7); // 1 week
+                        //     console.log('🍪 Set current language as preferred:', data.currentLanguageId);
+                        // }
+                        console.log('✅ Reqser Language Detection: No redirect needed. Reason:', data.reason);
+                    } else {
+                        // Error occurred
+                        console.warn('⚠️ Reqser Language Detection: Check failed. Reason:', data.reason);
+                    }
+
+                } catch (error) {
+                    console.error('💥 Reqser Language Detection: Request failed:', error);
+                }
+            }
+
+            // Run language detection when DOM is ready
+            console.log('📋 Document ready state:', document.readyState);
+            
+            if (document.readyState === 'loading') {
+                console.log('⏳ Waiting for DOMContentLoaded...');
+                document.addEventListener('DOMContentLoaded', function() {
+                    console.log('✅ DOMContentLoaded fired, starting language check');
+                    checkLanguage();
+                });
+            } else {
+                console.log('✅ DOM already ready, starting language check immediately');
+                checkLanguage();
+            }
+        })();
+    </script>
+{% endblock %}

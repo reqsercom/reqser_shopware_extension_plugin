@@ -133,6 +133,19 @@ class ReqserCustomFieldService
     }
 
     /**
+     * Get simplified redirect-into configuration for domains that only need basic validation
+     * Only returns: active, redirectInto, and languageCode
+     */
+    public function getRedirectIntoConfiguration(?array $customFields): array
+    {
+        return [
+            'active' => $this->getBool($customFields, 'active'),
+            'redirectInto' => $this->getBool($customFields, 'redirectInto'),
+            'languageCode' => $this->getString($customFields, 'languageCode'),
+        ];
+    }
+
+    /**
      * Get redirect configuration summary
      */
     public function getRedirectConfiguration(?array $customFields): array
@@ -143,12 +156,11 @@ class ReqserCustomFieldService
             'redirectFrom' => $this->getBool($customFields, 'redirectFrom'),
             'advancedRedirectEnabled' => $this->getBool($customFields, 'advancedRedirectEnabled'),
             'javaScriptRedirect' => $this->getBool($customFields, 'javaScriptRedirect'),
-            'jumpSalesChannels' => $this->getBool($customFields, 'jumpSalesChannels'),
             'redirectInto' => $this->getBool($customFields, 'redirectInto'),
             
             // Page restrictions
             'onlyRedirectFrontPage' => $this->getBool($customFields, 'onlyRedirectFrontPage'),
-            'sanitizeUrlOnFrontPageCheck' => $this->getBool($customFields, 'sanitizeUrlOnFrontPageCheck'),
+            'sanatizeUrlOnFrontPageCheck' => $this->getBool($customFields, 'sanatizeUrlOnFrontPageCheck'),
             
             // Language settings
             'languageCode' => $this->getString($customFields, 'languageCode'),

@@ -42,7 +42,10 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
             if ($session) {
                 $session->set('reqser_redirect_user_override_timestamp', time());
                 $session->set('reqser_user_override_language_id', $request->request->get('languageId'));
-            }            
+
+                $response->headers->set(AbstractSessionListener::NO_AUTO_CACHE_CONTROL_HEADER, '1');
+            }
+            
         } catch (\Throwable $e) {
             if ($this->debugMode) {
                 $this->webhookService->sendErrorToWebhook([

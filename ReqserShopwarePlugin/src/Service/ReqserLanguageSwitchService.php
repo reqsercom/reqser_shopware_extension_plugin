@@ -141,4 +141,26 @@ class ReqserLanguageSwitchService
         
         return false;
     }
+
+    /**
+     * Check for manual language switch events for AJAX requests (simplified version)
+     */
+    public function checkForManualLanguageSwitchEventForAjax(
+        $currentDomain, 
+        SalesChannelDomainCollection $salesChannelDomains, 
+        array $redirectConfig
+    ): bool {
+        $userOverrideEnabled = $redirectConfig['userOverrideEnabled'] ?? false;
+
+        if ($userOverrideEnabled === true) {
+            $skipRedirectAfterManualLanguageSwitch = $redirectConfig['skipRedirectAfterManualLanguageSwitch'] ?? false;
+            if ($skipRedirectAfterManualLanguageSwitch === true) {
+                if ($this->shouldSkipDueToUserOverride($redirectConfig, false, false, $currentDomain)) {
+                    return false; // Skip redirect
+                }
+            }
+        }
+
+        return true; // No language switch event, continue with normal flow
+    }
 }
