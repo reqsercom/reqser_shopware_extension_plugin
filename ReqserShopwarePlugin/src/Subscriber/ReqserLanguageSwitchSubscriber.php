@@ -7,6 +7,7 @@ use Reqser\Plugin\Service\ReqserWebhookService;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
+use Symfony\Component\HttpKernel\EventListener\AbstractSessionListener;
 
 class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
 {
@@ -35,11 +36,14 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
     {
         try {
             $request = $event->getRequest();
+            $response = $event->getResponse();
             
             $session = ReqserSessionService::getSessionWithFallback($request, $this->requestStack);
             if ($session) {
                 $session->set('reqser_redirect_user_override_timestamp', time());
                 $session->set('reqser_user_override_language_id', $request->request->get('languageId'));
+
+                $response->headers->set(AbstractSessionListener::NO_AUTO_CACHE_CONTROL_HEADER, '1');
             }
             
         } catch (\Throwable $e) {
