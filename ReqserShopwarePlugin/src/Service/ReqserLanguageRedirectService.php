@@ -274,23 +274,21 @@ class ReqserLanguageRedirectService
     private function userBrowserLanguageMatchesCurrentDomainLanguage($currentDomain): bool
     {
         if ($this->primaryBrowserLanguage === null) {
-            return false;
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Primary browser language is null, we cannot apply any redirects based on browser language here!', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
+            return true;
         }
 
-        $domainLanguage = $currentDomain->getLanguage();
-        if ($domainLanguage === null) {
-            return false;
-        }
-
-        $languageCode = $domainLanguage->getLocale()->getCode();
+        $languageCode = $this->redirectConfig['languageCode'];
         if ($languageCode === null) {
-            return false;
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Language code is null, we cannot check if the browser language matches this domain language', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
+            return true;
         }
 
         // Extract language code from locale (e.g., en-GB -> en)
         $language = strtolower(explode('-', $languageCode)[0]);
         
         if ($this->primaryBrowserLanguage == $language) {
+            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'User browser language matches current domain language so we stop now to redirect', 'primaryBrowserLanguage' => $this->primaryBrowserLanguage, 'languageCode' => $languageCode, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return true;
         }
 
