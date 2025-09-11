@@ -208,7 +208,7 @@ class ReqserLanguageRedirectService
         
         if ($domainUrl !== $currentUrl) {
             // Check if URL sanitization is enabled
-                if ($this->redirectConfig['sanatizeUrlOnFrontPageCheck'] ?? false) {
+                if ($this->redirectConfig['sanitizeUrlOnFrontPageCheck'] ?? false) {
                     $sanitizedCurrentUrl = $this->redirectService->sanitizeUrl($currentUrl);
                 if ($domainUrl === $sanitizedCurrentUrl) {
                     return true;

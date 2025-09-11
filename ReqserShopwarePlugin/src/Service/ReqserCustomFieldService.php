@@ -148,7 +148,7 @@ class ReqserCustomFieldService
             
             // Page restrictions
             'onlyRedirectFrontPage' => $this->getBool($customFields, 'onlyRedirectFrontPage'),
-            'sanatizeUrlOnFrontPageCheck' => $this->getBool($customFields, 'sanatizeUrlOnFrontPageCheck'),
+            'sanitizeUrlOnFrontPageCheck' => $this->getBool($customFields, 'sanitizeUrlOnFrontPageCheck'),
             
             // Language settings
             'languageCode' => $this->getString($customFields, 'languageCode'),
