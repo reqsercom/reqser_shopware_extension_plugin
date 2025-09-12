@@ -224,7 +224,7 @@ class ReqserLanguageRedirectService
     /**
      * Get and cache the parsed original page URL from referer header
      */
-    private function getOriginalPageUrl(): ?array
+    public function getOriginalPageUrl(): ?array
     {
         // Return cached result if already parsed
         if ($this->originalPageUrl !== null) {
@@ -285,8 +285,20 @@ class ReqserLanguageRedirectService
             if ($sessionLanguageId) {
                 //retrieve the first domain in our collection that matches this language id
                 $matchingDomain = $this->salesChannelDomains->filter(
-                    fn($domain) => $domain->getLanguageId() === $sessionLanguageId
+                    function($domain) use ($sessionLanguageId) {
+                        // Check if language ID matches
+                        if ($domain->getLanguageId() !== $sessionLanguageId) {
+                            return false;
+                        }
+                        
+                        // Check if this domain is valid for redirect into
+                        $domainCustomFields = $domain->getCustomFields();
+                        $domainConfig = $this->customFieldService->getRedirectIntoConfiguration($domainCustomFields);
+                        
+                        return $this->redirectService->isDomainValidForRedirectInto($domainConfig, $domain);
+                    }
                 )->first();
+                
                 
                 if ($matchingDomain) {
                     return $this->buildRedirectUrlWithParams($matchingDomain->getUrl());
@@ -370,7 +382,7 @@ class ReqserLanguageRedirectService
             $domainLanguageCode = $domainConfig['languageCode'] ?? null;
             if ($domainLanguageCode && $domainLanguageCode === $this->primaryBrowserLanguage) {
                 // Additional validation: check if domain is valid for redirect
-                if ($this->redirectService->isDomainValidForRedirectFromInto($domainConfig, $domain)) {
+                if ($this->redirectService->isDomainValidForRedirectInto($domainConfig, $domain)) {
                     return $domain; // Early exit - return first match immediately
                 }
             }

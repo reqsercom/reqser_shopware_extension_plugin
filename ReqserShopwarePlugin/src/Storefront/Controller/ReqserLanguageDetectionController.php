@@ -107,7 +107,11 @@ class ReqserLanguageDetectionController extends StorefrontController
 
         $additionalData = [];
         if ($redirectConfig['debugMode']) {
-            $additionalData = $redirectConfig;
+            $additionalData['customFieldsConfig'] = $redirectConfig;
+            $additionalData['primaryBrowserLanguage'] = $this->languageRedirectService->getPrimaryBrowserLanguage();
+            $additionalData['domainUrl'] = $currentDomain->getUrl();
+            $additionalData['currentOrignalURL'] = $this->languageRedirectService->getOriginalPageUrl();
+            $additionalData['isDomainValidForRedirectFrom'] = $this->languageRedirectService->isDomainValidForRedirectFrom();
         }
 
         // Initialize the service with the retrieved data
@@ -137,14 +141,12 @@ class ReqserLanguageDetectionController extends StorefrontController
             $this->languageRedirectService->updateSessionData();
             // Found a matching domain to redirect to
             return $this->createJsonResponse(true, 'language_mismatch', [
-                'shouldRedirect' => true,
-                'redirectUrl' => $redirectUrl,
+                array_merge($additionalData, [
+                    'shouldRedirect' => true,
+                    'redirectUrl' => $redirectUrl,
+                ])
             ]);
         } else {
-            // No matching domain found
-            if ($redirectConfig['debugMode']) {
-                $additionalData['redirectUrlWithoutParameters'] = $redirectUrl;
-            }
             return $this->createJsonResponse(true, 'no_matching_language_domain_found', [
                 array_merge($additionalData, [
                     'shouldRedirect' => false,

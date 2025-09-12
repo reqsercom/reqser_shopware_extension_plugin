@@ -166,7 +166,7 @@ class ReqserRedirectService
     /**
      * Check if domain is valid for redirect INTO (target domain)
      */
-    public function isDomainValidForRedirectFromInto(array $redirectConfig, $targetDomain): bool
+    public function isDomainValidForRedirectInto(array $redirectConfig, $targetDomain): bool
     {
         // Check if domain is active
         if (!($redirectConfig['active'] ?? false)) {
