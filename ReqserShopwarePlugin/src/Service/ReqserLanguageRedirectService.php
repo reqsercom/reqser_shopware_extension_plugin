@@ -95,7 +95,9 @@ class ReqserLanguageRedirectService
     public function shouldProcessRedirectBasedOnManualLanguageSwitch(): bool
     {
         if ($this->redirectConfig['skipRedirectAfterManualLanguageSwitch'] ?? false) {
-            return false;
+            if ($this->shouldSkipDueToManualLanguageSwitchEvent()) {
+                return false; 
+            }
         }
         return true;
     }
@@ -105,7 +107,80 @@ class ReqserLanguageRedirectService
      */
     public function shouldProcessRedirectBasedOnSessionData(): bool
     {
+        if (!$this->redirectConfig['sessionIgnoreMode'] ?? false) {
+            if (!$this->redirectAllowedBySessionData()) {
+                return false; 
+            }
+        }
         return true;
+    }
+
+    /**
+     * Check if redirect should be skipped due to session data
+     */
+    public function redirectAllowedBySessionData(): bool
+    {
+        //Session Data
+        $redirectCount = $this->sessionService->getRedirectCount();
+        $scriptCallCount = $this->sessionService->getScriptCallCount();
+        $lastRedirectTime = $this->sessionService->getLastRedirectTime();
+
+        //Config Data
+        $gracePeriodMs = $this->redirectConfig['gracePeriodMs'] ?? null;
+        $blockPeriodMs = $this->redirectConfig['blockPeriodMs'] ?? null;
+        $maxRedirects = $this->redirectConfig['maxRedirects'] ?? null;
+        $maxScriptCalls = $this->redirectConfig['maxScriptCalls'] ?? null;
+
+        //check for valid config data
+        if ($maxRedirects === null && $gracePeriodMs === null && $blockPeriodMs === null && $maxScriptCalls === null) {
+            //If there are no settings we cannot allow the redirect
+            return false;
+        }
+
+        //Max Redirect Check
+        if ($maxRedirects !== null && $redirectCount >= $maxRedirects) {
+            return false;
+        }
+
+        //Max Script Call Check
+        if ($maxScriptCalls !== null && $scriptCallCount >= $maxScriptCalls) {
+            return false;
+        }
+
+        //Increment the script call count now
+        $this->sessionService->incrementScriptCallCount($scriptCallCount);
+
+        // Check if the last redirect is to close to now so we will also block the redirect to prevent any chance of looping
+        $currentTimestamp = microtime(true) * 1000;
+        if ($gracePeriodMs !== null && $lastRedirectTime !== null && 
+            $lastRedirectTime < $currentTimestamp - $gracePeriodMs && 
+            $lastRedirectTime > $currentTimestamp - $blockPeriodMs) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Check if redirect should be skipped due to user override settings
+     */
+    public function shouldSkipDueToManualLanguageSwitchEvent(): bool
+    {
+        if ($this->sessionService->getUserlanguageSwitchTimestamp()) {
+            $languageSwitchTimestamp = $this->sessionService->getUserlanguageSwitchTimestamp();
+            $userLanguageSwitchIgnorePeriodS = $redirectConfig['userLanguageSwitchIgnorePeriodS'] ?? null;
+            
+            if ($userLanguageSwitchIgnorePeriodS !== null) {
+                // Check if the override timestamp is younger than the userLanguageSwitchIgnorePeriodS
+                if ($languageSwitchTimestamp > time() - $userLanguageSwitchIgnorePeriodS) {
+                    return true;
+                }
+            } else {
+                return true;
+            }
+        }
+        
+        return false;
     }
 
 

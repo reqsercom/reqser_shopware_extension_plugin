@@ -69,21 +69,21 @@ class ReqserLanguageSwitchService
      */
     public function shouldSkipDueToUserOverride(array $redirectConfig, bool $debugMode, bool $debugEchoMode, $currentDomain): bool
     {
-        if ($this->sessionService->getUserOverrideTimestamp()) {
-            $overrideTimestamp = $this->sessionService->getUserOverrideTimestamp();
-            $overrideIgnorePeriodS = $redirectConfig['overrideIgnorePeriodS'] ?? null;
+        if ($this->sessionService->getUserlanguageSwitchTimestamp()) {
+            $languageSwitchTimestamp = $this->sessionService->getUserlanguageSwitchTimestamp();
+            $userLanguageSwitchIgnorePeriodS = $redirectConfig['userLanguageSwitchIgnorePeriodS'] ?? null;
             
-            if ($overrideIgnorePeriodS !== null) {
-                // Check if the override timestamp is younger than the overrideIgnorePeriodS
-                if ($overrideTimestamp > time() - $overrideIgnorePeriodS) {
+            if ($userLanguageSwitchIgnorePeriodS !== null) {
+                // Check if the override timestamp is younger than the userLanguageSwitchIgnorePeriodS
+                if ($languageSwitchTimestamp > time() - $userLanguageSwitchIgnorePeriodS) {
                     if ($debugMode) {
-                        $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'User override active - within ignore period', 'overrideTimestamp' => $overrideTimestamp, 'overrideIgnorePeriodS' => $overrideIgnorePeriodS, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $debugEchoMode);
+                        $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'User override active - within ignore period', 'languageSwitchTimestamp' => $languageSwitchTimestamp, 'userLanguageSwitchIgnorePeriodS' => $userLanguageSwitchIgnorePeriodS, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $debugEchoMode);
                     }
                     return true; // Skip redirect
                 }
             } else {
                 if ($debugMode) {
-                    $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'User override active - no period restriction', 'overrideTimestamp' => $overrideTimestamp, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $debugEchoMode);
+                    $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'User override active - no period restriction', 'languageSwitchTimestamp' => $languageSwitchTimestamp, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $debugEchoMode);
                 }
                 return true; // Skip redirect (no period restriction)
             }

@@ -170,7 +170,7 @@ class ReqserCustomFieldService
             // User override settings
             'userOverrideEnabled' => $this->getBool($customFields, 'userOverrideEnabled'),
             'redirectBasedOnUserLanguageSwitch' => $this->getBool($customFields, 'redirectBasedOnUserLanguageSwitch'),
-            'overrideIgnorePeriodS' => $this->getInt($customFields, 'overrideIgnorePeriodS'),
+            'userLanguageSwitchIgnorePeriodS' => $this->getInt($customFields, 'userLanguageSwitchIgnorePeriodS'),
             'skipRedirectAfterManualLanguageSwitch' => $this->getBool($customFields, 'skipRedirectAfterManualLanguageSwitch'),
             'redirectToUserPreviouslyChosenDomain' => $this->getBool($customFields, 'redirectToUserPreviouslyChosenDomain'),
             

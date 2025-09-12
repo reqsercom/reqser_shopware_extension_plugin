@@ -138,7 +138,7 @@ class ReqserSessionService
     /**
      * Get user override timestamp
      */
-    public function getUserOverrideTimestamp(): ?int
+    public function getUserlanguageSwitchTimestamp(): ?int
     {
         return $this->session->get('reqser_redirect_user_override_timestamp', null);
     }
