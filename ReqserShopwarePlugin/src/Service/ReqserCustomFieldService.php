@@ -86,34 +86,46 @@ class ReqserCustomFieldService
      */
     public function getRedirectConfiguration(?array $customFields): array
     {
-        return [
-            // Basic redirect settings
-            'active' => $this->getBool($customFields, 'active'),
-            'redirectFrom' => $this->getBool($customFields, 'redirectFrom'),
-            'redirectInto' => $this->getBool($customFields, 'redirectInto'),
-            
-            // Page restrictions
-            'onlyRedirectFrontPage' => $this->getBool($customFields, 'onlyRedirectFrontPage'),
-            
-            // Language settings
+        $active = $this->getBool($customFields, 'active');
+        if (!$active) {
+            return [
+                'active' => false,
+            ];
+        }
+
+        //Default Config if active
+        $config = [
+            'active' => $active,
             'languageCode' => $this->getString($customFields, 'languageCode'),
-            
-            // User language switch settings
-            'skipRedirectAfterManualLanguageSwitch' => $this->getBool($customFields, 'skipRedirectAfterManualLanguageSwitch'),
-            'userLanguageSwitchIgnorePeriodS' => $this->getInt($customFields, 'userLanguageSwitchIgnorePeriodS'),
-            'redirectToUserPreviouslyChosenDomain' => $this->getBool($customFields, 'redirectToUserPreviouslyChosenDomain'),
-            
-            // Session settings
-            'sessionIgnoreMode' => $this->getBool($customFields, 'sessionIgnoreMode'),
-            
-            // Timing and limits
-            'gracePeriodMs' => $this->getInt($customFields, 'gracePeriodMs'),
-            'blockPeriodMs' => $this->getInt($customFields, 'blockPeriodMs'),
-            'maxRedirects' => $this->getInt($customFields, 'maxRedirects'),
-            'maxScriptCalls' => $this->getInt($customFields, 'maxScriptCalls'),
-            
-            // URL parameter settings
-            'preserveUrlParameters' => $this->getBool($customFields, 'preserveUrlParameters'),
+            'debugMode' => $this->getBool($customFields, 'debugMode'),
+        ];
+
+        $redirectInto = $this->getBool($customFields, 'redirectInto');
+        if ($redirectInto) {
+            $config['redirectInto'] = $redirectInto;
+            return $config;
+        }
+
+        $redirectFrom = $this->getBool($customFields, 'redirectFrom');
+        if ($redirectFrom) {
+            return 
+                array_merge($config, [
+                'redirectFrom' => $redirectFrom,
+                'onlyRedirectFrontPage' => $this->getBool($customFields, 'onlyRedirectFrontPage'),
+                'skipRedirectAfterManualLanguageSwitch' => $this->getBool($customFields, 'skipRedirectAfterManualLanguageSwitch'),
+                'userLanguageSwitchIgnorePeriodS' => $this->getInt($customFields, 'userLanguageSwitchIgnorePeriodS'),
+                'redirectToUserPreviouslyChosenDomain' => $this->getBool($customFields, 'redirectToUserPreviouslyChosenDomain'),
+                'sessionIgnoreMode' => $this->getBool($customFields, 'sessionIgnoreMode'),
+                'gracePeriodMs' => $this->getInt($customFields, 'gracePeriodMs'),
+                'blockPeriodMs' => $this->getInt($customFields, 'blockPeriodMs'),
+                'maxRedirects' => $this->getInt($customFields, 'maxRedirects'),
+                'maxScriptCalls' => $this->getInt($customFields, 'maxScriptCalls'),
+                'preserveUrlParameters' => $this->getBool($customFields, 'preserveUrlParameters')]);
+        }
+
+        //Fallback
+        return [
+            'active' => false,
         ];
     }
 

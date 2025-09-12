@@ -46,14 +46,15 @@
                 debugLog('🔍 Starting language detection check...');
                 
                 try {
-                    debugLog('📡 Making AJAX request to:', '/reqser/language-detection/check');
+                    const checkUrl = '{{ path('frontend.reqser.language_detection.check') }}';
+                    debugLog('📡 Making AJAX request to:', checkUrl);
                     
                     const headers = {
                         'X-Requested-With': 'XMLHttpRequest',
                         'Accept': 'application/json',
                     };
                     
-                    const response = await fetch('/reqser/language-detection/check', {
+                    const response = await fetch(checkUrl, {
                         method: 'GET',
                         credentials: 'same-origin',
                         headers: headers,

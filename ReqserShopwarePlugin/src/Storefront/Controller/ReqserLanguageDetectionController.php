@@ -67,7 +67,7 @@ class ReqserLanguageDetectionController extends StorefrontController
             }
             
             //If Basic Checks are ok we can continue to process
-            return $this->processRequest($request, $domainId, $salesChannelId);
+            return $this->processRequest($request, $domainId, $salesChannelId, $salesChannelContext);
 
         } catch (\Throwable $e) {
             return $this->createJsonResponse(false, 'internal_error', [
@@ -81,7 +81,7 @@ class ReqserLanguageDetectionController extends StorefrontController
     /**
      * Process the language detection request
      */
-    private function processRequest(Request $request, string $domainId, string $salesChannelId): JsonResponse
+    private function processRequest(Request $request, string $domainId, string $salesChannelId, SalesChannelContext $salesChannelContext): JsonResponse
     {
         // Get sales channel domains and current domain using cached method
         $salesChannelDomains = $this->languageRedirectService->getSalesChannelDomainsById($salesChannelId);
@@ -105,17 +105,26 @@ class ReqserLanguageDetectionController extends StorefrontController
         }
         $redirectConfig = $this->customFieldService->getRedirectConfiguration($customFields);
 
+        // Initialize the service with the retrieved data
+        $this->languageRedirectService->initialize($session, $redirectConfig, $request, $currentDomain, $salesChannelDomains);
+
         $additionalData = [];
-        if ($redirectConfig['debugMode']) {
-            $additionalData['customFieldsConfig'] = $redirectConfig;
-            $additionalData['primaryBrowserLanguage'] = $this->languageRedirectService->getPrimaryBrowserLanguage();
+        $additionalData['browserLanguage'] = $this->languageRedirectService->getPrimaryBrowserLanguage();
+        $additionalData['currentLanguageCode'] = $redirectConfig['languageCode'] ?? null;
+        $additionalData['customFieldsConfig'] = $redirectConfig;
+        $additionalData['debugMode'] = $redirectConfig['debugMode'] ?? false;
+        
+        //Additional Debug Data if needed
+        if ($redirectConfig['debugMode'] ?? false) {
             $additionalData['domainUrl'] = $currentDomain->getUrl();
             $additionalData['currentOrignalURL'] = $this->languageRedirectService->getOriginalPageUrl();
             $additionalData['isDomainValidForRedirectFrom'] = $this->languageRedirectService->isDomainValidForRedirectFrom();
+            
+            // Debug domain information
+            $additionalData['debug_domainId'] = $domainId;
+            $additionalData['debug_currentDomainId'] = $currentDomain->getId();
+            $additionalData['debug_currentDomainCustomFields'] = $currentDomain->getCustomFields();
         }
-
-        // Initialize the service with the retrieved data
-        $this->languageRedirectService->initialize($session, $redirectConfig, $request, $currentDomain, $salesChannelDomains);
         
         //Now we call each Method
         if (!$this->languageRedirectService->shouldProcessRedirect()) {
@@ -129,7 +138,6 @@ class ReqserLanguageDetectionController extends StorefrontController
 
         //Check for Session Redirect and cancel if necessary
         if (!$this->languageRedirectService->shouldProcessRedirectBasedOnSessionData()) {
-           
             return $this->createJsonResponse(true, 'redirect_blocked_by_session_data', $additionalData);
         }
 
@@ -140,18 +148,18 @@ class ReqserLanguageDetectionController extends StorefrontController
             //Adapt Session Data
             $this->languageRedirectService->updateSessionData();
             // Found a matching domain to redirect to
-            return $this->createJsonResponse(true, 'language_mismatch', [
+            return $this->createJsonResponse(true, 'language_mismatch', 
                 array_merge($additionalData, [
                     'shouldRedirect' => true,
                     'redirectUrl' => $redirectUrl,
                 ])
-            ]);
+            );
         } else {
-            return $this->createJsonResponse(true, 'no_matching_language_domain_found', [
+            return $this->createJsonResponse(true, 'no_matching_language_domain_found', 
                 array_merge($additionalData, [
                     'shouldRedirect' => false,
                 ])
-            ]);
+            );
         }
     }
 

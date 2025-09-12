@@ -396,6 +396,10 @@ class ReqserLanguageRedirectService
      */
     public function getPrimaryBrowserLanguage(): ?string
     {
+        if ($this->primaryBrowserLanguage) {
+            return $this->primaryBrowserLanguage;
+        }
+
         if (!$this->request) {
             return null;
         }
