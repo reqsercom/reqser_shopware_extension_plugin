@@ -13,8 +13,6 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
 {
     private $requestStack;
     private $webhookService;
-    private bool $debugMode;
-    
     public function __construct(
         RequestStack $requestStack,
         ReqserWebhookService $webhookService
@@ -22,7 +20,6 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
     {
         $this->requestStack = $requestStack;
         $this->webhookService = $webhookService;
-        $this->debugMode = false;
     }
 
     public static function getSubscribedEvents(): array
@@ -47,17 +44,7 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
             }
             
         } catch (\Throwable $e) {
-            if ($this->debugMode) {
-                $this->webhookService->sendErrorToWebhook([
-                    'type' => 'error',
-                    'function' => 'onLanguageSwitchResponse',
-                    'message' => $e->getMessage() ?? 'unknown',
-                    'trace' => $e->getTraceAsString() ?? 'unknown',
-                    'timestamp' => date('Y-m-d H:i:s'),
-                    'file' => __FILE__, 
-                    'line' => __LINE__,
-                ]);
-            }
+            // Silently handle errors - no debug mode needed with new GET parameter approach
             return;
         }
     }

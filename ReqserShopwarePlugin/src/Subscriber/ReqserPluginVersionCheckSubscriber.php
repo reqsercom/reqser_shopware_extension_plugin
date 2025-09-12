@@ -166,7 +166,7 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
     {
         if (!$this->debugMode) {
             return;
-}
+        }
 
         $timestamp = date('Y-m-d H:i:s');
         $lineInfo = $line ? " [Line:$line]" : "";

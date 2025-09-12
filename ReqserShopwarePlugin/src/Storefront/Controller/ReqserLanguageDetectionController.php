@@ -105,22 +105,28 @@ class ReqserLanguageDetectionController extends StorefrontController
         }
         $redirectConfig = $this->customFieldService->getRedirectConfiguration($customFields);
 
+        $additionalData = [];
+        if ($redirectConfig['debugMode']) {
+            $additionalData = $redirectConfig;
+        }
+
         // Initialize the service with the retrieved data
         $this->languageRedirectService->initialize($session, $redirectConfig, $request, $currentDomain, $salesChannelDomains);
         
         //Now we call each Method
         if (!$this->languageRedirectService->shouldProcessRedirect()) {
-            return $this->createJsonResponse(true, 'redirect_not_needed');
+            return $this->createJsonResponse(true, 'redirect_not_needed', $additionalData);
         }
 
         //Check for Manual Language Switch and cancel if necessary
         if (!$this->languageRedirectService->shouldProcessRedirectBasedOnManualLanguageSwitch()) {
-            return $this->createJsonResponse(true, 'redirect_blocked_by_manual_language_switch');
+            return $this->createJsonResponse(true, 'redirect_blocked_by_manual_language_switch', $additionalData);
         }
 
         //Check for Session Redirect and cancel if necessary
         if (!$this->languageRedirectService->shouldProcessRedirectBasedOnSessionData()) {
-            return $this->createJsonResponse(true, 'redirect_blocked_by_session_data');
+           
+            return $this->createJsonResponse(true, 'redirect_blocked_by_session_data', $additionalData);
         }
 
         // Get the redirect URL from the service
@@ -132,12 +138,17 @@ class ReqserLanguageDetectionController extends StorefrontController
             // Found a matching domain to redirect to
             return $this->createJsonResponse(true, 'language_mismatch', [
                 'shouldRedirect' => true,
-                'redirectUrl' => $redirectUrl
+                'redirectUrl' => $redirectUrl,
             ]);
         } else {
             // No matching domain found
+            if ($redirectConfig['debugMode']) {
+                $additionalData['redirectUrlWithoutParameters'] = $redirectUrl;
+            }
             return $this->createJsonResponse(true, 'no_matching_language_domain_found', [
-                'shouldRedirect' => false
+                array_merge($additionalData, [
+                    'shouldRedirect' => false,
+                ])
             ]);
         }
     }

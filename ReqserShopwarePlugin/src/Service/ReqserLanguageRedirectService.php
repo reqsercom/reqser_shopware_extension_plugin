@@ -24,6 +24,8 @@ class ReqserLanguageRedirectService
     private ?string $primaryBrowserLanguage = null;
     private $salesChannelDomains = null;
     private $currentDomain = null;
+    private $request = null;
+    private ?array $originalPageUrl = null;
 
     public function __construct(
         EntityRepository $domainRepository,
@@ -46,9 +48,10 @@ class ReqserLanguageRedirectService
     {
         $this->currentDomain = $currentDomain;
         $this->redirectConfig = $redirectConfig;
+        $this->request = $request;
         $this->sessionService->initialize($session);
         $this->salesChannelDomains = $salesChannelDomains;
-        $this->primaryBrowserLanguage = $this->getPrimaryBrowserLanguage($request);
+        $this->primaryBrowserLanguage = $this->getPrimaryBrowserLanguage();
     }
 
     /**
@@ -191,22 +194,16 @@ class ReqserLanguageRedirectService
             return true;
         }
 
-        // Get the original page URL from the referer header
-        $refererUrl = $_SERVER['HTTP_REFERER'] ?? null;
+        // Get the parsed original page URL using reusable method
+        $parsedReferer = $this->getOriginalPageUrl();
         
-        if (!$refererUrl) {
+        if (empty($parsedReferer)) {
             // No referer means we can't determine the original page
             return false;
         }
 
         // Get current domain URL (clean base URL)
         $currentDomainUrl = rtrim($this->currentDomain->getUrl(), '/');
-        
-        // Parse referer URL and remove query parameters and fragments
-        $parsedReferer = parse_url($refererUrl);
-        if (!$parsedReferer || !isset($parsedReferer['scheme']) || !isset($parsedReferer['host'])) {
-            return false;
-            }
         
         // Build clean referer URL (scheme + host + port + path, no query/fragment)
         $cleanRefererUrl = $parsedReferer['scheme'] . '://' . $parsedReferer['host'];
@@ -222,6 +219,54 @@ class ReqserLanguageRedirectService
         
         // Check if the clean referer URL matches the domain base URL (front page)
         return $cleanRefererUrl === $currentDomainUrl || $cleanRefererUrl === $currentDomainUrl . '/';
+    }
+
+    /**
+     * Get and cache the parsed original page URL from referer header
+     */
+    private function getOriginalPageUrl(): ?array
+    {
+        // Return cached result if already parsed
+        if ($this->originalPageUrl !== null) {
+            return $this->originalPageUrl;
+        }
+
+        // Get the original page URL from the referer header
+        $refererUrl = $this->request->headers->get('Referer') ?? $_SERVER['HTTP_REFERER'] ?? null;
+        
+        if (!$refererUrl) {
+            $this->originalPageUrl = [];
+            return $this->originalPageUrl;
+        }
+
+        // Parse referer URL
+        $parsedReferer = parse_url($refererUrl);
+        if (!$parsedReferer || !isset($parsedReferer['scheme']) || !isset($parsedReferer['host'])) {
+            $this->originalPageUrl = [];
+            return $this->originalPageUrl;
+        }
+
+        // Cache and return the parsed URL
+        $this->originalPageUrl = $parsedReferer;
+        return $this->originalPageUrl;
+    }
+
+    /**
+     * Get query parameters from the original page URL
+     */
+    private function getOriginalPageQueryParams(): array
+    {
+        $originalUrl = $this->getOriginalPageUrl();
+        
+        if (empty($originalUrl) || !isset($originalUrl['query'])) {
+            return [];
+        }
+
+        // Parse query string into array
+        $queryParams = [];
+        parse_str($originalUrl['query'], $queryParams);
+        
+        return $queryParams;
     }
 
     /**
@@ -244,7 +289,7 @@ class ReqserLanguageRedirectService
                 )->first();
                 
                 if ($matchingDomain) {
-                    return $matchingDomain->getUrl();
+                    return $this->buildRedirectUrlWithParams($matchingDomain->getUrl());
                 }
             }
         }
@@ -252,12 +297,56 @@ class ReqserLanguageRedirectService
         // Find matching domain using database filtering for maximum performance
         $matchingDomain = $this->findMatchingDomainByLanguage();
         if ($matchingDomain) {
-            return $matchingDomain->getUrl();
+            return $this->buildRedirectUrlWithParams($matchingDomain->getUrl());
         }
 
         return null;
     }
 
+    /**
+     * Build redirect URL with preserved GET parameters from original request
+     * Always preserves reqser_debug_mode, other parameters based on configuration
+     */
+    private function buildRedirectUrlWithParams(string $baseUrl): string
+    {
+        // If no request available, return base URL
+        if (!$this->request) {
+            return $baseUrl;
+        }
+
+        // Get query parameters from the original page URL (referer), not the AJAX request
+        $queryParams = $this->getOriginalPageQueryParams();
+        
+        // If no parameters, return base URL
+        if (empty($queryParams)) {
+            return $baseUrl;
+        }
+
+        // Check configuration for preserving URL parameters
+        $preserveUrlParameters = $this->redirectConfig['preserveUrlParameters'] ?? false;
+        
+        // Always preserve reqser_debug_mode parameter
+        $parametersToKeep = [];
+        if (isset($queryParams['reqserdebugmode'])) {
+            $parametersToKeep['reqserdebugmode'] = $queryParams['reqserdebugmode'];
+        }
+        
+        // If configuration allows, preserve all other parameters
+        if ($preserveUrlParameters) {
+            $parametersToKeep = $queryParams;
+        }
+        
+        // If no parameters to keep, return base URL
+        if (empty($parametersToKeep)) {
+            return $baseUrl;
+        }
+
+        // Build query string from parameters
+        $queryString = http_build_query($parametersToKeep);
+        
+        // Append query string to base URL
+        return $baseUrl . '?' . $queryString;
+    }
 
     /**
      * Find a matching domain by language code using foreach for optimal performance (early exit)
@@ -293,9 +382,13 @@ class ReqserLanguageRedirectService
     /**
      * Get primary browser language from request
      */
-    private function getPrimaryBrowserLanguage($request): ?string
+    public function getPrimaryBrowserLanguage(): ?string
     {
-        $acceptLanguage = $request->headers->get('Accept-Language', '');
+        if (!$this->request) {
+            return null;
+        }
+        
+        $acceptLanguage = $this->request->headers->get('Accept-Language', '');
         
         if (empty($acceptLanguage)) {
             return null;

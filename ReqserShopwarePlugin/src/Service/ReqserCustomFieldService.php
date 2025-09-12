@@ -67,70 +67,6 @@ class ReqserCustomFieldService
     }
 
 
-    /**
-     * Check if debug mode is active based on configuration
-     * This is the ONLY place where debug mode is determined - it's based on custom fields, not hardcoded
-     */
-    public function isDebugModeActive(?array $redirectConfig, $request, $currentDomain, $sessionService = null): bool
-    {
-        try {
-            // Check if debug mode is enabled in domain configuration
-            if (!($redirectConfig['debugMode'] ?? false)) {
-                return false;
-            }
-
-            // Check if debugModeIp is set and validate the request IP
-            $debugModeIp = $redirectConfig['debugModeIp'] ?? null;
-            if ($debugModeIp !== null) {
-                $clientIp = $request->getClientIp();
-                
-                if ($clientIp == $debugModeIp) {
-                    // IP matches, activate debug mode
-                    $sessionValues = $sessionService ? $sessionService->getAllSessionData() : [];
-                    $debugEchoMode = $redirectConfig['debugEchoMode'] ?? false;
-                    $this->webhookService->sendErrorToWebhook([
-                        'type' => 'debug', 
-                        'info' => 'Debug mode activated - IP match', 
-                        'clientIp' => $clientIp, 
-                        'debugModeIp' => $debugModeIp, 
-                        'sessionValues' => $sessionValues,
-                        'domain_id' => $currentDomain->getId(), 
-                        'file' => __FILE__, 
-                        'line' => __LINE__
-                    ], $debugEchoMode);
-                    return true;
-                } else {
-                    // IP doesn't match, debug mode is not active
-                    return false;
-                }
-            } else {
-                // No IP restriction, activate debug mode
-                $sessionValues = $sessionService ? $sessionService->getAllSessionData() : [];
-                $debugEchoMode = $redirectConfig['debugEchoMode'] ?? false;
-                $this->webhookService->sendErrorToWebhook([
-                    'type' => 'debug', 
-                    'info' => 'Debug mode activated - no IP restriction', 
-                    'sessionValues' => $sessionValues,
-                    'domain_id' => $currentDomain->getId(), 
-                    'file' => __FILE__, 
-                    'line' => __LINE__
-                ], $debugEchoMode);
-                return true;
-            }
-        } catch (\Throwable $e) {
-            $this->webhookService->sendErrorToWebhook([
-                'type' => 'error', 
-                'info' => 'isDebugModeActive() Error', 
-                'message' => $e->getMessage(), 
-                'trace' => $e->getTraceAsString(), 
-                'domain_id' => $currentDomain->getId(), 
-                'file' => __FILE__, 
-                'line' => __LINE__
-            ]);
-            return false;
-        }
-        
-    }
 
     /**
      * Get simplified redirect-into configuration for domains that only need basic validation
@@ -162,9 +98,9 @@ class ReqserCustomFieldService
             // Language settings
             'languageCode' => $this->getString($customFields, 'languageCode'),
             
-            // User override settings
-            'userLanguageSwitchIgnorePeriodS' => $this->getInt($customFields, 'userLanguageSwitchIgnorePeriodS'),
+            // User language switch settings
             'skipRedirectAfterManualLanguageSwitch' => $this->getBool($customFields, 'skipRedirectAfterManualLanguageSwitch'),
+            'userLanguageSwitchIgnorePeriodS' => $this->getInt($customFields, 'userLanguageSwitchIgnorePeriodS'),
             'redirectToUserPreviouslyChosenDomain' => $this->getBool($customFields, 'redirectToUserPreviouslyChosenDomain'),
             
             // Session settings
@@ -176,25 +112,10 @@ class ReqserCustomFieldService
             'maxRedirects' => $this->getInt($customFields, 'maxRedirects'),
             'maxScriptCalls' => $this->getInt($customFields, 'maxScriptCalls'),
             
-            // Debug settings
-            'debugMode' => $this->getBool($customFields, 'debugMode'),
-            'debugEchoMode' => $this->getBool($customFields, 'debugEchoMode'),
-            'debugModeIp' => $this->getString($customFields, 'debugModeIp'),
+            // URL parameter settings
+            'preserveUrlParameters' => $this->getBool($customFields, 'preserveUrlParameters'),
         ];
     }
 
-    /**
-     * Check if debug echo mode is active (requires debug mode to be active first)
-     */
-    public function isDebugEchoModeActive(bool $debugMode, ?array $redirectConfig): bool
-    {
-        // If debug mode is not active, echo mode cannot be active
-        if (!$debugMode) {
-            return false;
-        }
-        
-        // Check if debug echo mode is enabled in configuration
-        return $redirectConfig['debugEchoMode'] ?? false;
-    }
 
 }
