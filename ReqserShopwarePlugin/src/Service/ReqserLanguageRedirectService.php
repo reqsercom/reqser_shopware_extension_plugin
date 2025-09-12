@@ -2,74 +2,52 @@
 
 namespace Reqser\Plugin\Service;
 
-use Symfony\Component\HttpFoundation\RedirectResponse;
-use Reqser\Plugin\Service\ReqserWebhookService;
-use Reqser\Plugin\Service\ReqserAppService;
 use Reqser\Plugin\Service\ReqserSessionService;
 use Reqser\Plugin\Service\ReqserCustomFieldService;
 use Reqser\Plugin\Service\ReqserRedirectService;
-use Reqser\Plugin\Service\ReqserLanguageSwitchService;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\NotFilter;
-use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\System\SalesChannel\Aggregate\SalesChannelDomain\SalesChannelDomainCollection;
 use Shopware\Core\System\SalesChannel\Aggregate\SalesChannelDomain\SalesChannelDomainEntity;
 use Shopware\Core\Framework\Context;
-use Symfony\Component\HttpKernel\Event\ControllerEvent;
 
 class ReqserLanguageRedirectService
 {
     private $domainRepository;
-    private $appService;
-    private $webhookService;
     private $sessionService;
     private $customFieldService;
     private $redirectService;
-    private $languageSwitchService;
     private $cache;
-    private ?ControllerEvent $currentEvent = null;
-    private ?array $currentCustomFields = null;
-    private bool $debugMode = false;
-    private bool $debugEchoMode = false;
     private ?array $redirectConfig = null;
     private ?string $primaryBrowserLanguage = null;
-    private bool $sessionAvailable = false;
     private $salesChannelDomains = null;
-    private ?string $salesChannelId = null;
     private $currentDomain = null;
 
     public function __construct(
         EntityRepository $domainRepository,
-        ReqserAppService $appService,
-        ReqserWebhookService $webhookService,
         ReqserSessionService $sessionService,
         ReqserCustomFieldService $customFieldService,
         ReqserRedirectService $redirectService,
-        ReqserLanguageSwitchService $languageSwitchService,
         $cache
     ) {
         $this->domainRepository = $domainRepository;
-        $this->appService = $appService;
-        $this->webhookService = $webhookService;
         $this->sessionService = $sessionService;
         $this->customFieldService = $customFieldService;
         $this->redirectService = $redirectService;
-        $this->languageSwitchService = $languageSwitchService;
         $this->cache = $cache;
     }
 
     /**
      * Initialize
      */
-    public function initialize($session, array $redirectConfig, $request, $currentDomain, $salesChannelDomains, string $salesChannelId): void
+    public function initialize($session, array $redirectConfig, $request, $currentDomain, $salesChannelDomains): void
     {
         $this->currentDomain = $currentDomain;
         $this->redirectConfig = $redirectConfig;
-        $this->sessionAvailable = $this->sessionService->initialize($session, $this->redirectConfig);
+        $this->sessionService->initialize($session);
         $this->salesChannelDomains = $salesChannelDomains;
-        $this->salesChannelId = $salesChannelId;
         $this->primaryBrowserLanguage = $this->getPrimaryBrowserLanguage($request);
     }
 
@@ -168,7 +146,7 @@ class ReqserLanguageRedirectService
     {
         if ($this->sessionService->getUserlanguageSwitchTimestamp()) {
             $languageSwitchTimestamp = $this->sessionService->getUserlanguageSwitchTimestamp();
-            $userLanguageSwitchIgnorePeriodS = $redirectConfig['userLanguageSwitchIgnorePeriodS'] ?? null;
+            $userLanguageSwitchIgnorePeriodS = $this->redirectConfig['userLanguageSwitchIgnorePeriodS'] ?? null;
             
             if ($userLanguageSwitchIgnorePeriodS !== null) {
                 // Check if the override timestamp is younger than the userLanguageSwitchIgnorePeriodS
@@ -256,11 +234,27 @@ class ReqserLanguageRedirectService
             return null;
         }
 
+        //Check if the user has choosen one manualy so we will use this domain as his last choice
+        if ($this->redirectConfig['redirectToUserPreviouslyChosenDomain']) {
+            $sessionLanguageId = $this->sessionService->getUserOverrideLanguageId();
+            if ($sessionLanguageId) {
+                //retrieve the first domain in our collection that matches this language id
+                $matchingDomain = $this->salesChannelDomains->filter(
+                    fn($domain) => $domain->getLanguageId() === $sessionLanguageId
+                )->first();
+                
+                if ($matchingDomain) {
+                    return $matchingDomain->getUrl();
+                }
+            }
+        }
+
         // Find matching domain using database filtering for maximum performance
         $matchingDomain = $this->findMatchingDomainByLanguage();
         if ($matchingDomain) {
             return $matchingDomain->getUrl();
         }
+
         return null;
     }
 
@@ -325,7 +319,6 @@ class ReqserLanguageRedirectService
 
         $languageCode = $this->redirectConfig['languageCode'];
         if ($languageCode === null) {
-            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Language code is null, we cannot check if the browser language matches this domain language', 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return true;
         }
 
@@ -333,7 +326,6 @@ class ReqserLanguageRedirectService
         $language = strtolower(explode('-', $languageCode)[0]);
         
         if ($this->primaryBrowserLanguage == $language) {
-            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'User browser language matches current domain language so we stop now to redirect', 'primaryBrowserLanguage' => $this->primaryBrowserLanguage, 'languageCode' => $languageCode, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
             return true;
         }
 
@@ -342,98 +334,40 @@ class ReqserLanguageRedirectService
 
 
     /**
-     * Handle language redirect for a specific browser language
-     * 
-     * @param string $preferred_browser_language The preferred browser language code
-     * @param SalesChannelDomainCollection $salesChannelDomains Collection of available domains
-     * @param object $currentDomain Current domain object
-     * @param object $request Current request object
+     * Retrieve sales channel domains with ReqserRedirect custom fields by sales channel ID (cached method)
      */
-    private function handleLanguageRedirect(string $preferred_browser_language, SalesChannelDomainCollection $salesChannelDomains, $currentDomain, $request): void
-    {
-        if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'All Sales Channel Domains to check', 'salesChannelDomains' => $salesChannelDomains, 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-        foreach ($salesChannelDomains as $salesChannelDomain) {
-            if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Checking sales channel domain', 'url' => $salesChannelDomain->url, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-            //If the current domain is the check we continue
-            if ($currentDomain->getId() == $salesChannelDomain->getId()){
-                if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Continue because it is the default domain', 'domain_id' => $salesChannelDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-                continue;
-            } 
-            // Only check domains within the same sales channel
-            if ($salesChannelDomain->getSalesChannelId() != $currentDomain->getSalesChannelId()) {
-                if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Continue - different sales channel', 'url' => $salesChannelDomain->url, 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-                continue;
-            }
-            $customFields = $salesChannelDomain->getCustomFields();
-
-            //Only allow if redirectInto is set to true
-            if (!$this->customFieldService->getBool($customFields, 'redirectInto')) {
-                if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Skipping domain - redirectInto disabled', 'url' => $salesChannelDomain->url, 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-                continue;
-            }
-
-            // Check if ReqserRedirect exists and has a languageRedirect array
-            if (isset($customFields['ReqserRedirect']['languageRedirect']) && is_array($customFields['ReqserRedirect']['languageRedirect'])) {
-                if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Checking language redirect configuration', 'languageRedirect' => $customFields['ReqserRedirect']['languageRedirect'], 'domain_id' => $currentDomain->getId(), 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-                if (in_array($preferred_browser_language, $customFields['ReqserRedirect']['languageRedirect'])) {                    
-                    if ($this->debugMode) $this->webhookService->sendErrorToWebhook(['type' => 'debug', 'info' => 'Redirecting now', 'file' => __FILE__, 'line' => __LINE__], $this->debugEchoMode);
-                    
-                    // Use redirect service for the actual redirect (handles all cases: headers sent, JavaScript, echo mode, etc.)
-                    $this->redirectService->handleDirectDomainRedirect(
-                        $salesChannelDomain->getUrl(),
-                        ($this->redirectConfig['javaScriptRedirect'] ?? false),
-                        $this->currentEvent
-                    );
-                }
-            }
-        }
-    }
-
-
-    /**
-     * Retrieve sales channel domains with ReqserRedirect custom fields by sales channel ID (cached static method)
-     */
-    public static function getSalesChannelDomainsById(string $salesChannelId, ?EntityRepository $domainRepository = null, $cache = null)
+    public function getSalesChannelDomainsById(string $salesChannelId): SalesChannelDomainCollection
     {
         // Create cache key based on sales channel ID
         $cacheKey = 'reqser_domains_' . $salesChannelId;
         
         // If cache is available, use it
-        if ($cache) {
+        if ($this->cache) {
             try {
-                return $cache->get($cacheKey, function ($item) use ($salesChannelId, $domainRepository) {
+                return $this->cache->get($cacheKey, function ($item) use ($salesChannelId) {
                     // Cache for 1 hour (3600 seconds) - domain configs rarely change
                     $item->expiresAfter(3600);
                     
                     // Query database only when cache expires
-                    return self::queryDomainsByChannelId($salesChannelId, $domainRepository);
+                    return $this->queryDomainsByChannelId($salesChannelId);
                 });
                 
             } catch (\Throwable $e) {
                 // If cache fails, fall back to direct database query
-                return self::queryDomainsByChannelId($salesChannelId, $domainRepository);
+                return $this->queryDomainsByChannelId($salesChannelId);
             }
         }
         
         // No cache available, query directly
-        return self::queryDomainsByChannelId($salesChannelId, $domainRepository);
+        return $this->queryDomainsByChannelId($salesChannelId);
     }
 
 
-    
-
-
-
-
     /**
-     * Query domains from database by sales channel ID (static method)
+     * Query domains from database by sales channel ID
      */
-    private static function queryDomainsByChannelId(string $salesChannelId, ?EntityRepository $domainRepository = null)
+    private function queryDomainsByChannelId(string $salesChannelId): SalesChannelDomainCollection
     {
-        if (!$domainRepository) {
-            throw new \InvalidArgumentException('Domain repository is required for querying domains');
-        }
-        
         $criteria = new Criteria();
         
         // Ensure we're only retrieving domains that have the 'ReqserRedirect' custom field set
@@ -445,6 +379,14 @@ class ReqserLanguageRedirectService
         $criteria->addFilter(new EqualsFilter('salesChannelId', $salesChannelId));
     
         // Get the collection from the repository using default context
-        return $domainRepository->search($criteria, Context::createDefaultContext())->getEntities();
+        return $this->domainRepository->search($criteria, Context::createDefaultContext())->getEntities();
+    }
+
+    /**
+     * Update session data
+     */
+    public function updateSessionData(): void
+    {
+        $this->sessionService->prepareRedirectSession();
     }
 }

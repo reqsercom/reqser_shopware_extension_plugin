@@ -2,34 +2,28 @@
 
 namespace Reqser\Plugin\Service;
 
-use Reqser\Plugin\Service\ReqserWebhookService;
 use Symfony\Component\HttpFoundation\RequestStack;
 
 class ReqserSessionService
 {
     private $session = null;
     private ?int $redirectCount = null;
-    private bool $sessionIgnoreMode = false;
-    private $webhookService;
-    private ?array $redirectConfig = null;
 
-    public function __construct(ReqserWebhookService $webhookService)
+    public function __construct()
     {
-        $this->webhookService = $webhookService;
     }
 
     /**
-     * Initialize the service with a session and redirect configuration
+     * Initialize the service with a session
      * Returns false if session is null to indicate initialization failed
      */
-    public function initialize($session, ?array $redirectConfig = null): bool
+    public function initialize($session): bool
     {
         if ($session === null) {
             return false; // Initialization failed - no session available
         }
         
         $this->session = $session;
-        $this->redirectConfig = $redirectConfig;
         $this->redirectCount = null; // Reset cache when session changes
         return true; // Initialization successful
     }
@@ -159,11 +153,8 @@ class ReqserSessionService
      */
     public function prepareRedirectSession(): void
     {
-        // Only write session data if sessionIgnoreMode is false
-        if ($this->sessionIgnoreMode === false) {
-            $this->setLastRedirectTime();
-            $this->incrementRedirectCount();
-        }
+        $this->setLastRedirectTime();
+        $this->incrementRedirectCount();
     }
 
     /**
@@ -174,54 +165,6 @@ class ReqserSessionService
         return $this->session?->all() ?? [];
     }
     
-
-    /**
-     * Validate and manage session redirects
-     */
-    public function validateAndManageSessionRedirects(): bool
-    {
-        $advancedRedirectEnabled = $this->redirectConfig['advancedRedirectEnabled'] ?? false;
-        $sessionIgnoreMode = $this->redirectConfig['sessionIgnoreMode'] ?? false;
-        $redirectCount = $this->getRedirectCount();
-        
-        if ($redirectCount > 0 && $advancedRedirectEnabled === true && $sessionIgnoreMode === false) {
-            // Set redirect done flag
-            $this->prepareRedirectSession();
-            $lastRedirectTime = $this->getLastRedirectAt();
-            
-            $gracePeriodMs = $this->redirectConfig['gracePeriodMs'] ?? null;
-            $blockPeriodMs = $this->redirectConfig['blockPeriodMs'] ?? null;
-            $maxRedirects = $this->redirectConfig['maxRedirects'] ?? null;
-            $maxScriptCalls = $this->redirectConfig['maxScriptCalls'] ?? null;
-            
-            if ($maxRedirects === null && $gracePeriodMs === null && $blockPeriodMs === null && $maxScriptCalls === null) {
-                return true;
-            }
-            
-            if ($maxRedirects !== null && $redirectCount >= $maxRedirects) {
-                return false;
-            }
-
-            $scriptCallCount = $this->getScriptCallCount();
-
-            if ($maxScriptCalls !== null && $scriptCallCount >= $maxScriptCalls) {
-                return false;
-            }
-
-            // Update script call count for validation tracking
-            $this->incrementScriptCallCount();
-
-            // Check if the last redirect was done after the grace period but within the block period
-            $currentTimestamp = microtime(true) * 1000;
-            if ($gracePeriodMs !== null && $lastRedirectTime !== null && 
-                $lastRedirectTime < $currentTimestamp - $gracePeriodMs && 
-                $lastRedirectTime > $currentTimestamp - $blockPeriodMs) {
-                return false;
-            }
-        } 
-
-        return true; 
-    }
 
 
 }

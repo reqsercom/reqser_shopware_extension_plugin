@@ -67,7 +67,7 @@ class ReqserLanguageDetectionController extends StorefrontController
             }
             
             //If Basic Checks are ok we can continue to process
-            return $this->processRequest($request, $salesChannelContext, $domainId, $salesChannelId);
+            return $this->processRequest($request, $domainId, $salesChannelId);
 
         } catch (\Throwable $e) {
             return $this->createJsonResponse(false, 'internal_error', [
@@ -81,10 +81,10 @@ class ReqserLanguageDetectionController extends StorefrontController
     /**
      * Process the language detection request
      */
-    private function processRequest(Request $request, SalesChannelContext $salesChannelContext, string $domainId, string $salesChannelId): JsonResponse
+    private function processRequest(Request $request, string $domainId, string $salesChannelId): JsonResponse
     {
-        // Get sales channel domains and current domain using static cached method
-        $salesChannelDomains = ReqserLanguageRedirectService::getSalesChannelDomainsById($salesChannelId, $this->domainRepository, $this->cache);
+        // Get sales channel domains and current domain using cached method
+        $salesChannelDomains = $this->languageRedirectService->getSalesChannelDomainsById($salesChannelId);
         if ($salesChannelDomains->count() <= 1) {
             return $this->createJsonResponse(false, 'only_one_domain_available');
         }
@@ -106,7 +106,7 @@ class ReqserLanguageDetectionController extends StorefrontController
         $redirectConfig = $this->customFieldService->getRedirectConfiguration($customFields);
 
         // Initialize the service with the retrieved data
-        $this->languageRedirectService->initialize($session, $redirectConfig, $request, $currentDomain, $salesChannelDomains, $salesChannelId);
+        $this->languageRedirectService->initialize($session, $redirectConfig, $request, $currentDomain, $salesChannelDomains);
         
         //Now we call each Method
         if (!$this->languageRedirectService->shouldProcessRedirect()) {
@@ -123,12 +123,12 @@ class ReqserLanguageDetectionController extends StorefrontController
             return $this->createJsonResponse(true, 'redirect_blocked_by_session_data');
         }
 
-    
-
         // Get the redirect URL from the service
         $redirectUrl = $this->languageRedirectService->retrieveNewDomainToRedirectTo();
         
         if ($redirectUrl) {
+            //Adapt Session Data
+            $this->languageRedirectService->updateSessionData();
             // Found a matching domain to redirect to
             return $this->createJsonResponse(true, 'language_mismatch', [
                 'shouldRedirect' => true,

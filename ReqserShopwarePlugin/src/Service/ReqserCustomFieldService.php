@@ -154,29 +154,21 @@ class ReqserCustomFieldService
             // Basic redirect settings
             'active' => $this->getBool($customFields, 'active'),
             'redirectFrom' => $this->getBool($customFields, 'redirectFrom'),
-            'advancedRedirectEnabled' => $this->getBool($customFields, 'advancedRedirectEnabled'),
-            'javaScriptRedirect' => $this->getBool($customFields, 'javaScriptRedirect'),
             'redirectInto' => $this->getBool($customFields, 'redirectInto'),
             
             // Page restrictions
             'onlyRedirectFrontPage' => $this->getBool($customFields, 'onlyRedirectFrontPage'),
-            'sanatizeUrlOnFrontPageCheck' => $this->getBool($customFields, 'sanatizeUrlOnFrontPageCheck'),
             
             // Language settings
             'languageCode' => $this->getString($customFields, 'languageCode'),
-            'redirectOnDefaultBrowserLanguageOnly' => $this->getBool($customFields, 'redirectOnDefaultBrowserLanguageOnly'),
-            'languageRedirect' => $this->getArray($customFields, 'languageRedirect'),
             
             // User override settings
-            'userOverrideEnabled' => $this->getBool($customFields, 'userOverrideEnabled'),
-            'redirectBasedOnUserLanguageSwitch' => $this->getBool($customFields, 'redirectBasedOnUserLanguageSwitch'),
             'userLanguageSwitchIgnorePeriodS' => $this->getInt($customFields, 'userLanguageSwitchIgnorePeriodS'),
             'skipRedirectAfterManualLanguageSwitch' => $this->getBool($customFields, 'skipRedirectAfterManualLanguageSwitch'),
             'redirectToUserPreviouslyChosenDomain' => $this->getBool($customFields, 'redirectToUserPreviouslyChosenDomain'),
             
             // Session settings
             'sessionIgnoreMode' => $this->getBool($customFields, 'sessionIgnoreMode'),
-            'onlyRedirectIfSessionIsAvailable' => $this->getBool($customFields, 'onlyRedirectIfSessionIsAvailable'),
             
             // Timing and limits
             'gracePeriodMs' => $this->getInt($customFields, 'gracePeriodMs'),
