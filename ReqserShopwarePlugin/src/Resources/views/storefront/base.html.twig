@@ -4,7 +4,7 @@
     {{ parent() }}
 
     <script>
-        // Reqser Language Detection - Ultra-fast synchronous execution
+        // Reqser Language Detection - Ultra-fast asynchronous execution
         // Generated: {{ "now"|date("Y-m-d H:i:s") }} - Anti-cache measures
         (function() {
             'use strict';
@@ -16,7 +16,7 @@
             
             if (debugMode) {
                 console.log('🐛 Reqser Debug Mode: ENABLED');
-                console.log('🚀 Reqser Language Detection: Script loaded SYNCHRONOUSLY');
+                console.log('🚀 Reqser Language Detection: Script loaded ASYNCHRONOUSLY');
                 console.log('📋 Document ready state:', document.readyState);
             }
             
@@ -42,81 +42,90 @@
                 };
             }
             
-            // Hybrid approach: Try synchronous first, fallback to async if needed
+            // Hybrid approach: Try asynchronous first, fallback to secondary async if needed
             function checkLanguageHybrid() {
                 if (debugMode) console.log('🔍 Starting HYBRID language detection check...');
                 
                 const checkUrl = buildRequestUrl();
                 
-                // Try synchronous approach with safety measures
+                // Try asynchronous approach with safety measures
                 try {
-                    // Feature detection: Check if synchronous XHR is supported
+                    // Feature detection: Check if XMLHttpRequest is supported
                     if (typeof XMLHttpRequest === 'undefined') {
-                        if (debugMode) console.warn('⚠️ XMLHttpRequest not supported, skipping sync check');
+                        if (debugMode) console.warn('⚠️ XMLHttpRequest not supported, skipping async check');
                         return false;
                     }
                     
                     const xhr = new XMLHttpRequest();
                     
-                    // Set a timeout to prevent indefinite blocking (safety measure)
+                    // Set a timeout for monitoring request duration (safety measure)
                     let timeoutId;
                     const timeoutMs = 2000; // 2 second max wait
                     
-                    if (debugMode) console.log('📡 Making SAFE SYNCHRONOUS request to:', checkUrl);
+                    if (debugMode) console.log('📡 Making SAFE ASYNCHRONOUS request to:', checkUrl);
                     
-                    // Synchronous request with timeout protection
-                    xhr.open('GET', checkUrl, false); // false = synchronous
+                     // Asynchronous request with timeout protection
+                     xhr.open('GET', checkUrl, true); // true = asynchronous
                     
-                    // Apply shared headers
-                    const headers = buildRequestHeaders();
-                    Object.keys(headers).forEach(key => {
-                        xhr.setRequestHeader(key, headers[key]);
-                    });
-                    
-                    // Start timeout protection
-                    const startTime = Date.now();
-                    
-                    xhr.send();
-                    
-                    const endTime = Date.now();
-                    const duration = endTime - startTime;
-                    
-                    if (debugMode) console.log('📥 Response in', duration + 'ms, status:', xhr.status, xhr.statusText);
-                    
-                    // Safety check: If request took too long, something might be wrong
-                    if (duration > timeoutMs) {
-                        if (debugMode) console.warn('⚠️ Request took too long (' + duration + 'ms), might be unsafe');
-                    }
-                    
-                    if (xhr.status === 200) {
-                        const data = JSON.parse(xhr.responseText);
-                        if (debugMode) console.log('📊 Response data:', data);
-                        
-                        if (data.success && data.shouldRedirect && data.redirectUrl) {
-                            if (debugMode) console.log('🚀 REDIRECT REQUESTED to:', data.redirectUrl);
-                            
-                            if (noRedirectMode) {
-                                console.log('🚫 REDIRECT BLOCKED by reqsernoredirectmode - would have redirected to:', data.redirectUrl);
-                                console.log('📊 Full redirect data:', data);
-                                return false; // Redirect blocked for debugging
-                            }
-                            
-                            if (debugMode) console.log('✅ EXECUTING IMMEDIATE REDIRECT to:', data.redirectUrl);
-                            
-                            // Immediate redirect - stops page loading
-                            window.location.replace(data.redirectUrl);
-                            return true; // Redirect happened
-                        } else {
-                            if (debugMode) console.log('✅ No redirect needed. Reason:', data.reason);
-                        }
-                    } else {
-                        if (debugMode) console.warn('❌ Request failed with status:', xhr.status);
-                    }
+                     // Apply shared headers
+                     const headers = buildRequestHeaders();
+                     Object.keys(headers).forEach(key => {
+                         xhr.setRequestHeader(key, headers[key]);
+                     });
+                     
+                     // Start timeout protection
+                     const startTime = Date.now();
+                     
+                     // Set up async response handler
+                     xhr.onload = function() {
+                         const endTime = Date.now();
+                         const duration = endTime - startTime;
+                         
+                         if (debugMode) console.log('📥 Response in', duration + 'ms, status:', xhr.status, xhr.statusText);
+                         
+                         // Safety check: If request took too long, something might be wrong
+                         if (duration > timeoutMs) {
+                             if (debugMode) console.warn('⚠️ Request took too long (' + duration + 'ms), might be unsafe');
+                         }
+                         
+                         if (xhr.status === 200) {
+                             const data = JSON.parse(xhr.responseText);
+                             if (debugMode) console.log('📊 Response data:', data);
+                             
+                             if (data.success && data.shouldRedirect && data.redirectUrl) {
+                                 if (debugMode) console.log('🚀 REDIRECT REQUESTED to:', data.redirectUrl);
+                                 
+                                 if (noRedirectMode) {
+                                     console.log('🚫 REDIRECT BLOCKED by reqsernoredirectmode - would have redirected to:', data.redirectUrl);
+                                     console.log('📊 Full redirect data:', data);
+                                     return; // Redirect blocked for debugging
+                                 }
+                                 
+                                 if (debugMode) console.log('✅ EXECUTING ASYNC REDIRECT to:', data.redirectUrl);
+                                 
+                                 // Redirect - page may have already started loading
+                                 window.location.replace(data.redirectUrl);
+                             } else {
+                                 if (debugMode) console.log('✅ No redirect needed. Reason:', data.reason);
+                             }
+                         } else {
+                             if (debugMode) console.warn('❌ Request failed with status:', xhr.status);
+                         }
+                     };
+                     
+                     xhr.onerror = function() {
+                         if (debugMode) console.error('💥 Async XMLHttpRequest failed');
+                        // Fallback to secondary async approach for safety
+                        if (debugMode) console.log('🔄 Falling back to secondary async approach...');
+                         checkLanguageAsync();
+                     };
+                     
+                     xhr.send();
                 } catch (error) {
-                    if (debugMode) console.error('💥 Synchronous request failed:', error);
+                    if (debugMode) console.error('💥 Asynchronous request failed:', error);
                     
-                    // Fallback to async approach for safety
-                    if (debugMode) console.log('🔄 Falling back to async approach...');
+                    // Fallback to secondary async approach for safety
+                    if (debugMode) console.log('🔄 Falling back to secondary async approach...');
                     checkLanguageAsync();
                 }
                 
@@ -142,7 +151,7 @@
                 })
                 .then(data => {
                     if (debugMode) console.log('📊 Async response data:', data);
-                    
+
                     if (data.success && data.shouldRedirect && data.redirectUrl) {
                         if (debugMode) console.log('🚀 ASYNC REDIRECT REQUESTED to:', data.redirectUrl);
                         
