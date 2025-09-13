@@ -111,14 +111,13 @@ class ReqserLanguageDetectionController extends StorefrontController
         $additionalData = [];
         $additionalData['browserLanguage'] = $this->languageRedirectService->getPrimaryBrowserLanguage();
         $additionalData['currentLanguageCode'] = $redirectConfig['languageCode'] ?? null;
-        $additionalData['customFieldsConfig'] = $redirectConfig;
-        $additionalData['debugMode'] = $redirectConfig['debugMode'] ?? false;
         
         //Additional Debug Data if needed
         if ($redirectConfig['debugMode'] ?? false) {
             $additionalData['domainUrl'] = $currentDomain->getUrl();
             $additionalData['currentOrignalURL'] = $this->languageRedirectService->getOriginalPageUrl();
             $additionalData['isDomainValidForRedirectFrom'] = $this->languageRedirectService->isDomainValidForRedirectFrom();
+            $additionalData['customFieldsConfig'] = $redirectConfig;
             
             // Debug domain information
             $additionalData['debug_domainId'] = $domainId;
@@ -164,7 +163,7 @@ class ReqserLanguageDetectionController extends StorefrontController
     }
 
     /**
-     * Create a standardized JSON response
+     * Create a standardized JSON response with anti-cache headers
      */
     private function createJsonResponse(bool $success, ?string $reason = null, array $additionalData = []): JsonResponse
     {
@@ -176,7 +175,16 @@ class ReqserLanguageDetectionController extends StorefrontController
             $data['reason'] = $reason;
         }
         
-        return new JsonResponse(array_merge($data, $additionalData));
+        $response = new JsonResponse(array_merge($data, $additionalData));
+        
+        // Add anti-cache headers to prevent caching of language detection responses
+        $response->headers->set('Cache-Control', 'no-cache, no-store, must-revalidate, private');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('Expires', '0');
+        $response->headers->set('X-Accel-Expires', '0'); // Nginx
+        $response->headers->set('Surrogate-Control', 'no-store'); // Varnish
+        
+        return $response;
     }
 
     

@@ -337,10 +337,17 @@ class ReqserLanguageRedirectService
         // Check configuration for preserving URL parameters
         $preserveUrlParameters = $this->redirectConfig['preserveUrlParameters'] ?? false;
         
-        // Always preserve reqser_debug_mode parameter
+        // Always preserve reqser* parameters when debug mode is active
         $parametersToKeep = [];
-        if (isset($queryParams['reqserdebugmode'])) {
-            $parametersToKeep['reqserdebugmode'] = $queryParams['reqserdebugmode'];
+        $debugMode = isset($queryParams['reqserdebugmode']) && $queryParams['reqserdebugmode'] === 'true';
+        
+        if ($debugMode) {
+            // When debug mode is active, preserve all reqser* parameters for performance debugging
+            foreach ($queryParams as $key => $value) {
+                if (stripos($key, 'reqser') === 0) {
+                    $parametersToKeep[$key] = $value;
+                }
+            }
         }
         
         // If configuration allows, preserve all other parameters
