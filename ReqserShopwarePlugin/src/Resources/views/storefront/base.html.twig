@@ -3,8 +3,11 @@
 {% block base_head %}
     {{ parent() }}
 
+    {# Only execute language detection script on front page #}
+    {% if app.request.attributes.get('_route') == 'frontend.home.page' %}
     <script>
-        // Reqser Language Detection - Ultra-fast asynchronous execution
+        // Reqser Language Detection - Ultra-fast asynchronous execution (FRONT PAGE ONLY)
+        // Current route: {{ app.request.attributes.get('_route') }}
         // Generated: {{ "now"|date("Y-m-d H:i:s") }} - Anti-cache measures
         (function() {
             'use strict';
@@ -16,8 +19,9 @@
             
             if (debugMode) {
                 console.log('🐛 Reqser Debug Mode: ENABLED');
-                console.log('🚀 Reqser Language Detection: Script loaded ASYNCHRONOUSLY');
+                console.log('🚀 Reqser Language Detection: Script loaded ASYNCHRONOUSLY (FRONT PAGE ONLY)');
                 console.log('📋 Document ready state:', document.readyState);
+                console.log('🏠 Current route: {{ app.request.attributes.get('_route') }}');
             }
             
             if (noRedirectMode) {
@@ -178,4 +182,5 @@
             }
         })();
     </script>
+    {% endif %}
 {% endblock %}
