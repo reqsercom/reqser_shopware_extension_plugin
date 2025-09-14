@@ -123,8 +123,6 @@ class ReqserLanguageDetectionController extends StorefrontController
             $additionalData['debug_currentDomainId'] = $currentDomain->getId();
             $additionalData['debug_currentDomainCustomFields'] = $currentDomain->getCustomFields();
             $additionalData['debug_domainMappings'] = $this->languageRedirectService->getCachedDomainMappings($salesChannelId, $salesChannelDomains);
-            
-            // Debug cache information
             $additionalData['debug_cacheInfo'] = $this->languageRedirectService->getCacheDebugInfo($salesChannelId);
         }
         

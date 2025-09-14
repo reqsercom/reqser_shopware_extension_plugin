@@ -414,7 +414,6 @@ class ReqserLanguageRedirectService
         }
         
         return $this->primaryBrowserLanguage;
-        
     }
 
     /**
@@ -523,11 +522,16 @@ class ReqserLanguageRedirectService
                 if ($cacheInfo['cache_keys'][$domainCacheKey]['exists']) {
                     try {
                         $cachedDomains = $this->cache->getItem($domainCacheKey)->get();
-                        $cacheInfo['cache_keys'][$domainCacheKey]['data'] = [
-                            'type' => 'SalesChannelDomainCollection',
-                            'count' => $cachedDomains ? $cachedDomains->count() : 0,
-                            'domain_ids' => $cachedDomains ? array_map(fn($d) => $d->getId(), $cachedDomains->getElements()) : []
-                        ];
+                        if ($cachedDomains) {
+                            // Use JSON encode to serialize all domain data for debugging
+                            $cacheInfo['cache_keys'][$domainCacheKey]['data'] = [
+                                'type' => 'SalesChannelDomainCollection',
+                                'count' => $cachedDomains->count(),
+                                'serialized_data' => json_encode($cachedDomains, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+                            ];
+                        } else {
+                            $cacheInfo['cache_keys'][$domainCacheKey]['data'] = 'Cache exists but contains null data';
+                        }
                     } catch (\Throwable $e) {
                         $cacheInfo['cache_keys'][$domainCacheKey]['data'] = 'Error reading cache: ' . $e->getMessage();
                     }
