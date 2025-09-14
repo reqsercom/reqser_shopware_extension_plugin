@@ -90,6 +90,7 @@
             <argument type="service" id="Reqser\Plugin\Service\ReqserCustomFieldService" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserRedirectService" />
             <argument type="service" id="cache.app" />
+            <argument>%kernel.environment%</argument>
         </service>
 
         <service id="Reqser\Plugin\Subscriber\ReqserPluginVersionCheckSubscriber"

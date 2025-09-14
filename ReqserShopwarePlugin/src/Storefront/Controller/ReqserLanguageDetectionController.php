@@ -113,11 +113,12 @@ class ReqserLanguageDetectionController extends StorefrontController
         $additionalData['currentLanguageCode'] = $redirectConfig['languageCode'] ?? null;
         
         //Additional Debug Data if needed
-        if ($redirectConfig['debugMode'] ?? false) {
+        if ($redirectConfig['extendDebugInformation'] ?? false) {
             $additionalData['domainUrl'] = $currentDomain->getUrl();
             $additionalData['currentOrignalURL'] = $this->languageRedirectService->getOriginalPageUrl();
             $additionalData['isDomainValidForRedirectFrom'] = $this->languageRedirectService->isDomainValidForRedirectFrom();
             $additionalData['customFieldsConfig'] = $redirectConfig;
+            $additionalData['alternativeBrowserLanguages'] = $this->languageRedirectService->getAlternativeBrowserLanguages();
             
             // Debug domain information
             $additionalData['debug_domainId'] = $domainId;

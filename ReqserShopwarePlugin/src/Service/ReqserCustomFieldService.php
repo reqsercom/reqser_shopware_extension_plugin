@@ -97,12 +97,18 @@ class ReqserCustomFieldService
         $config = [
             'active' => $active,
             'languageCode' => $this->getString($customFields, 'languageCode'),
-            'debugMode' => $this->getBool($customFields, 'debugMode'),
+            'extendDebugInformation' => $this->getBool($customFields, 'extendDebugInformation'),
         ];
 
         $redirectInto = $this->getBool($customFields, 'redirectInto');
         if ($redirectInto) {
-            $config['redirectInto'] = $redirectInto;
+            //Security Check, it can not be true on both as this could lead to redirect loops!
+            $redirectFrom = $this->getBool($customFields, 'redirectFrom');
+            if ($redirectFrom === false) {
+                $config['redirectInto'] = $redirectInto;
+            } else {
+                $config['redirectInto'] = false;
+            }
             return $config;
         }
 
@@ -111,10 +117,11 @@ class ReqserCustomFieldService
             return 
                 array_merge($config, [
                 'redirectFrom' => $redirectFrom,
-                'onlyRedirectFrontPage' => $this->getBool($customFields, 'onlyRedirectFrontPage'),
                 'skipRedirectAfterManualLanguageSwitch' => $this->getBool($customFields, 'skipRedirectAfterManualLanguageSwitch'),
                 'userLanguageSwitchIgnorePeriodS' => $this->getInt($customFields, 'userLanguageSwitchIgnorePeriodS'),
                 'redirectToUserPreviouslyChosenDomain' => $this->getBool($customFields, 'redirectToUserPreviouslyChosenDomain'),
+                'redirectToAlternativeLanguage' => $this->getBool($customFields, 'redirectToAlternativeLanguage'),
+                'alternativeRedirectLanguageCode' => $this->getString($customFields, 'alternativeRedirectLanguageCode'),
                 'sessionIgnoreMode' => $this->getBool($customFields, 'sessionIgnoreMode'),
                 'gracePeriodMs' => $this->getInt($customFields, 'gracePeriodMs'),
                 'blockPeriodMs' => $this->getInt($customFields, 'blockPeriodMs'),

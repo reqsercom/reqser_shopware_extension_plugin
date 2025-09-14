@@ -20,8 +20,10 @@ class ReqserLanguageRedirectService
     private $customFieldService;
     private $redirectService;
     private $cache;
+    private string $environment;
     private ?array $redirectConfig = null;
     private ?string $primaryBrowserLanguage = null;
+    private ?array $alternativeBrowserLanguages = null;
     private $salesChannelDomains = null;
     private $currentDomain = null;
     private $request = null;
@@ -32,13 +34,15 @@ class ReqserLanguageRedirectService
         ReqserSessionService $sessionService,
         ReqserCustomFieldService $customFieldService,
         ReqserRedirectService $redirectService,
-        $cache
+        $cache,
+        string $environment
     ) {
         $this->domainRepository = $domainRepository;
         $this->sessionService = $sessionService;
         $this->customFieldService = $customFieldService;
         $this->redirectService = $redirectService;
         $this->cache = $cache;
+        $this->environment = $environment;
     }
 
     /**
@@ -63,9 +67,7 @@ class ReqserLanguageRedirectService
             return false;
         } elseif ($this->userBrowserLanguageMatchesCurrentDomainLanguage()) {
             return false;
-        } elseif (!$this->currentPageIsAllowed()) {
-            return false;
-        } 
+        }
         return true;
     }
 
@@ -183,43 +185,6 @@ class ReqserLanguageRedirectService
     }
 
 
-    /**
-     * Check if current page is front page (simplified and optimized for AJAX context)
-     */
-    private function currentPageIsAllowed(): bool
-    {
-        $onlyRedirectFrontPage = $this->redirectConfig['onlyRedirectFrontPage'] ?? false;
-        if (!$onlyRedirectFrontPage) {
-            // If onlyRedirectFrontPage is false, allow all pages
-            return true;
-        }
-
-        // Get the parsed original page URL using reusable method
-        $parsedReferer = $this->getOriginalPageUrl();
-        
-        if (empty($parsedReferer)) {
-            // No referer means we can't determine the original page
-            return false;
-        }
-
-        // Get current domain URL (clean base URL)
-        $currentDomainUrl = rtrim($this->currentDomain->getUrl(), '/');
-        
-        // Build clean referer URL (scheme + host + port + path, no query/fragment)
-        $cleanRefererUrl = $parsedReferer['scheme'] . '://' . $parsedReferer['host'];
-        if (isset($parsedReferer['port'])) {
-            $cleanRefererUrl .= ':' . $parsedReferer['port'];
-        }
-        
-        // Add path if it exists and is not just '/'
-        $path = $parsedReferer['path'] ?? '/';
-        if ($path !== '/') {
-            $cleanRefererUrl .= rtrim($path, '/');
-        }
-        
-        // Check if the clean referer URL matches the domain base URL (front page)
-        return $cleanRefererUrl === $currentDomainUrl || $cleanRefererUrl === $currentDomainUrl . '/';
-    }
 
     /**
      * Get and cache the parsed original page URL from referer header
@@ -374,6 +339,7 @@ class ReqserLanguageRedirectService
      */
     private function findMatchingDomainByLanguage(): ?SalesChannelDomainEntity
     {
+        $alternativeDomain = [];
         // Use foreach for maximum performance - early exit on first match
         foreach ($this->salesChannelDomains as $domain) {
             // Skip the current domain
@@ -392,14 +358,24 @@ class ReqserLanguageRedirectService
                 if ($this->redirectService->isDomainValidForRedirectInto($domainConfig, $domain)) {
                     return $domain; // Early exit - return first match immediately
                 }
+            } elseif ($this->redirectConfig['redirectToAlternativeLanguage'] ?? false) {
+                    $alternativeDomain[$domainLanguageCode] = ['domain' => $domain, 'config' => $domainConfig];
             }
         }
-        
+        if (($this->redirectConfig['redirectToAlternativeLanguage'] ?? false)
+            && count($alternativeDomain) > 0
+            && !in_array($this->primaryBrowserLanguage, $this->getAlternativeBrowserLanguages())
+            && isset($alternativeDomain[$this->redirectConfig['alternativeRedirectLanguageCode']])
+            && $this->redirectService->isDomainValidForRedirectInto($alternativeDomain[$this->redirectConfig['alternativeRedirectLanguageCode']]['config'], $alternativeDomain[$this->redirectConfig['alternativeRedirectLanguageCode']]['domain'])) {
+            return $alternativeDomain[$this->redirectConfig['alternativeRedirectLanguageCode']]['domain'];
+        }
+
         return null;
     }
 
     /**
      * Get primary browser language from request
+     * Ultra-fast extraction of just the first language code
      */
     public function getPrimaryBrowserLanguage(): ?string
     {
@@ -410,18 +386,89 @@ class ReqserLanguageRedirectService
         if (!$this->request) {
             return null;
         }
-        
+
+        //If we will check for Redirect Alternative Language we can create the primary browser language
+        if ($this->redirectConfig['redirectToAlternativeLanguage'] ?? false) {
+            $this->getAlternativeBrowserLanguages();
+            if (isset($this->primaryBrowserLanguage)) return $this->primaryBrowserLanguage;
+        } 
+
         $acceptLanguage = $this->request->headers->get('Accept-Language', '');
-        
+    
         if (empty($acceptLanguage)) {
             return null;
         }
 
-        $languages = explode(',', $acceptLanguage);
-        $primaryLanguage = explode(';', $languages[0])[0];
+        // Ultra-fast extraction of just the first language code
+        // Matches first occurrence: en-US -> en, fr-FR -> fr, de -> de
+        if (preg_match('/([a-z]{2})(?:-[a-z]{2})?/i', $acceptLanguage, $match)) {
+            $this->primaryBrowserLanguage = strtolower($match[1]);
+        }
         
-        // Extract just the language part (remove country code: en-US -> en)
-        return strtolower(trim(explode('-', $primaryLanguage)[0]));
+        return $this->primaryBrowserLanguage;
+        
+    }
+
+    /**
+     * Get alternative browser languages from request (all languages except the primary one)
+     * Returns array of language codes ordered by browser preference
+     * Cached globally to avoid multiple parsing of the same Accept-Language header
+     */
+    public function getAlternativeBrowserLanguages(): array
+    {
+        // Return cached result if already parsed
+        if ($this->alternativeBrowserLanguages !== null) {
+            return $this->alternativeBrowserLanguages;
+        }
+
+        if (!$this->request) {
+            return [];
+        }
+
+        $acceptLanguage = $this->request->headers->get('Accept-Language', '');
+
+        $this->alternativeBrowserLanguages = [];
+
+        if (empty($acceptLanguage)) {
+            return $this->alternativeBrowserLanguages;
+        }
+
+        // Extract all language codes in one pass
+        if (!preg_match_all('/([a-z]{2})(?:-[a-z]{2})?/i', $acceptLanguage, $matches)) {
+            return $this->alternativeBrowserLanguages;
+        }
+
+        // Ultra-fast processing: combine operations to avoid intermediate arrays
+        $seen = [];
+        $alternatives = [];
+        $primary = null;
+        
+        // Process matches in one loop - faster than multiple array operations
+        foreach ($matches[1] as $lang) {
+            $langCode = strtolower($lang);
+            
+            // Skip duplicates
+            if (isset($seen[$langCode])) {
+                continue;
+            }
+            $seen[$langCode] = true;
+            
+            // First unique language is primary
+            if ($primary === null) {
+                $primary = $langCode;
+                // Set primary if not already cached
+                if ($this->primaryBrowserLanguage === null) {
+                    $this->primaryBrowserLanguage = $primary;
+                }
+            } else {
+                // All others are alternatives
+                $alternatives[] = $langCode;
+            }
+        }
+        
+        $this->alternativeBrowserLanguages = $alternatives;
+        
+        return $this->alternativeBrowserLanguages;
     }
 
     /**
@@ -451,9 +498,15 @@ class ReqserLanguageRedirectService
 
     /**
      * Retrieve sales channel domains with ReqserRedirect custom fields by sales channel ID (cached method)
+     * Caching is disabled in non-production environments for testing purposes
      */
     public function getSalesChannelDomainsById(string $salesChannelId): SalesChannelDomainCollection
     {
+        // Skip caching in non-production environments for testing
+        if ($this->isNonProductionEnvironment()) {
+            return $this->queryDomainsByChannelId($salesChannelId);
+        }
+
         // Create cache key based on sales channel ID
         $cacheKey = 'reqser_domains_' . $salesChannelId;
         
@@ -478,6 +531,17 @@ class ReqserLanguageRedirectService
         return $this->queryDomainsByChannelId($salesChannelId);
     }
 
+
+    /**
+     * Check if we're in a non-production environment (for testing purposes)
+     * Disables caching in any environment that is not production
+     * Uses globally stored environment from constructor injection
+     */
+    private function isNonProductionEnvironment(): bool
+    {
+        // Only enable caching in production environment
+        return $this->environment !== 'prod';
+    }
 
     /**
      * Query domains from database by sales channel ID
