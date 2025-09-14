@@ -37,8 +37,8 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
             
             $session = ReqserSessionService::getSessionWithFallback($request, $this->requestStack);
             if ($session) {
-                $session->set('reqser_redirect_user_override_timestamp', time());
-                $session->set('reqser_user_override_language_id', $request->request->get('languageId'));
+                $session->set('reqser_user_manual_language_switch_timestamp', time());
+                $session->set('reqser_user_manual_language_switch_id', $request->request->get('languageId'));
 
                 $response->headers->set(AbstractSessionListener::NO_AUTO_CACHE_CONTROL_HEADER, '1');
             }

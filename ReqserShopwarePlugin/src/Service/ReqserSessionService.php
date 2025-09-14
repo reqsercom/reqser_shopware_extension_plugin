@@ -130,21 +130,21 @@ class ReqserSessionService
     }
 
     /**
-     * Get user override timestamp
+     * Get user manual language switch timestamp
      */
     public function getUserlanguageSwitchTimestamp(): ?int
     {
-        return $this->session->get('reqser_redirect_user_override_timestamp', null);
+        return $this->session->get('reqser_user_manual_language_switch_timestamp', null);
     }
 
 
 
     /**
-     * Get user override language ID from session
+     * Get user manual language switch ID from session storage
      */
-    public function getUserOverrideLanguageId(): ?string
+    public function getSessionUserManualLanguageSwitchId(): ?string
     {
-        return $this->session?->get('reqser_user_override_language_id', null);
+        return $this->session?->get('reqser_user_manual_language_switch_id', null);
     }
 
 

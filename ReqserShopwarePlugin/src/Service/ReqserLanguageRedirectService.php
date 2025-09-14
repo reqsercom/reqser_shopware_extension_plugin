@@ -4,7 +4,6 @@ namespace Reqser\Plugin\Service;
 
 use Reqser\Plugin\Service\ReqserSessionService;
 use Reqser\Plugin\Service\ReqserCustomFieldService;
-use Reqser\Plugin\Service\ReqserRedirectService;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
@@ -15,10 +14,12 @@ use Shopware\Core\Framework\Context;
 
 class ReqserLanguageRedirectService
 {
+    // Cache expiration time in seconds (1 hour)
+    private const CACHE_EXPIRATION_TIME = 3600;
+    
     private $domainRepository;
     private $sessionService;
     private $customFieldService;
-    private $redirectService;
     private $cache;
     private string $environment;
     private ?array $redirectConfig = null;
@@ -28,34 +29,45 @@ class ReqserLanguageRedirectService
     private $currentDomain = null;
     private $request = null;
     private ?array $originalPageUrl = null;
+    private ?array $domainMappings = null;
 
     public function __construct(
         EntityRepository $domainRepository,
         ReqserSessionService $sessionService,
         ReqserCustomFieldService $customFieldService,
-        ReqserRedirectService $redirectService,
         $cache,
         string $environment
     ) {
         $this->domainRepository = $domainRepository;
         $this->sessionService = $sessionService;
         $this->customFieldService = $customFieldService;
-        $this->redirectService = $redirectService;
         $this->cache = $cache;
         $this->environment = $environment;
     }
 
     /**
-     * Initialize
+     * Initialize and return redirect config from domain mappings
      */
-    public function initialize($session, array $redirectConfig, $request, $currentDomain, $salesChannelDomains): void
+    public function initialize($session, $request, $currentDomain, $salesChannelDomains, string $salesChannelId): ?array
     {
         $this->currentDomain = $currentDomain;
-        $this->redirectConfig = $redirectConfig;
         $this->request = $request;
         $this->sessionService->initialize($session);
         $this->salesChannelDomains = $salesChannelDomains;
+        
+        // Initialize cached domain mappings for global access
+        $this->domainMappings = $this->getCachedDomainMappings($salesChannelId, $salesChannelDomains);
+        
+        // Extract redirect config from domain mappings (already processed and cached)
+        $currentDomainId = $currentDomain->getId();
+        if (isset($this->domainMappings['domainInformation'][$currentDomainId]['redirectConfig'])) {
+            $this->redirectConfig = $this->domainMappings['domainInformation'][$currentDomainId]['redirectConfig'];
+        }
+        
         $this->primaryBrowserLanguage = $this->getPrimaryBrowserLanguage();
+        
+        // Return the redirect config for use in controller
+        return $this->redirectConfig;
     }
 
     /**
@@ -67,7 +79,7 @@ class ReqserLanguageRedirectService
             return false;
         } elseif ($this->userBrowserLanguageMatchesCurrentDomainLanguage()) {
             return false;
-        }
+        } 
         return true;
     }
 
@@ -246,27 +258,19 @@ class ReqserLanguageRedirectService
 
         //Check if the user has choosen one manualy so we will use this domain as his last choice
         if ($this->redirectConfig['redirectToUserPreviouslyChosenDomain']) {
-            $sessionLanguageId = $this->sessionService->getUserOverrideLanguageId();
+            $sessionLanguageId = $this->sessionService->getSessionUserManualLanguageSwitchId();
             if ($sessionLanguageId) {
-                //retrieve the first domain in our collection that matches this language id
-                $matchingDomain = $this->salesChannelDomains->filter(
-                    function($domain) use ($sessionLanguageId) {
-                        // Check if language ID matches
-                        if ($domain->getLanguageId() !== $sessionLanguageId) {
-                            return false;
-                        }
-                        
-                        // Check if this domain is valid for redirect into
-                        $domainCustomFields = $domain->getCustomFields();
-                        $domainConfig = $this->customFieldService->getRedirectIntoConfiguration($domainCustomFields);
-                        
-                        return $this->redirectService->isDomainValidForRedirectInto($domainConfig, $domain);
+                // Direct O(1) lookup using cached language ID to domain ID mapping
+                if (isset($this->domainMappings['languageIdToDomainId'][$sessionLanguageId])) {
+                    $domainId = $this->domainMappings['languageIdToDomainId'][$sessionLanguageId];
+                    //if this domain is is the current one we must return null
+                    if ($domainId === $this->currentDomain->getId()) {
+                        return null;
+                    } elseif (in_array($domainId, $this->domainMappings['redirectIntoDomains']) && 
+                              isset($this->domainMappings['domainInformation'][$domainId]['url'])) {
+                        $domainUrl = $this->domainMappings['domainInformation'][$domainId]['url'];
+                        return $this->buildRedirectUrlWithParams($domainUrl);
                     }
-                )->first();
-                
-                
-                if ($matchingDomain) {
-                    return $this->buildRedirectUrlWithParams($matchingDomain->getUrl());
                 }
             }
         }
@@ -333,41 +337,45 @@ class ReqserLanguageRedirectService
     }
 
     /**
-     * Find a matching domain by language code using foreach for optimal performance (early exit)
+     * Find a matching domain by language code using cached domain mappings for ultra-fast lookup
      * 
      * @return SalesChannelDomainEntity|null The first matching domain or null
      */
     private function findMatchingDomainByLanguage(): ?SalesChannelDomainEntity
     {
-        $alternativeDomain = [];
-        // Use foreach for maximum performance - early exit on first match
-        foreach ($this->salesChannelDomains as $domain) {
-            // Skip the current domain
-            if ($domain->getId() === $this->currentDomain->getId()) {
-                continue;
-            }
-
-            // Check if this domain is valid for redirect into
-            $domainCustomFields = $domain->getCustomFields();
-            $domainConfig = $this->customFieldService->getRedirectIntoConfiguration($domainCustomFields);
-
-            // Check if the domain's language matches the browser language
-            $domainLanguageCode = $domainConfig['languageCode'] ?? null;
-            if ($domainLanguageCode && $domainLanguageCode === $this->primaryBrowserLanguage) {
-                // Additional validation: check if domain is valid for redirect
-                if ($this->redirectService->isDomainValidForRedirectInto($domainConfig, $domain)) {
-                    return $domain; // Early exit - return first match immediately
+        // Direct lookup using cached domain mappings - O(1) complexity!
+        if (isset($this->domainMappings['domainLanguageCode'][$this->primaryBrowserLanguage])) {
+            $domainId = $this->domainMappings['domainLanguageCode'][$this->primaryBrowserLanguage];
+            
+            // Skip if it's the current domain
+            if ($domainId !== $this->currentDomain->getId()) {
+                // Check if domain is allowed for redirect into
+                if (in_array($domainId, $this->domainMappings['redirectIntoDomains'])) {
+                    $domain = $this->salesChannelDomains->get($domainId);
+                    if ($domain) {
+                        return $domain;
+                    }
                 }
-            } elseif ($this->redirectConfig['redirectToAlternativeLanguage'] ?? false) {
-                    $alternativeDomain[$domainLanguageCode] = ['domain' => $domain, 'config' => $domainConfig];
             }
         }
-        if (($this->redirectConfig['redirectToAlternativeLanguage'] ?? false)
-            && count($alternativeDomain) > 0
-            && !in_array($this->primaryBrowserLanguage, $this->getAlternativeBrowserLanguages())
-            && isset($alternativeDomain[$this->redirectConfig['alternativeRedirectLanguageCode']])
-            && $this->redirectService->isDomainValidForRedirectInto($alternativeDomain[$this->redirectConfig['alternativeRedirectLanguageCode']]['config'], $alternativeDomain[$this->redirectConfig['alternativeRedirectLanguageCode']]['domain'])) {
-            return $alternativeDomain[$this->redirectConfig['alternativeRedirectLanguageCode']]['domain'];
+
+        // Handle alternative language redirect if configured
+        if (($this->redirectConfig['redirectToAlternativeLanguage'] ?? false) &&
+            !in_array($this->primaryBrowserLanguage, $this->getAlternativeBrowserLanguages()) &&
+            isset($this->domainMappings['domainLanguageCode'][$this->redirectConfig['alternativeRedirectLanguageCode']])) {
+            
+            $alternativeDomainId = $this->domainMappings['domainLanguageCode'][$this->redirectConfig['alternativeRedirectLanguageCode']];
+            
+            // Skip if it's the current domain
+            if ($alternativeDomainId !== $this->currentDomain->getId()) {
+                // Check if domain is allowed for redirect into
+                if (in_array($alternativeDomainId, $this->domainMappings['redirectIntoDomains'])) {
+                    $alternativeDomain = $this->salesChannelDomains->get($alternativeDomainId);
+                    if ($alternativeDomain) {
+                        return $alternativeDomain;
+                    }
+                }
+            }
         }
 
         return null;
@@ -391,10 +399,10 @@ class ReqserLanguageRedirectService
         if ($this->redirectConfig['redirectToAlternativeLanguage'] ?? false) {
             $this->getAlternativeBrowserLanguages();
             if (isset($this->primaryBrowserLanguage)) return $this->primaryBrowserLanguage;
-        } 
-
+        }
+        
         $acceptLanguage = $this->request->headers->get('Accept-Language', '');
-    
+        
         if (empty($acceptLanguage)) {
             return null;
         }
@@ -472,6 +480,76 @@ class ReqserLanguageRedirectService
     }
 
     /**
+     * Get user manual language switch ID for debug purposes only
+     * Transfer function to avoid loading session service in controller for debug data
+     */
+    public function getUserManualLanguageSwitchIdForDebug(): ?string
+    {
+        return $this->sessionService->getSessionUserManualLanguageSwitchId();
+    }
+
+    /**
+     * Get cache debug information for troubleshooting
+     */
+    public function getCacheDebugInfo(string $salesChannelId): array
+    {
+        $cacheInfo = [
+            'cache_available' => $this->cache !== null,
+            'environment' => $this->environment,
+            'caching_enabled' => !$this->isNonProductionEnvironment(),
+            'cache_keys' => []
+        ];
+
+        if ($this->cache) {
+            $domainCacheKey = 'reqser_domains_' . $salesChannelId;
+            $processedCacheKey = 'reqser_processed_domains_' . $salesChannelId;
+
+            try {
+                // Get actual cached data for debugging
+                $cacheInfo['cache_keys'] = [
+                    $domainCacheKey => [
+                        'description' => 'Domain collection cache',
+                        'exists' => $this->cache->hasItem($domainCacheKey),
+                        'data' => null
+                    ],
+                    $processedCacheKey => [
+                        'description' => 'Processed domain mappings cache', 
+                        'exists' => $this->cache->hasItem($processedCacheKey),
+                        'data' => null
+                    ]
+                ];
+
+                // Get actual cached data if keys exist
+                if ($cacheInfo['cache_keys'][$domainCacheKey]['exists']) {
+                    try {
+                        $cachedDomains = $this->cache->getItem($domainCacheKey)->get();
+                        $cacheInfo['cache_keys'][$domainCacheKey]['data'] = [
+                            'type' => 'SalesChannelDomainCollection',
+                            'count' => $cachedDomains ? $cachedDomains->count() : 0,
+                            'domain_ids' => $cachedDomains ? array_map(fn($d) => $d->getId(), $cachedDomains->getElements()) : []
+                        ];
+                    } catch (\Throwable $e) {
+                        $cacheInfo['cache_keys'][$domainCacheKey]['data'] = 'Error reading cache: ' . $e->getMessage();
+                    }
+                }
+
+                if ($cacheInfo['cache_keys'][$processedCacheKey]['exists']) {
+                    try {
+                        $cachedMappings = $this->cache->getItem($processedCacheKey)->get();
+                        $cacheInfo['cache_keys'][$processedCacheKey]['data'] = $cachedMappings;
+                    } catch (\Throwable $e) {
+                        $cacheInfo['cache_keys'][$processedCacheKey]['data'] = 'Error reading cache: ' . $e->getMessage();
+                    }
+                }
+            } catch (\Throwable $e) {
+                $cacheInfo['cache_error'] = $e->getMessage();
+            }
+        }
+
+        return $cacheInfo;
+    }
+
+    /**
      * Check if user's browser language matches current domain language
      */
     private function userBrowserLanguageMatchesCurrentDomainLanguage(): bool
@@ -485,16 +563,95 @@ class ReqserLanguageRedirectService
             return true;
         }
 
-        // Extract language code from locale (e.g., en-GB -> en)
-        $language = strtolower(explode('-', $languageCode)[0]);
-        
-        if ($this->primaryBrowserLanguage == $language) {
+        // Direct comparison - both are already 2-character language codes
+        if ($this->primaryBrowserLanguage === $languageCode) {
             return true;
         }
 
         return false;
     }
 
+
+    /**
+     * Get cached domain mappings with server-side caching
+     * Returns multi-dimensional array with pre-processed domain mappings
+     */
+    public function getCachedDomainMappings(string $salesChannelId, SalesChannelDomainCollection $salesChannelDomains): array
+    {
+        // Skip caching in non-production environments for testing
+        if ($this->isNonProductionEnvironment()) {
+            return $this->buildDomainMappings($salesChannelDomains);
+        }
+
+        // Create cache key for processed domain data
+        $cacheKey = 'reqser_processed_domains_' . $salesChannelId;
+        
+        // If cache is available, use it
+        if ($this->cache) {
+            try {
+                return $this->cache->get($cacheKey, function ($item) use ($salesChannelDomains) {
+                    // Cache for the configured time - same as domain collection cache
+                    $item->expiresAfter(self::CACHE_EXPIRATION_TIME);
+                    
+                    // Build processed mappings only when cache expires
+                    return $this->buildDomainMappings($salesChannelDomains);
+                });
+                
+            } catch (\Throwable $e) {
+                // If cache fails, fall back to direct processing
+                return $this->buildDomainMappings($salesChannelDomains);
+            }
+        }
+        
+        // No cache available - process directly
+        return $this->buildDomainMappings($salesChannelDomains);
+    }
+
+    /**
+     * Build the optimized domain mappings structure
+     */
+    private function buildDomainMappings(SalesChannelDomainCollection $salesChannelDomains): array
+    {
+        $redirectFromDomains = [];
+        $redirectIntoDomains = [];
+        $domainInformation = [];
+        $domainLanguageCode = [];
+        $languageIdToDomainId = [];
+
+        foreach ($salesChannelDomains as $domain) {
+            $domainId = $domain->getId();
+            $domainCustomFields = $domain->getCustomFields();
+            $redirectConfig = $this->customFieldService->getRedirectConfiguration($domainCustomFields);
+
+            //Each Domain needs a languageCode as well as must be active 
+            if (!$redirectConfig['active'] ?? false) {
+                continue;
+            } elseif (!$redirectConfig['languageCode'] ?? false) {
+                continue;
+            }
+            
+            // Check if domain has redirectFrom enabled
+            if ($redirectConfig['redirectFrom'] ?? false) {
+                $redirectFromDomains[] = $domainId;
+            } elseif ($redirectConfig['redirectInto'] ?? false) {
+                $redirectIntoDomains[] = $domainId;
+            } else {
+                continue;
+            }
+
+            $domainInformation[$domainId] = ['url' => $domain->getUrl(), 'redirectConfig' => $redirectConfig];
+            $domainLanguageCode[$redirectConfig['languageCode']] = $domainId;
+            $languageIdToDomainId[$domain->getLanguageId()] = $domainId;
+        }
+
+        return [
+            'redirectFromDomains' => $redirectFromDomains,
+            'redirectIntoDomains' => $redirectIntoDomains,
+            'domainInformation' => $domainInformation,
+            'domainLanguageCode' => $domainLanguageCode,
+            'languageIdToDomainId' => $languageIdToDomainId
+        ];
+    }
 
     /**
      * Retrieve sales channel domains with ReqserRedirect custom fields by sales channel ID (cached method)
@@ -514,8 +671,8 @@ class ReqserLanguageRedirectService
         if ($this->cache) {
             try {
                 return $this->cache->get($cacheKey, function ($item) use ($salesChannelId) {
-                    // Cache for 1 hour (3600 seconds) - domain configs rarely change
-                    $item->expiresAfter(3600);
+                    // Cache for the configured time - domain configs rarely change
+                    $item->expiresAfter(self::CACHE_EXPIRATION_TIME);
                     
                     // Query database only when cache expires
                     return $this->queryDomainsByChannelId($salesChannelId);

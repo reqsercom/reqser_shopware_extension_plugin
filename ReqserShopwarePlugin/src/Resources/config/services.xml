@@ -77,18 +77,12 @@
             <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
         </service>
 
-        <service id="Reqser\Plugin\Service\ReqserRedirectService"
-                class="Reqser\Plugin\Service\ReqserRedirectService">
-            <argument type="service" id="Reqser\Plugin\Service\ReqserSessionService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
-        </service>
 
         <service id="Reqser\Plugin\Service\ReqserLanguageRedirectService"
                 class="Reqser\Plugin\Service\ReqserLanguageRedirectService">
             <argument type="service" id="sales_channel_domain.repository" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserSessionService" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserCustomFieldService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserRedirectService" />
             <argument type="service" id="cache.app" />
             <argument>%kernel.environment%</argument>
         </service>

@@ -91,22 +91,19 @@ class ReqserLanguageDetectionController extends StorefrontController
 
         $currentDomain = $salesChannelDomains->get($domainId);
         if (!$currentDomain) {
-            return $this->createJsonResponse(false, 'domain_not_found');
+            return $this->createJsonResponse(false, 'domain_not_found_with_necessary_custom_fields');
         }
-        
+
         $session = ReqserSessionService::getSessionWithFallback($request, $this->container->get('request_stack'));
         if (!$session) {
             return $this->createJsonResponse(false, 'session_not_found');
         }
 
-        $customFields = $currentDomain->getCustomFields();
-        if (!$customFields) {
-            return $this->createJsonResponse(false, 'custom_fields_not_found');
+        // Initialize the service and get redirect config from domain mappings
+        $redirectConfig = $this->languageRedirectService->initialize($session, $request, $currentDomain, $salesChannelDomains, $salesChannelId);
+        if (!$redirectConfig) {
+            return $this->createJsonResponse(false, 'redirect_config_not_found');
         }
-        $redirectConfig = $this->customFieldService->getRedirectConfiguration($customFields);
-
-        // Initialize the service with the retrieved data
-        $this->languageRedirectService->initialize($session, $redirectConfig, $request, $currentDomain, $salesChannelDomains);
 
         $additionalData = [];
         $additionalData['browserLanguage'] = $this->languageRedirectService->getPrimaryBrowserLanguage();
@@ -119,11 +116,16 @@ class ReqserLanguageDetectionController extends StorefrontController
             $additionalData['isDomainValidForRedirectFrom'] = $this->languageRedirectService->isDomainValidForRedirectFrom();
             $additionalData['customFieldsConfig'] = $redirectConfig;
             $additionalData['alternativeBrowserLanguages'] = $this->languageRedirectService->getAlternativeBrowserLanguages();
+            $additionalData['getUserManualLanguageSwitchId'] = $this->languageRedirectService->getUserManualLanguageSwitchIdForDebug();
             
             // Debug domain information
             $additionalData['debug_domainId'] = $domainId;
             $additionalData['debug_currentDomainId'] = $currentDomain->getId();
             $additionalData['debug_currentDomainCustomFields'] = $currentDomain->getCustomFields();
+            $additionalData['debug_domainMappings'] = $this->languageRedirectService->getCachedDomainMappings($salesChannelId, $salesChannelDomains);
+            
+            // Debug cache information
+            $additionalData['debug_cacheInfo'] = $this->languageRedirectService->getCacheDebugInfo($salesChannelId);
         }
         
         //Now we call each Method
