@@ -106,6 +106,7 @@
             <argument type="service" id="Reqser\Plugin\Service\ReqserNotificationService" />
             <argument type="service" id="translator" />
             <argument type="service" id="logger" />
+            <argument type="service" id="cache_clearer" />
             <tag name="kernel.event_subscriber" />
         </service>
 
