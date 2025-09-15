@@ -10,6 +10,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 use Reqser\Plugin\Service\ReqserVersionService;
 use Reqser\Plugin\Service\ReqserNotificationService;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpKernel\CacheClearer\CacheClearerInterface;
 
 class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
 {
@@ -17,6 +18,7 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
     private ReqserNotificationService $notificationService;
     private TranslatorInterface $translator;
     private LoggerInterface $logger;
+    private CacheClearerInterface $cacheClearer;
     private bool $debugMode = false;
     private static bool $updateInProgress = false;
 
@@ -24,12 +26,14 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
         ReqserVersionService $versionService,
         ReqserNotificationService $notificationService,
         TranslatorInterface $translator,
-        LoggerInterface $logger
+        LoggerInterface $logger,
+        CacheClearerInterface $cacheClearer
     ) {
         $this->versionService = $versionService;
         $this->notificationService = $notificationService;
         $this->translator = $translator;
         $this->logger = $logger;
+        $this->cacheClearer = $cacheClearer;
     }
 
     public static function getSubscribedEvents(): array
@@ -165,6 +169,10 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
         }
 
         $this->writeLog("Update completed successfully", __LINE__);
+        
+        // CRITICAL: Clear all caches after plugin directory replacement
+        // This prevents stale template path cache that causes double-slash errors
+        $this->clearShopwareCache();
         
         // Ensure the plugin version in database matches the updated composer.json
         try {
@@ -420,4 +428,26 @@ class ReqserPluginUpdateSubscriber implements EventSubscriberInterface
             $this->writeLog("Failed to rollback from backup: " . $e->getMessage());
         }
     }
+
+    /**
+     * Clear Shopware cache to prevent stale template path issues
+     * 
+     * This is critical when plugin structure changes (files/directories removed)
+     * to ensure cached template paths are invalidated
+     */
+    private function clearShopwareCache(): void
+    {
+        try {
+            $this->writeLog("Clearing Shopware cache after plugin update", __LINE__);
+            
+            // Use Shopware's built-in cache clearer service
+            $this->cacheClearer->clear('');
+            
+            $this->writeLog("Cache cleared successfully using Shopware's CacheClearerInterface", __LINE__);
+            
+        } catch (\Throwable $e) {
+            $this->writeLog("Cache clearing failed: " . $e->getMessage(), __LINE__);
+        }
+    }
+
 }
