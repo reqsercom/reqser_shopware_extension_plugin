@@ -32,19 +32,6 @@
             <tag name="messenger.message_handler" />
         </service>
 
-        <service id="Reqser\Plugin\Subscriber\ReqserLanguageRedirectSubscriber"
-                class="Reqser\Plugin\Subscriber\ReqserLanguageRedirectSubscriber">
-            <argument type="service" id="request_stack" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserLanguageRedirectService" />
-            <argument type="service" id="sales_channel_domain.repository" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserCustomFieldService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserAppService" />
-            <argument type="service" id="cache.app" />
-            <argument type="service" id="logger"/>
-            <tag name="kernel.event_subscriber" />
-        </service>
-
         <service id="Reqser\Plugin\Subscriber\ReqserLanguageSwitchSubscriber"
                 class="Reqser\Plugin\Subscriber\ReqserLanguageSwitchSubscriber">
             <argument type="service" id="request_stack" />
@@ -78,11 +65,11 @@
             <argument type="service" id="Doctrine\DBAL\Connection"/>
             <argument type="service" id="request_stack"/>
             <argument type="service" id="cache.app"/>
+            <argument>%kernel.environment%</argument>
         </service>
 
         <service id="Reqser\Plugin\Service\ReqserSessionService"
                 class="Reqser\Plugin\Service\ReqserSessionService">
-            <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
         </service>
 
         <service id="Reqser\Plugin\Service\ReqserCustomFieldService"
@@ -90,30 +77,14 @@
             <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
         </service>
 
-        <service id="Reqser\Plugin\Service\ReqserRedirectService"
-                class="Reqser\Plugin\Service\ReqserRedirectService">
-            <argument type="service" id="Reqser\Plugin\Service\ReqserSessionService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
-        </service>
-
-        <service id="Reqser\Plugin\Service\ReqserLanguageSwitchService"
-                class="Reqser\Plugin\Service\ReqserLanguageSwitchService">
-            <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserSessionService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserCustomFieldService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserRedirectService" />
-        </service>
 
         <service id="Reqser\Plugin\Service\ReqserLanguageRedirectService"
                 class="Reqser\Plugin\Service\ReqserLanguageRedirectService">
             <argument type="service" id="sales_channel_domain.repository" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserAppService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserSessionService" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserCustomFieldService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserRedirectService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserLanguageSwitchService" />
             <argument type="service" id="cache.app" />
+            <argument>%kernel.environment%</argument>
         </service>
 
         <service id="Reqser\Plugin\Subscriber\ReqserPluginVersionCheckSubscriber"
@@ -136,6 +107,19 @@
             <argument type="service" id="translator" />
             <argument type="service" id="logger" />
             <tag name="kernel.event_subscriber" />
+        </service>
+
+        <service id="Reqser\Plugin\Storefront\Controller\ReqserLanguageDetectionController" public="true">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserLanguageRedirectService" />
+            <argument type="service" id="sales_channel_domain.repository" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserCustomFieldService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserAppService" />
+            <argument type="service" id="cache.app" />
+            <argument type="service" id="logger" />
+            <call method="setContainer">
+                <argument type="service" id="service_container" />
+            </call>
         </service>
 
     </services>

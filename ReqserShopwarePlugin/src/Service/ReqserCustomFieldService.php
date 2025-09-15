@@ -67,69 +67,18 @@ class ReqserCustomFieldService
     }
 
 
-    /**
-     * Check if debug mode is active based on configuration
-     * This is the ONLY place where debug mode is determined - it's based on custom fields, not hardcoded
-     */
-    public function isDebugModeActive(?array $redirectConfig, $request, $currentDomain, $sessionService = null): bool
-    {
-        try {
-            // Check if debug mode is enabled in domain configuration
-            if (!($redirectConfig['debugMode'] ?? false)) {
-                return false;
-            }
 
-            // Check if debugModeIp is set and validate the request IP
-            $debugModeIp = $redirectConfig['debugModeIp'] ?? null;
-            if ($debugModeIp !== null) {
-                $clientIp = $request->getClientIp();
-                
-                if ($clientIp == $debugModeIp) {
-                    // IP matches, activate debug mode
-                    $sessionValues = $sessionService ? $sessionService->getAllSessionData() : [];
-                    $debugEchoMode = $redirectConfig['debugEchoMode'] ?? false;
-                    $this->webhookService->sendErrorToWebhook([
-                        'type' => 'debug', 
-                        'info' => 'Debug mode activated - IP match', 
-                        'clientIp' => $clientIp, 
-                        'debugModeIp' => $debugModeIp, 
-                        'sessionValues' => $sessionValues,
-                        'domain_id' => $currentDomain->getId(), 
-                        'file' => __FILE__, 
-                        'line' => __LINE__
-                    ], $debugEchoMode);
-                    return true;
-                } else {
-                    // IP doesn't match, debug mode is not active
-                    return false;
-                }
-            } else {
-                // No IP restriction, activate debug mode
-                $sessionValues = $sessionService ? $sessionService->getAllSessionData() : [];
-                $debugEchoMode = $redirectConfig['debugEchoMode'] ?? false;
-                $this->webhookService->sendErrorToWebhook([
-                    'type' => 'debug', 
-                    'info' => 'Debug mode activated - no IP restriction', 
-                    'sessionValues' => $sessionValues,
-                    'domain_id' => $currentDomain->getId(), 
-                    'file' => __FILE__, 
-                    'line' => __LINE__
-                ], $debugEchoMode);
-                return true;
-            }
-        } catch (\Throwable $e) {
-            $this->webhookService->sendErrorToWebhook([
-                'type' => 'error', 
-                'info' => 'isDebugModeActive() Error', 
-                'message' => $e->getMessage(), 
-                'trace' => $e->getTraceAsString(), 
-                'domain_id' => $currentDomain->getId(), 
-                'file' => __FILE__, 
-                'line' => __LINE__
-            ]);
-            return false;
-        }
-        
+    /**
+     * Get simplified redirect-into configuration for domains that only need basic validation
+     * Only returns: active, redirectInto, and languageCode
+     */
+    public function getRedirectIntoConfiguration(?array $customFields): array
+    {
+        return [
+            'active' => $this->getBool($customFields, 'active'),
+            'redirectInto' => $this->getBool($customFields, 'redirectInto'),
+            'languageCode' => $this->getString($customFields, 'languageCode'),
+        ];
     }
 
     /**
@@ -137,60 +86,55 @@ class ReqserCustomFieldService
      */
     public function getRedirectConfiguration(?array $customFields): array
     {
-        return [
-            // Basic redirect settings
-            'active' => $this->getBool($customFields, 'active'),
-            'redirectFrom' => $this->getBool($customFields, 'redirectFrom'),
-            'advancedRedirectEnabled' => $this->getBool($customFields, 'advancedRedirectEnabled'),
-            'javaScriptRedirect' => $this->getBool($customFields, 'javaScriptRedirect'),
-            'jumpSalesChannels' => $this->getBool($customFields, 'jumpSalesChannels'),
-            'redirectInto' => $this->getBool($customFields, 'redirectInto'),
-            
-            // Page restrictions
-            'onlyRedirectFrontPage' => $this->getBool($customFields, 'onlyRedirectFrontPage'),
-            'sanitizeUrlOnFrontPageCheck' => $this->getBool($customFields, 'sanitizeUrlOnFrontPageCheck'),
-            
-            // Language settings
+        $active = $this->getBool($customFields, 'active');
+        if (!$active) {
+            return [
+                'active' => false,
+            ];
+        }
+
+        //Default Config if active
+        $config = [
+            'active' => $active,
             'languageCode' => $this->getString($customFields, 'languageCode'),
-            'redirectOnDefaultBrowserLanguageOnly' => $this->getBool($customFields, 'redirectOnDefaultBrowserLanguageOnly'),
-            'languageRedirect' => $this->getArray($customFields, 'languageRedirect'),
-            
-            // User override settings
-            'userOverrideEnabled' => $this->getBool($customFields, 'userOverrideEnabled'),
-            'redirectBasedOnUserLanguageSwitch' => $this->getBool($customFields, 'redirectBasedOnUserLanguageSwitch'),
-            'overrideIgnorePeriodS' => $this->getInt($customFields, 'overrideIgnorePeriodS'),
-            'skipRedirectAfterManualLanguageSwitch' => $this->getBool($customFields, 'skipRedirectAfterManualLanguageSwitch'),
-            'redirectToUserPreviouslyChosenDomain' => $this->getBool($customFields, 'redirectToUserPreviouslyChosenDomain'),
-            
-            // Session settings
-            'sessionIgnoreMode' => $this->getBool($customFields, 'sessionIgnoreMode'),
-            'onlyRedirectIfSessionIsAvailable' => $this->getBool($customFields, 'onlyRedirectIfSessionIsAvailable'),
-            
-            // Timing and limits
-            'gracePeriodMs' => $this->getInt($customFields, 'gracePeriodMs'),
-            'blockPeriodMs' => $this->getInt($customFields, 'blockPeriodMs'),
-            'maxRedirects' => $this->getInt($customFields, 'maxRedirects'),
-            'maxScriptCalls' => $this->getInt($customFields, 'maxScriptCalls'),
-            
-            // Debug settings
-            'debugMode' => $this->getBool($customFields, 'debugMode'),
-            'debugEchoMode' => $this->getBool($customFields, 'debugEchoMode'),
-            'debugModeIp' => $this->getString($customFields, 'debugModeIp'),
+            'extendDebugInformation' => $this->getBool($customFields, 'extendDebugInformation'),
+        ];
+
+        $redirectInto = $this->getBool($customFields, 'redirectInto');
+        if ($redirectInto) {
+            //Security Check, it can not be true on both as this could lead to redirect loops!
+            $redirectFrom = $this->getBool($customFields, 'redirectFrom');
+            if ($redirectFrom === false) {
+                $config['redirectInto'] = $redirectInto;
+            } else {
+                $config['redirectInto'] = false;
+            }
+            return $config;
+        }
+
+        $redirectFrom = $this->getBool($customFields, 'redirectFrom');
+        if ($redirectFrom) {
+            return 
+                array_merge($config, [
+                'redirectFrom' => $redirectFrom,
+                'skipRedirectAfterManualLanguageSwitch' => $this->getBool($customFields, 'skipRedirectAfterManualLanguageSwitch'),
+                'userLanguageSwitchIgnorePeriodS' => $this->getInt($customFields, 'userLanguageSwitchIgnorePeriodS'),
+                'redirectToUserPreviouslyChosenDomain' => $this->getBool($customFields, 'redirectToUserPreviouslyChosenDomain'),
+                'redirectToAlternativeLanguage' => $this->getBool($customFields, 'redirectToAlternativeLanguage'),
+                'alternativeRedirectLanguageCode' => $this->getString($customFields, 'alternativeRedirectLanguageCode'),
+                'sessionIgnoreMode' => $this->getBool($customFields, 'sessionIgnoreMode'),
+                'gracePeriodMs' => $this->getInt($customFields, 'gracePeriodMs'),
+                'blockPeriodMs' => $this->getInt($customFields, 'blockPeriodMs'),
+                'maxRedirects' => $this->getInt($customFields, 'maxRedirects'),
+                'maxScriptCalls' => $this->getInt($customFields, 'maxScriptCalls'),
+                'preserveUrlParameters' => $this->getBool($customFields, 'preserveUrlParameters')]);
+        }
+
+        //Fallback
+        return [
+            'active' => false,
         ];
     }
 
-    /**
-     * Check if debug echo mode is active (requires debug mode to be active first)
-     */
-    public function isDebugEchoModeActive(bool $debugMode, ?array $redirectConfig): bool
-    {
-        // If debug mode is not active, echo mode cannot be active
-        if (!$debugMode) {
-            return false;
-        }
-        
-        // Check if debug echo mode is enabled in configuration
-        return $redirectConfig['debugEchoMode'] ?? false;
-    }
 
 }

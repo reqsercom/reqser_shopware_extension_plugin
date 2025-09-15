@@ -13,8 +13,6 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
 {
     private $requestStack;
     private $webhookService;
-    private bool $debugMode;
-    
     public function __construct(
         RequestStack $requestStack,
         ReqserWebhookService $webhookService
@@ -22,7 +20,6 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
     {
         $this->requestStack = $requestStack;
         $this->webhookService = $webhookService;
-        $this->debugMode = false;
     }
 
     public static function getSubscribedEvents(): array
@@ -40,21 +37,14 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
             
             $session = ReqserSessionService::getSessionWithFallback($request, $this->requestStack);
             if ($session) {
-                $session->set('reqser_redirect_user_override_timestamp', time());
-                $session->set('reqser_user_override_language_id', $request->request->get('languageId'));
-            }            
-        } catch (\Throwable $e) {
-            if ($this->debugMode) {
-                $this->webhookService->sendErrorToWebhook([
-                    'type' => 'error',
-                    'function' => 'onLanguageSwitchResponse',
-                    'message' => $e->getMessage() ?? 'unknown',
-                    'trace' => $e->getTraceAsString() ?? 'unknown',
-                    'timestamp' => date('Y-m-d H:i:s'),
-                    'file' => __FILE__, 
-                    'line' => __LINE__,
-                ]);
+                $session->set('reqser_user_manual_language_switch_timestamp', time());
+                $session->set('reqser_user_manual_language_switch_id', $request->request->get('languageId'));
+
+                $response->headers->set(AbstractSessionListener::NO_AUTO_CACHE_CONTROL_HEADER, '1');
             }
+            
+        } catch (\Throwable $e) {
+            // Silently handle errors - no debug mode needed with new GET parameter approach
             return;
         }
     }

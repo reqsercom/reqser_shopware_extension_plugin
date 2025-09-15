@@ -1,0 +1,186 @@
+{% sw_extends '@Storefront/storefront/base.html.twig' %}
+
+{% block base_head %}
+    {{ parent() }}
+
+    {# Only execute language detection script on front page #}
+    {% if app.request.attributes.get('_route') == 'frontend.home.page' %}
+    <script>
+        // Reqser Language Detection - Ultra-fast asynchronous execution (FRONT PAGE ONLY)
+        // Current route: {{ app.request.attributes.get('_route') }}
+        // Generated: {{ "now"|date("Y-m-d H:i:s") }} - Anti-cache measures
+        (function() {
+            'use strict';
+            
+            // Check URL parameters for Reqser modes
+            const urlParams = new URLSearchParams(window.location.search);
+            const debugMode = urlParams.get('reqserdebugmode') === 'true';
+            const noRedirectMode = urlParams.get('reqsernoredirectmode') === 'true';
+            
+            if (debugMode) {
+                console.log('🐛 Reqser Debug Mode: ENABLED');
+                console.log('🚀 Reqser Language Detection: Script loaded ASYNCHRONOUSLY (FRONT PAGE ONLY)');
+                console.log('📋 Document ready state:', document.readyState);
+                console.log('🏠 Current route: {{ app.request.attributes.get('_route') }}');
+            }
+            
+            if (noRedirectMode) {
+                console.log('🚫 Reqser No-Redirect Mode: ENABLED - Redirects will be blocked');
+            }
+            
+            // Shared function to build request URL with cache busting
+            function buildRequestUrl() {
+                const baseUrl = '{{ path('frontend.reqser.language_detection.check') }}';
+                const cacheBuster = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                return baseUrl + '?_cb=' + cacheBuster;
+            }
+            
+            // Shared function to build request headers
+            function buildRequestHeaders() {
+                return {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                };
+            }
+            
+            // Hybrid approach: Try asynchronous first, fallback to secondary async if needed
+            function checkLanguageHybrid() {
+                if (debugMode) console.log('🔍 Starting HYBRID language detection check...');
+                
+                const checkUrl = buildRequestUrl();
+                
+                // Try asynchronous approach with safety measures
+                try {
+                    // Feature detection: Check if XMLHttpRequest is supported
+                    if (typeof XMLHttpRequest === 'undefined') {
+                        if (debugMode) console.warn('⚠️ XMLHttpRequest not supported, skipping async check');
+                        return false;
+                    }
+                    
+                    const xhr = new XMLHttpRequest();
+                    
+                    // Set a timeout for monitoring request duration (safety measure)
+                    let timeoutId;
+                    const timeoutMs = 2000; // 2 second max wait
+                    
+                    if (debugMode) console.log('📡 Making SAFE ASYNCHRONOUS request to:', checkUrl);
+                    
+                     // Asynchronous request with timeout protection
+                     xhr.open('GET', checkUrl, true); // true = asynchronous
+                    
+                     // Apply shared headers
+                     const headers = buildRequestHeaders();
+                     Object.keys(headers).forEach(key => {
+                         xhr.setRequestHeader(key, headers[key]);
+                     });
+                     
+                     // Start timeout protection
+                     const startTime = Date.now();
+                     
+                     // Set up async response handler
+                     xhr.onload = function() {
+                         const endTime = Date.now();
+                         const duration = endTime - startTime;
+                         
+                         if (debugMode) console.log('📥 Response in', duration + 'ms, status:', xhr.status, xhr.statusText);
+                         
+                         // Safety check: If request took too long, something might be wrong
+                         if (duration > timeoutMs) {
+                             if (debugMode) console.warn('⚠️ Request took too long (' + duration + 'ms), might be unsafe');
+                         }
+                         
+                         if (xhr.status === 200) {
+                             const data = JSON.parse(xhr.responseText);
+                             if (debugMode) console.log('📊 Response data:', data);
+                             
+                             if (data.success && data.shouldRedirect && data.redirectUrl) {
+                                 if (debugMode) console.log('🚀 REDIRECT REQUESTED to:', data.redirectUrl);
+                                 
+                                 if (noRedirectMode) {
+                                     console.log('🚫 REDIRECT BLOCKED by reqsernoredirectmode - would have redirected to:', data.redirectUrl);
+                                     console.log('📊 Full redirect data:', data);
+                                     return; // Redirect blocked for debugging
+                                 }
+                                 
+                                 if (debugMode) console.log('✅ EXECUTING ASYNC REDIRECT to:', data.redirectUrl);
+                                 
+                                 // Redirect - page may have already started loading
+                                 window.location.replace(data.redirectUrl);
+                             } else {
+                                 if (debugMode) console.log('✅ No redirect needed. Reason:', data.reason);
+                             }
+                         } else {
+                             if (debugMode) console.warn('❌ Request failed with status:', xhr.status);
+                         }
+                     };
+                     
+                     xhr.onerror = function() {
+                         if (debugMode) console.error('💥 Async XMLHttpRequest failed');
+                        // Fallback to secondary async approach for safety
+                        if (debugMode) console.log('🔄 Falling back to secondary async approach...');
+                         checkLanguageAsync();
+                     };
+                     
+                     xhr.send();
+                } catch (error) {
+                    if (debugMode) console.error('💥 Asynchronous request failed:', error);
+                    
+                    // Fallback to secondary async approach for safety
+                    if (debugMode) console.log('🔄 Falling back to secondary async approach...');
+                    checkLanguageAsync();
+                }
+                
+                return false; // No redirect
+            }
+            
+            // Fallback async function for safety
+            function checkLanguageAsync() {
+                if (debugMode) console.log('🔄 Starting ASYNC fallback check...');
+                
+                const checkUrl = buildRequestUrl();
+                
+                fetch(checkUrl, {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: buildRequestHeaders()
+                })
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    }
+                    throw new Error('Response not ok: ' + response.status);
+                })
+                .then(data => {
+                    if (debugMode) console.log('📊 Async response data:', data);
+
+                    if (data.success && data.shouldRedirect && data.redirectUrl) {
+                        if (debugMode) console.log('🚀 ASYNC REDIRECT REQUESTED to:', data.redirectUrl);
+                        
+                        if (noRedirectMode) {
+                            console.log('🚫 ASYNC REDIRECT BLOCKED by reqsernoredirectmode - would have redirected to:', data.redirectUrl);
+                            console.log('📊 Full async redirect data:', data);
+                            return;
+                        }
+                        
+                        if (debugMode) console.log('✅ EXECUTING ASYNC REDIRECT to:', data.redirectUrl);
+                        window.location.replace(data.redirectUrl);
+                    }
+                })
+                .catch(error => {
+                    if (debugMode) console.error('💥 Async request failed:', error);
+                });
+            }
+            
+            // Execute hybrid approach
+            const redirected = checkLanguageHybrid();
+            
+            if (debugMode && !redirected) {
+                console.log('🏁 Hybrid check completed, continuing page load');
+            }
+        })();
+    </script>
+    {% endif %}
+{% endblock %}

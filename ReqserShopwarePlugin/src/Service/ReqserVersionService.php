@@ -10,8 +10,8 @@ class ReqserVersionService
     private string $debugFile;
     private string $shopwareVersion;
     private string $projectDir;
-    private ?PluginEntity $plugin = null;
     private bool $debugMode = false;
+    private ?PluginEntity $plugin = null;
 
     public function __construct(string $shopwareVersion, string $projectDir)
     {

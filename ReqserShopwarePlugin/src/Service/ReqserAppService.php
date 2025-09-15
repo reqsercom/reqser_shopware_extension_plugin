@@ -12,20 +12,28 @@ class ReqserAppService
     private Connection $connection;
     private RequestStack $requestStack;
     private CacheInterface $cache;
+    private string $environment;
 
     public function __construct(
         Connection $connection,
         RequestStack $requestStack,
-        CacheInterface $cache
+        CacheInterface $cache,
+        string $environment
     ) {
         $this->connection = $connection;
         $this->requestStack = $requestStack;
         $this->cache = $cache;
+        $this->environment = $environment;
     }
 
     public function isAppActive(): bool
     {
         try {
+            // In development/testing environments, always return true (bypass app check)
+            if ($this->environment !== 'prod') {
+                return true;
+            }
+            
             // Use server-side cache for all users (much more efficient)
             return $this->cache->get('reqser_app_active', function (ItemInterface $item) {
                 // Cache for 1 hour (3600 seconds) - matches Shopware default TTL
