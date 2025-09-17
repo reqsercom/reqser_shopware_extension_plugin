@@ -1,8 +1,7 @@
 {
     "reqser-plugin": {
         "update": {
-            "clickTwiceToUpdate": "click 2x on Update",
-            "downloadSuccessful": "ReqserPlugin: Download was successful. Please click update again to complete the process."
+            "updateAvailable": "Update available at reqser.com"
         }
     }
 }

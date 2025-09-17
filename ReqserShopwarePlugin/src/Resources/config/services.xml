@@ -91,6 +91,7 @@
                 class="Reqser\Plugin\Subscriber\ReqserPluginVersionCheckSubscriber">
             <argument type="service" id="Reqser\Plugin\Service\ReqserVersionService" />
             <argument type="service" id="translator" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserNotificationService" />
             <tag name="kernel.event_subscriber" />
         </service>
 
@@ -100,15 +101,6 @@
             <argument>%kernel.project_dir%</argument>
         </service>
 
-        <service id="Reqser\Plugin\Subscriber\ReqserPluginUpdateSubscriber"
-                class="Reqser\Plugin\Subscriber\ReqserPluginUpdateSubscriber">
-            <argument type="service" id="Reqser\Plugin\Service\ReqserVersionService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserNotificationService" />
-            <argument type="service" id="translator" />
-            <argument type="service" id="logger" />
-            <argument type="service" id="cache_clearer" />
-            <tag name="kernel.event_subscriber" />
-        </service>
 
         <service id="Reqser\Plugin\Storefront\Controller\ReqserLanguageDetectionController" public="true">
             <argument type="service" id="Reqser\Plugin\Service\ReqserLanguageRedirectService" />
