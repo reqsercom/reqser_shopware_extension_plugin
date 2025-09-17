@@ -1,10 +1,17 @@
 {
-    "name": "reqser/plugin",
-    "description": "AI Reqser.com Plugin",
+    "name": "reqser/shopware-plugin",
+    "description": "Reqser.com AI Extension Plugin",
     "version": "2.0.0",
     "type": "shopware-platform-plugin",
     "license": "proprietary",
+    "authors": [
+        {
+            "name": "Joris Klostermann at Reqser.com",
+            "homepage": "https://reqser.com"
+        }
+    ],
     "require": {
+        "php": ">=7.4",
         "shopware/core": "^6.6"
     },
     "autoload": {
@@ -15,10 +22,10 @@
     "extra": {
         "shopware-plugin-class": "Reqser\\Plugin\\ReqserPlugin",
         "label": {
-            "de-DE": "AI Reqser.com Extension Plugin",
-            "de-CH": "AI Reqser.com Extension Plugin",
-            "en-GB": "AI Reqser.com Extension Plugin",
-            "en-US": "AI Reqser.com Extension Plugin"
+            "de-DE": "Reqser.com AI Extension Plugin",
+            "de-CH": "Reqser.com AI Extension Plugin",
+            "en-GB": "Reqser.com AI Extension Plugin",
+            "en-US": "Reqser.com AI Extension Plugin"
 
         },
         "description": {
@@ -27,6 +34,8 @@
             "en-GB": "This plugin automatically keeps external modules up to date in multiple languages and offers intelligent redirects based on the user's browser language for an optimised foreign-language shopping experience.",
             "en-US": "This plugin automatically keeps external modules up to date in multiple languages and offers intelligent redirects based on the user's browser language for an optimised foreign-language shopping experience."
         },
+        "keywords": ["shopware", "plugin", "ai", "multilingual", "translation", "redirect", "language", "extension"],
+        "homepage": "https://reqser.com",
         "icon": "Resources/icon.png"
     },
     "config": {

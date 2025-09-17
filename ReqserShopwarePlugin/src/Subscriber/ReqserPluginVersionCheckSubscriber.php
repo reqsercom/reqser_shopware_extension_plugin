@@ -7,21 +7,24 @@ use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Shopware\Core\Framework\Store\Event\InstalledExtensionsListingLoadedEvent;
 use Reqser\Plugin\Service\ReqserVersionService;
+use Reqser\Plugin\Service\ReqserNotificationService;
 
 class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
 {
     private FilesystemAdapter $cache;
     private ReqserVersionService $versionService;
     private TranslatorInterface $translator;
+    private ReqserNotificationService $notificationService;
     private string $shopwareVersion;
     private string $debugFile;
     private bool $debugMode = false;
 
-    public function __construct(ReqserVersionService $versionService, TranslatorInterface $translator)
+    public function __construct(ReqserVersionService $versionService, TranslatorInterface $translator, ReqserNotificationService $notificationService)
     {
         $this->cache = new FilesystemAdapter('reqser_extension_api');
         $this->versionService = $versionService;
         $this->translator = $translator;
+        $this->notificationService = $notificationService;
         $this->shopwareVersion = $versionService->getShopwareVersion();
         $this->debugFile = $this->versionService->getPluginDir() . '/debug_version_check.log';
     }
@@ -62,32 +65,29 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
                     $currentVersion = $extension->getVersion();
                     $this->writeLog("Extension version: " . $currentVersion, __LINE__);
                     
-                    // Check if updateAvailable is already set to true - if so, don't modify
-                    $vars = $extension->getVars();
-                    $updateAlreadyAvailable = isset($vars['updateAvailable']) && $vars['updateAvailable'] === true;
-                    
-                    if (!$updateAlreadyAvailable) {
-                        $this->writeLog("UpdateAvailable not set or false, checking if update is necessary", __LINE__);
+                    // Check if update is necessary
+                    if ($this->versionService->updateIsNecessary($versionData['plugin_version'], $currentVersion)) {
+                        $this->writeLog("Update is necessary", __LINE__);
                         
-                        // Check if update is necessary
-                        if ($this->versionService->updateIsNecessary($versionData['plugin_version'], $currentVersion)) {
-                            $this->writeLog("Update is necessary", __LINE__);
+                        // Add update message without URL (clean display)
+                        $downloadUrl = $versionData['plugin_download_url'] ?? null;
+                        $updateText = $this->translator->trans('reqser-plugin.update.updateAvailable');
+                        $extension->setLabel(str_replace("AI Extension", "", $extension->getLabel()) . ' (' . $updateText . ')');
+                        if ($downloadUrl) {
+                            // Send user-specific notification - try to get user from admin context
+                            $notificationMessage = 'ReqserPlugin Update Available' . "\n\n" . 'Download Link: ' . $downloadUrl;
                             
-                            // Add update message to label
-                            $updateMessage = $this->translator->trans('reqser-plugin.update.clickTwiceToUpdate', ['%version%' => $versionData['plugin_version']]);
-                            $extension->setLabel($extension->getLabel() . ' (' . $updateMessage . ')');
-                            $extension->setLatestVersion($versionData['plugin_version']);
-                            
-                            // Set updateAvailable using assign method (no direct setter exists)
-                            $extension->assign(['updateAvailable' => true]);
-                            $modified = true;
-                            
-                            $this->writeLog("Extension data modified with update info", __LINE__);
+                            $this->notificationService->sendAdminNotification($notificationMessage, 'info', ['system.plugin_maintain']);
                         } else {
-                            $this->writeLog("No update necessary", __LINE__);
+                            // Fallback if no download URL - just show text
+                            $extension->setLabel($extension->getLabel() . ' (' . $updateText . ')');
                         }
+                        
+                        $modified = true;
+                        
+                        $this->writeLog("Extension data modified with download link", __LINE__);
                     } else {
-                        $this->writeLog("UpdateAvailable already set to true, skipping modification", __LINE__);
+                        $this->writeLog("No update necessary", __LINE__);
                     }
                     break;
                 }
@@ -172,4 +172,5 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
         $lineInfo = $line ? " [Line:$line]" : "";
         file_put_contents($this->debugFile, "[$timestamp]$lineInfo $message\n", FILE_APPEND | LOCK_EX);
     }
+
 }
