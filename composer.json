@@ -1,7 +1,7 @@
 {
     "name": "reqser/shopware-plugin",
     "description": "Reqser.com AI Extension Plugin",
-    "version": "2.0.0",
+    "version": "1.7.0",
     "type": "shopware-platform-plugin",
     "license": "proprietary",
     "authors": [
@@ -11,8 +11,8 @@
         }
     ],
     "require": {
-        "php": ">=7.4",
-        "shopware/core": "^6.6"
+        "php": ">=7.0",
+        "shopware/core": "<6.6"
     },
     "autoload": {
         "psr-4": {
