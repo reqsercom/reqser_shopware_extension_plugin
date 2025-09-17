@@ -1,6 +1,7 @@
 {
     "name": "reqser/shopware-plugin",
     "description": "Reqser.com AI Extension Plugin",
+    "version": "2.0.0",
     "type": "shopware-platform-plugin",
     "license": "proprietary",
     "authors": [
