@@ -6,14 +6,12 @@ namespace Reqser\Plugin\Service\ScheduledTask;
 use Doctrine\DBAL\Connection;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTaskHandler;
-use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Reqser\Plugin\Service\ReqserNotificationService;
 use Reqser\Plugin\Service\ReqserWebhookService;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 
-#[AsMessageHandler(handles: ReqserNotificiationRemoval::class)]
 class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
 {
     private Connection $connection;
@@ -37,6 +35,12 @@ class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
         $this->notificationService = $notificationService;
         $this->webhookService = $webhookService;
         $this->cache = $cache;
+    }
+
+    //Needed for Shopware <=6.5 support, not necessary from 6.6+
+    public static function getHandledMessages(): iterable
+    {
+        return [ReqserNotificiationRemoval::class];
     }
 
     public function run(): void
