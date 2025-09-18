@@ -72,7 +72,7 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
                         // Add update message without URL (clean display)
                         $downloadUrl = $versionData['plugin_download_url'] ?? null;
                         $updateText = $this->translator->trans('reqser-plugin.update.updateAvailable');
-                        $extension->setLabel(str_replace("AI Extension", "", $extension->getLabel()) . ' (' . $updateText . ')');
+                        $extension->setLabel(str_replace("Extension ", "", $extension->getLabel()) . ' (' . $updateText . ')');
                         if ($downloadUrl) {
                             // Send user-specific notification - try to get user from admin context
                             $notificationMessage = 'ReqserPlugin Update Available' . "\n\n" . 'Download Link: ' . $downloadUrl;
