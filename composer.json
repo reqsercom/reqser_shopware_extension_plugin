@@ -1,7 +1,7 @@
 {
     "name": "reqser/shopware-plugin",
-    "description": "Reqser.com AI Extension Plugin",
-    "version": "1.7.0",
+    "description": "AI Reqser.com Extension Plugin",
+    "version": "2.0.0",
     "type": "shopware-platform-plugin",
     "license": "proprietary",
     "authors": [
@@ -13,6 +13,9 @@
     "require": {
         "shopware/core": "~6.4.0 || ~6.5.0"
     },
+    "conflict": {
+        "shopware/core": "<6.6.0"
+    },
     "autoload": {
         "psr-4": {
             "Reqser\\Plugin\\": "src/"
@@ -21,10 +24,10 @@
     "extra": {
         "shopware-plugin-class": "Reqser\\Plugin\\ReqserPlugin",
         "label": {
-            "de-DE": "Reqser.com AI Extension Plugin",
-            "de-CH": "Reqser.com AI Extension Plugin",
-            "en-GB": "Reqser.com AI Extension Plugin",
-            "en-US": "Reqser.com AI Extension Plugin"
+            "de-DE": "AI Reqser.com Extension Plugin",
+            "de-CH": "AI Reqser.com Extension Plugin",
+            "en-GB": "AI Reqser.com Extension Plugin",
+            "en-US": "AI Reqser.com Extension Plugin"
 
         },
         "description": {
