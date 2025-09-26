@@ -144,7 +144,7 @@ class ReqserSessionService
      */
     public function getSessionUserManualLanguageSwitchId(): ?string
     {
-        return $this->session?->get('reqser_user_manual_language_switch_id', null);
+        return $this->session ? $this->session->get('reqser_user_manual_language_switch_id', null) : null;
     }
 
 
@@ -162,7 +162,7 @@ class ReqserSessionService
      */
     public function getAllSessionData(): array
     {
-        return $this->session?->all() ?? [];
+        return $this->session ? $this->session->all() : [];
     }
     
 

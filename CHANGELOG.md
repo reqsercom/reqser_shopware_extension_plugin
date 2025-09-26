@@ -1,7 +1,9 @@
 # Changelog
 
-## 2.0.0 - 09.2025
-- New Major Version only for Shopware >= 6.6
+## 2.0.1/1.7.1 - 09.2025
+- Minor Syntax Adaption for better backwards compatiability PHP
+
+## 2.0.0/1.7.0 - 09.2025
 - SEO Friendly Redirect
 - Improved performance and caching
 
