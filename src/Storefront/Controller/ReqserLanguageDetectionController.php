@@ -5,7 +5,7 @@ namespace Reqser\Plugin\Storefront\Controller;
 use Shopware\Storefront\Controller\StorefrontController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Routing\Annotation\Route;
 use Reqser\Plugin\Service\ReqserLanguageRedirectService;
 use Reqser\Plugin\Service\ReqserWebhookService;
 use Reqser\Plugin\Service\ReqserCustomFieldService;
@@ -16,7 +16,9 @@ use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Contracts\Cache\CacheInterface;
 use Psr\Log\LoggerInterface;
 
-#[Route(defaults: ['_routeScope' => ['storefront']])]
+/**
+ * @Route(defaults={"_routeScope"={"storefront"}})
+ */
 class ReqserLanguageDetectionController extends StorefrontController
 {
     private $languageRedirectService;
@@ -45,7 +47,9 @@ class ReqserLanguageDetectionController extends StorefrontController
         $this->logger = $logger;
     }
 
-    #[Route(path: '/reqser/language-detection/check', name: 'frontend.reqser.language_detection.check', defaults: ['XmlHttpRequest' => true], methods: ['GET'])]
+    /**
+     * @Route(path="/reqser/language-detection/check", name="frontend.reqser.language_detection.check", defaults={"XmlHttpRequest"=true}, methods={"GET"})
+     */
     public function checkLanguage(Request $request, SalesChannelContext $salesChannelContext): JsonResponse
     {
         
