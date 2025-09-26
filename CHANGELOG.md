@@ -1,7 +1,12 @@
 # Changelog
 
-## 2.0.1/1.7.1 - 09.2025
+## 2.0.1/1.7.1/1.6.1 - 09.2025
 - Minor Syntax Adaption for better backwards compatiability PHP
+- Seperated Legacy Version 1.6.1 for Shopware 6.4
+- Version Overview:
+    2.x => 6.6/6.7
+    1.7.x => 6.5
+    1.6.x => 6.4
 
 ## 2.0.0/1.7.0 - 09.2025
 - SEO Friendly Redirect
