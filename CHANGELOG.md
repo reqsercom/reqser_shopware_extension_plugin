@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.2/1.7.2/1.6.2 10.2025
+- Prevent Version Check warning
+- Improve Shopware Version splitting
+
 ## 2.0.1/1.7.1/1.6.1 - 09.2025
 - Minor Syntax Adaption for better backwards compatiability PHP
 - Seperated Legacy Version 1.6.1 for Shopware 6.4
