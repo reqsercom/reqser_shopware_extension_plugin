@@ -51,6 +51,9 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
             if (!$versionData) {
                 $this->writeLog("No version data available", __LINE__);
                 return;
+            } elseif (!isset($versionData['plugin_version'])) {
+                $this->writeLog("No plugin version data available", __LINE__);
+                return;
             }
 
             // Modify our plugin's extension data if present
@@ -73,7 +76,7 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
                         $downloadUrl = $versionData['plugin_download_url'] ?? null;
                         $updateText = $this->translator->trans('reqser-plugin.update.updateAvailable');
                         $extension->setLabel(str_replace("Extension ", "", $extension->getLabel()) . ' (' . $updateText . ')');
-                        if ($downloadUrl) {
+                        if (isset($downloadUrl)) {
                             // Send user-specific notification - try to get user from admin context
                             $notificationMessage = 'ReqserPlugin Update Available' . "\n\n" . 'Download Link: ' . $downloadUrl;
                             

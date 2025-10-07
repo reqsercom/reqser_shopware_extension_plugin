@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.2 - 10.2025
+- Updated Shopware compatibility to require 6.5.8+ (minimum version)
+- Improved plugin stability for newer Shopware versions
+
 ## 2.0.1/1.7.1/1.6.1 - 09.2025
 - Minor Syntax Adaption for better backwards compatiability PHP
 - Seperated Legacy Version 1.6.1 for Shopware 6.4
