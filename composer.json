@@ -14,7 +14,8 @@
         "shopware/core": "^6.5.8"
     },
     "conflict": {
-        "shopware/core": "<6.5.8"
+        "shopware/core": "<6.5.8",
+        "symfony/routing": "<6.4"
     },
     "autoload": {
         "psr-4": {
