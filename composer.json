@@ -11,7 +11,7 @@
         }
     ],
     "require": {
-        "shopware/core": "^6.5.8"
+        "shopware/core": ">=6.5.8 <6.6.0"
     },
     "conflict": {
         "shopware/core": "<6.5.8",
