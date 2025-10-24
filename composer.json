@@ -11,10 +11,10 @@
         }
     ],
     "require": {
-        "shopware/core": ">=6.4.9 <6.5.8"
+        "shopware/core": ">=6.4.11 <6.5.8"
     },
     "conflict": {
-        "shopware/core": "<6.4.9",
+        "shopware/core": "<6.4.11",
         "symfony/routing": ">=6.4"
     },
     "autoload": {
