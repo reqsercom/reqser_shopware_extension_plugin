@@ -14,6 +14,7 @@
         "shopware/core": ">=6.4.9 <6.5.8"
     },
     "conflict": {
+        "shopware/core": "<6.4.9",
         "symfony/routing": ">=6.4"
     },
     "autoload": {
