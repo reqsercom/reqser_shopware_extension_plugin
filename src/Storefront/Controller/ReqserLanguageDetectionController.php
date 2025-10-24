@@ -6,6 +6,7 @@ use Shopware\Storefront\Controller\StorefrontController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
+use Shopware\Core\Framework\Routing\Annotation\RouteScope;
 use Reqser\Plugin\Service\ReqserLanguageRedirectService;
 use Reqser\Plugin\Service\ReqserWebhookService;
 use Reqser\Plugin\Service\ReqserCustomFieldService;
@@ -17,7 +18,7 @@ use Symfony\Contracts\Cache\CacheInterface;
 use Psr\Log\LoggerInterface;
 
 /**
- * @Route(defaults={"_routeScope"={"storefront"}})
+ * @RouteScope(scopes={"storefront"})
  */
 class ReqserLanguageDetectionController extends StorefrontController
 {
