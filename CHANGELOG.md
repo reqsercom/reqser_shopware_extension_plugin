@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.3/1.5.3 10.2025
+- Backwards Compatability Support for < 6.4.9.0
+https://developer.shopware.com/docs/v6.4/resources/references/adr/api/2022-02-09-controller-configuration-route-defaults.html
+- New Version Overview
+    2.x => 6.6/6.7
+    1.7.x => 6.5
+
 ## 2.0.2/1.7.2/1.6.2 10.2025
 - Prevent Version Check warning
 - Improve Shopware Version splitting
