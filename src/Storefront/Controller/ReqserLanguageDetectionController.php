@@ -183,26 +183,11 @@ class ReqserLanguageDetectionController extends StorefrontController
             return false;
         }
         
-        // List of bot identifiers - ordered by specificity
-        // Major search engines first, then generic patterns to catch all others
-        $botPatterns = [
-            'Googlebot',           // Google (all variants)
-            'bingbot',             // Bing
-            'Slurp',               // Yahoo
-            'DuckDuckBot',         // DuckDuckGo
-            'Baiduspider',         // Baidu (China)
-            'YandexBot',           // Yandex (Russia)
-            'bot',                 // Generic: catches most bots (Facebook, Twitter, Telegram, etc.)
-            'crawler',             // Generic: catches all crawlers
-            'spider',              // Generic: catches all spiders
-            'Headless',            // Catches HeadlessChrome, headless browsers
-        ];
+        // Simple regex check for the 3 most common bot patterns
+        $pattern = '/(bot|crawler|spider)/i';
         
-        // Case-insensitive check for bot patterns in User-Agent
-        foreach ($botPatterns as $pattern) {
-            if (stripos($userAgent, $pattern) !== false) {                
-                return true;
-            }
+        if (preg_match($pattern, $userAgent)) {
+            return true;
         }
         
         return false;
