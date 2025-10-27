@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.4/1.7.4/1.6.4/1.5.4 10.2025
+- SEO Improvements prevent redirect if Bot detected
+- Add nofollow to redirect response in header
+
 ## 1.6.3/1.5.3 10.2025
 - Backwards Compatability route annotation Support for < 6.4.9.0
 https://developer.shopware.com/docs/v6.4/resources/references/adr/api/2022-02-09-controller-configuration-route-defaults.html

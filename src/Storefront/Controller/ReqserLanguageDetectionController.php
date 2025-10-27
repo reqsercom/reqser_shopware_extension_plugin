@@ -50,6 +50,11 @@ class ReqserLanguageDetectionController extends StorefrontController
     {
         
         try {
+            // Check if request is from a search engine bot - prevent redirects for SEO
+            if ($this->isSearchEngineBot($request)) {
+                return $this->createJsonResponse(true, 'search_engine_bot_detected');
+            }
+
             // Check if the app is active (includes environment check)
             if (!$this->appService->isAppActive()) {
                 return $this->createJsonResponse(false, 'app_inactive');
@@ -164,6 +169,53 @@ class ReqserLanguageDetectionController extends StorefrontController
     }
 
     /**
+     * Detect if the request is from a search engine bot
+     * Following Google's best practices for multilingual sites
+     * 
+     * @param Request $request
+     * @return bool True if bot detected, false otherwise
+     */
+    private function isSearchEngineBot(Request $request): bool
+    {
+        $userAgent = $request->headers->get('User-Agent', '');
+        
+        if (empty($userAgent)) {
+            return false;
+        }
+        
+        // List of bot identifiers - ordered by specificity
+        // Major search engines first, then generic patterns to catch all others
+        $botPatterns = [
+            'Googlebot',           // Google (all variants)
+            'bingbot',             // Bing
+            'Slurp',               // Yahoo
+            'DuckDuckBot',         // DuckDuckGo
+            'Baiduspider',         // Baidu (China)
+            'YandexBot',           // Yandex (Russia)
+            'bot',                 // Generic: catches most bots (Facebook, Twitter, Telegram, etc.)
+            'crawler',             // Generic: catches all crawlers
+            'spider',              // Generic: catches all spiders
+            'Headless',            // Catches HeadlessChrome, headless browsers
+        ];
+        
+        // Case-insensitive check for bot patterns in User-Agent
+        foreach ($botPatterns as $pattern) {
+            if (stripos($userAgent, $pattern) !== false) {
+                // Log bot detection for monitoring (optional)
+                $this->logger->info('Search engine bot detected', [
+                    'user_agent' => $userAgent,
+                    'pattern_matched' => $pattern,
+                    'route' => 'language_detection'
+                ]);
+                
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
      * Create a standardized JSON response with anti-cache headers
      */
     private function createJsonResponse(bool $success, ?string $reason = null, array $additionalData = []): JsonResponse
@@ -184,6 +236,9 @@ class ReqserLanguageDetectionController extends StorefrontController
         $response->headers->set('Expires', '0');
         $response->headers->set('X-Accel-Expires', '0'); // Nginx
         $response->headers->set('Surrogate-Control', 'no-store'); // Varnish
+        
+        // Prevent search engines from indexing redirect responses
+        $response->headers->set('X-Robots-Tag', 'noindex, follow');
         
         return $response;
     }
