@@ -200,14 +200,7 @@ class ReqserLanguageDetectionController extends StorefrontController
         
         // Case-insensitive check for bot patterns in User-Agent
         foreach ($botPatterns as $pattern) {
-            if (stripos($userAgent, $pattern) !== false) {
-                // Log bot detection for monitoring (optional)
-                $this->logger->info('Search engine bot detected', [
-                    'user_agent' => $userAgent,
-                    'pattern_matched' => $pattern,
-                    'route' => 'language_detection'
-                ]);
-                
+            if (stripos($userAgent, $pattern) !== false) {                
                 return true;
             }
         }
