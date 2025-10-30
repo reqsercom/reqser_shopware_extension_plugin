@@ -50,6 +50,11 @@ class ReqserLanguageDetectionController extends StorefrontController
     {
         
         try {
+            // Check if request is from a search engine bot - prevent redirects for SEO
+            if ($this->isSearchEngineBot($request)) {
+                return $this->createJsonResponse(true, 'search_engine_bot_detected');
+            }
+
             // Check if the app is active (includes environment check)
             if (!$this->appService->isAppActive()) {
                 return $this->createJsonResponse(false, 'app_inactive');
@@ -164,6 +169,31 @@ class ReqserLanguageDetectionController extends StorefrontController
     }
 
     /**
+     * Detect if the request is from a search engine bot
+     * Following Google's best practices for multilingual sites
+     * 
+     * @param Request $request
+     * @return bool True if bot detected, false otherwise
+     */
+    private function isSearchEngineBot(Request $request): bool
+    {
+        $userAgent = $request->headers->get('User-Agent', '');
+        
+        if (empty($userAgent)) {
+            return false;
+        }
+        
+        // Simple regex check for the 3 most common bot patterns
+        $pattern = '/(bot|crawler|spider)/i';
+        
+        if (preg_match($pattern, $userAgent)) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
      * Create a standardized JSON response with anti-cache headers
      */
     private function createJsonResponse(bool $success, ?string $reason = null, array $additionalData = []): JsonResponse
@@ -184,6 +214,9 @@ class ReqserLanguageDetectionController extends StorefrontController
         $response->headers->set('Expires', '0');
         $response->headers->set('X-Accel-Expires', '0'); // Nginx
         $response->headers->set('Surrogate-Control', 'no-store'); // Varnish
+        
+        // Prevent search engines from indexing redirect responses
+        $response->headers->set('X-Robots-Tag', 'noindex, follow');
         
         return $response;
     }
