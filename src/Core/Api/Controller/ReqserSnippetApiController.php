@@ -190,8 +190,8 @@ class ReqserSnippetApiController extends AbstractController
             return null; // Allow request
         }
         
-        // For production: check if Reqser App is active
-        if (!$this->appService->isAppActive()) {
+        // For production: check if Reqser App is active (skip cache for critical snippet operations)
+        if (!$this->appService->isAppActive(skipCache: true)) {
             $this->logger->warning('Reqser API: Unauthorized access attempt - Reqser App not active', [
                 'endpoint' => $request->getPathInfo(),
                 'method' => $request->getMethod(),

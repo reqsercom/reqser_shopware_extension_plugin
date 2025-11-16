@@ -32,12 +32,17 @@ class ReqserAppService
         $this->logger = $logger;
     }
 
-    public function isAppActive(): bool
+    public function isAppActive(bool $skipCache = false): bool
     {
         try {
             // In development/testing environments, always return true (bypass app check)
             if ($this->environment !== 'prod') {
                 return true;
+            }
+            
+            // Skip cache if explicitly requested (e.g., for critical operations like snippet sync)
+            if ($skipCache) {
+                return $this->queryDatabaseForAppStatus();
             }
             
             // Use server-side cache for all users (much more efficient)
