@@ -8,7 +8,6 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Service to read snippet data from JSON files without writing to database
- * Based on ReqserSnippetCrawlerHandler logic but returns data instead
  */
 class ReqserSnippetApiService
 {
