@@ -98,14 +98,16 @@ class ReqserSnippetApiService
     {
         $collectedData = [
             'snippetSet' => $snippetSetInfo,
-            'files' => [],
             'includeCoreFiles' => $includeCoreFiles,
             'projectDir' => $projectDir, // Store for use in file processing
             'stats' => [
                 'totalFiles' => 0,
                 'totalSnippets' => 0,
-                'errorFiles' => 0
-            ]
+                'errorFiles' => 0,
+                'coreFiles' => 0,
+                'customFiles' => 0
+            ],
+            'files' => []
         ];
 
         $this->processDirectoryRecursively($baseDirectory, $collectedData);
@@ -176,16 +178,17 @@ class ReqserSnippetApiService
                     }
                     
                     // Check if we should exclude core files
-                    if (!$collectedData['includeCoreFiles']) {
-                        if (strpos($filePath, '/custom/plugins/SwagLanguagePack/src/Resources/snippet/') !== false || strpos($filePath, '/vendor/shopware/') !== false) {
-                            // Exclude SwagLanguagePack and core files when includeCoreFiles is false
-                            continue;
-                        }
+                    if (!$collectedData['includeCoreFiles'] && $this->isCoreFile($filePath)) {
+                        continue;
                     }
 
                     // Check if this file matches the requested ISO code
                     $fileIso = $this->getIsoFromFilePath($filePath);
-                    if ($fileIso !== $collectedData['snippetSet']['iso']) {
+                    $expectedIso = $collectedData['snippetSet']['iso'];
+                    
+                    // Match ISO codes - support both full (de-DE) and short (de) formats
+                    // Core files use short format (de), custom plugins use full format (de-DE)
+                    if (!$this->isIsoMatch($fileIso, $expectedIso)) {
                         continue;
                     }
 
@@ -208,19 +211,39 @@ class ReqserSnippetApiService
                         $this->flattenSnippet((string) $document, $value, $flatSnippets);
                     }
 
-                            // Convert absolute path to relative path
-                            $relativePath = str_replace($collectedData['projectDir'], '', $filePath);
-                            $relativePath = ltrim($relativePath, '/\\'); // Remove leading slashes
-                            
-                            // Add file with all its snippets
-                            $collectedData['files'][] = [
-                                'fileName' => $fileName,
-                                'filePath' => $relativePath,
-                                'snippets' => $flatSnippets
-                            ];
+                    // Convert to clean relative path
+                    // First resolve to absolute real path to handle symlinks and .. paths
+                    $realPath = realpath($filePath);
+                    $realProjectDir = realpath($collectedData['projectDir']);
+                    
+                    // Remove project directory and normalize
+                    $relativePath = str_replace($realProjectDir, '', $realPath);
+                    $relativePath = str_replace('\\', '/', $relativePath); // Convert Windows paths
+                    // Ensure path starts with / for consistency
+                    if (!str_starts_with($relativePath, '/')) {
+                        $relativePath = '/' . $relativePath;
+                    }
+                    
+                    // Determine if this is a core file or custom file
+                    $isCoreFile = $this->isCoreFile($relativePath);
+                    
+                    // Add file with all its snippets
+                    $collectedData['files'][] = [
+                        'fileName' => $fileName,
+                        'filePath' => $relativePath,
+                        'snippets' => $flatSnippets,
+                        'isCoreFile' => $isCoreFile
+                    ];
                     
                     $collectedData['stats']['totalFiles']++;
                     $collectedData['stats']['totalSnippets'] += count($flatSnippets);
+                    
+                    // Track core vs custom files
+                    if ($isCoreFile) {
+                        $collectedData['stats']['coreFiles']++;
+                    } else {
+                        $collectedData['stats']['customFiles']++;
+                    }
 
                 } catch (\Exception $e) {
                     $collectedData['stats']['errorFiles']++;
@@ -253,8 +276,52 @@ class ReqserSnippetApiService
     }
 
     /**
-     * Extract ISO code from file path
+     * Determine if a file path represents a core file (vendor/shopware or SwagLanguagePack)
      * 
+     * @param string $filePath The file path to check
+     * @return bool True if this is a core file, false if it's a custom plugin file
+     */
+    private function isCoreFile(string $filePath): bool
+    {
+        // Core files are defined as:
+        // 1. Files in /vendor/shopware/ (Shopware core snippets)
+        // 2. Files in /custom/plugins/SwagLanguagePack/ (Official language pack)
+        return strpos($filePath, '/vendor/shopware/') !== false || 
+               strpos($filePath, '/custom/plugins/SwagLanguagePack/') !== false;
+    }
+
+    /**
+     * Check if the file ISO matches the expected ISO
+     * Supports both full format (de-DE) and short format (de)
+     * 
+     * @param string|null $fileIso ISO extracted from filename
+     * @param string $expectedIso Expected ISO from snippet set
+     * @return bool True if they match
+     */
+    private function isIsoMatch(?string $fileIso, string $expectedIso): bool
+    {
+        if ($fileIso === null) {
+            return false;
+        }
+        
+        // Exact match (e.g., de-DE === de-DE)
+        if ($fileIso === $expectedIso) {
+            return true;
+        }
+        
+        // Short format match (e.g., "de" matches "de-DE")
+        // Core Shopware files use short format like "de", while plugins use "de-DE"
+        $expectedShort = substr($expectedIso, 0, 2); // Get first 2 chars (de from de-DE)
+        if ($fileIso === $expectedShort) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Extract ISO code from file path
+     *
      * @param string $filePath
      * @return string|null
      */
