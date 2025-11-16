@@ -1,7 +1,15 @@
 # Changelog
 
-## 2.0.5/1.7.5/1.6.5/1.5.5 11.2025
-- Improve Alternative Redirect to predefined langauge f.e. English only if there is a known Browser Language
+## 2.0.5 11.2025
+- **Removed scheduled task for snippet crawler** - completely removed from codebase
+- **New Admin API endpoint**: `POST /api/_action/reqser/snippets/collect` to retrieve all snippet data from JSON files
+- **New Admin API endpoint**: `GET /api/_action/reqser/snippets/status` to check API and Reqser App status
+- **Enhanced Security**: API endpoints can ONLY be accessed via Reqser App integration credentials (not regular admin users)
+- API endpoints verify both app installation status and authentication source
+- Snippet data is now collected and returned via API without database writes
+- **New Parameter**: `includeCoreFiles` option to include/exclude Shopware core and SwagLanguagePack files
+- Changed snippet collect endpoint to POST-only for better parameter handling
+- Cleaned up all old snippet crawler code and service definitions
 
 ## 2.0.4/1.7.4/1.6.4/1.5.4 10.2025
 - SEO Improvements prevent redirect if Bot detected

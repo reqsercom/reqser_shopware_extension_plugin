@@ -3,6 +3,7 @@
 namespace Reqser\Plugin\Service;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Context;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -63,4 +64,68 @@ class ReqserAppService
             return false;
         }
     }
-} 
+
+    /**
+     * Verify that the request is authenticated via the Reqser App's integration
+     * 
+     * @param Context $context
+     * @return bool True if request is from Reqser App integration, false otherwise
+     */
+    public function isRequestFromReqserApp(Context $context): bool
+    {
+        try {
+            // In development/testing environments, bypass verification
+            if ($this->environment !== 'prod') {
+                return true;
+            }
+
+            // Get the source from the Context
+            $source = $context->getSource();
+            
+            // Check if source is an IntegrationSource (API integration authentication)
+            if (!($source instanceof \Shopware\Core\Framework\Api\Context\AdminApiSource)) {
+                return false;
+            }
+
+            // Get integration ID from the source
+            $integrationId = $source->getIntegrationId();
+            if (!$integrationId) {
+                return false;
+            }
+
+            // Query database to check if this integration belongs to the Reqser App
+            $result = $this->connection->fetchOne(
+                "SELECT app.name 
+                 FROM integration 
+                 LEFT JOIN app ON integration.app_id = app.id 
+                 WHERE integration.id = :integration_id AND app.name = :app_name",
+                [
+                    'integration_id' => $integrationId,
+                    'app_name' => 'ReqserApp'
+                ]
+            );
+
+            return $result === 'ReqserApp';
+
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Get the Reqser App ID from database
+     * 
+     * @return string|null
+     */
+    public function getReqserAppId(): ?string
+    {
+        try {
+            return $this->connection->fetchOne(
+                "SELECT id FROM `app` WHERE name = :app_name",
+                ['app_name' => 'ReqserApp']
+            );
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+}

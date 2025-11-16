@@ -5,19 +5,6 @@
            xsi:schemaLocation="http://symfony.com/schema/dic/services http://symfony.com/schema/dic/services/services-1.0.xsd">
 
     <services>
-        <service id="Reqser\Plugin\Service\ScheduledTask\ReqserSnippetCrawler">
-            <tag name="shopware.scheduled.task" />
-        </service>
-        <service id="Reqser\Plugin\Service\ScheduledTask\ReqserSnippetCrawlerHandler" public="true">
-            <argument type="service" id="scheduled_task.repository" />
-            <argument type="service" id="logger"/>
-            <argument type="service" id="Doctrine\DBAL\Connection"/>
-            <argument type="service" id="logger"/>
-            <argument type="service" id="service_container"/>
-            <argument type="service" id="Shopware\Core\Framework\App\ShopId\ShopIdProvider"/>
-            <tag name="messenger.message_handler" />
-        </service>
-
         <service id="Reqser\Plugin\Service\ScheduledTask\ReqserNotificiationRemoval">
             <tag name="shopware.scheduled.task" />
         </service>
@@ -109,6 +96,23 @@
             <argument type="service" id="Reqser\Plugin\Service\ReqserCustomFieldService" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserAppService" />
             <argument type="service" id="cache.app" />
+            <argument type="service" id="logger" />
+            <call method="setContainer">
+                <argument type="service" id="service_container" />
+            </call>
+        </service>
+
+        <!-- API Services -->
+        <service id="Reqser\Plugin\Service\ReqserSnippetApiService">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="logger"/>
+            <argument type="service" id="service_container"/>
+        </service>
+
+        <!-- API Controllers -->
+        <service id="Reqser\Plugin\Core\Api\Controller\ReqserSnippetApiController" public="true">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserSnippetApiService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserAppService" />
             <argument type="service" id="logger" />
             <call method="setContainer">
                 <argument type="service" id="service_container" />
