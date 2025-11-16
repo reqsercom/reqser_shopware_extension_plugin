@@ -30,7 +30,7 @@ class ReqserSnippetApiService
 
     /**
      * Collect all snippets from JSON files for a specific snippet set
-     * 
+     *
      * @param string $snippetSetId The snippet set ID to collect snippets for
      * @param bool $includeCoreFiles Whether to include Shopware core and SwagLanguagePack files
      * @return array Array of snippet data with metadata
@@ -39,7 +39,7 @@ class ReqserSnippetApiService
     {
         // Get snippet set info from database
         $snippetSetInfo = $this->getSnippetSetInfo($snippetSetId);
-        
+
         if (!$snippetSetInfo) {
             return [
                 'error' => 'Snippet set not found',
@@ -51,7 +51,7 @@ class ReqserSnippetApiService
         $projectDir = $this->container->getParameter('kernel.project_dir');
 
         // Start searching for snippet files
-        return $this->searchAndCollectSnippetFiles($projectDir, $snippetSetInfo, $includeCoreFiles);
+        return $this->searchAndCollectSnippetFiles($projectDir, $snippetSetInfo, $includeCoreFiles, $projectDir);
     }
 
     /**
@@ -88,18 +88,20 @@ class ReqserSnippetApiService
 
     /**
      * Search and collect snippet files
-     * 
+     *
      * @param string $baseDirectory Base directory to start search
      * @param array $snippetSetInfo Snippet set information
      * @param bool $includeCoreFiles Whether to include core files
+     * @param string $projectDir Project root directory for relative path calculation
      * @return array Collected snippets with metadata
      */
-    private function searchAndCollectSnippetFiles(string $baseDirectory, array $snippetSetInfo, bool $includeCoreFiles): array
+    private function searchAndCollectSnippetFiles(string $baseDirectory, array $snippetSetInfo, bool $includeCoreFiles, string $projectDir): array
     {
         $collectedData = [
             'snippetSet' => $snippetSetInfo,
             'files' => [],
             'includeCoreFiles' => $includeCoreFiles,
+            'projectDir' => $projectDir, // Store for use in file processing
             'stats' => [
                 'totalFiles' => 0,
                 'totalSnippets' => 0,
@@ -108,6 +110,9 @@ class ReqserSnippetApiService
         ];
 
         $this->processDirectoryRecursively($baseDirectory, $collectedData);
+        
+        // Remove projectDir from final output (only needed internally)
+        unset($collectedData['projectDir']);
 
         return $collectedData;
     }
@@ -204,12 +209,16 @@ class ReqserSnippetApiService
                         $this->flattenSnippet((string) $document, $value, $flatSnippets);
                     }
 
-                    // Add file with all its snippets
-                    $collectedData['files'][] = [
-                        'fileName' => $fileName,
-                        'filePath' => $filePath,
-                        'snippets' => $flatSnippets
-                    ];
+                            // Convert absolute path to relative path
+                            $relativePath = str_replace($collectedData['projectDir'], '', $filePath);
+                            $relativePath = ltrim($relativePath, '/\\'); // Remove leading slashes
+                            
+                            // Add file with all its snippets
+                            $collectedData['files'][] = [
+                                'fileName' => $fileName,
+                                'filePath' => $relativePath,
+                                'snippets' => $flatSnippets
+                            ];
                     
                     $collectedData['stats']['totalFiles']++;
                     $collectedData['stats']['totalSnippets'] += count($flatSnippets);
