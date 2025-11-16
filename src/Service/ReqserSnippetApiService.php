@@ -29,54 +29,60 @@ class ReqserSnippetApiService
     }
 
     /**
-     * Collect all snippets from JSON files
+     * Collect all snippets from JSON files for a specific snippet set
      * 
+     * @param string $snippetSetId The snippet set ID to collect snippets for
      * @param bool $includeCoreFiles Whether to include Shopware core and SwagLanguagePack files
      * @return array Array of snippet data with metadata
      */
-    public function collectSnippets(bool $includeCoreFiles = false): array
+    public function collectSnippets(string $snippetSetId, bool $includeCoreFiles = false): array
     {
-        // Preload snippet set IDs
-        $this->preloadSnippetSetIds();
+        // Get snippet set info from database
+        $snippetSetInfo = $this->getSnippetSetInfo($snippetSetId);
+        
+        if (!$snippetSetInfo) {
+            return [
+                'error' => 'Snippet set not found',
+                'snippetSetId' => $snippetSetId
+            ];
+        }
 
         // Get the root directory of the Shopware installation
         $projectDir = $this->container->getParameter('kernel.project_dir');
 
-        // Start searching for directories that contain Resources/snippet
-        return $this->searchAndCollectSnippetFiles($projectDir, $includeCoreFiles);
+        // Start searching for snippet files
+        return $this->searchAndCollectSnippetFiles($projectDir, $snippetSetInfo, $includeCoreFiles);
     }
 
     /**
-     * Preload snippet set IDs from database
+     * Get snippet set information from database
+     * 
+     * @param string $snippetSetId
+     * @return array|null
      */
-    private function preloadSnippetSetIds(): void
+    private function getSnippetSetInfo(string $snippetSetId): ?array
     {
-        $sql = "SELECT id, iso, custom_fields FROM snippet_set WHERE custom_fields IS NOT NULL";
-        $result = $this->connection->fetchAllAssociative($sql);
-
-        foreach ($result as $row) {
-            try {
-                $customFields = json_decode($row['custom_fields'], true);
-                if (isset($customFields['ReqserSnippetCrawl']['active']) && $customFields['ReqserSnippetCrawl']['active'] === true) {
-                    $this->snippetSetMap[$row['iso']][] = [
-                        'id' => (string) $row['id'],
-                        'iso' => $row['iso']
-                    ];
-                    if (isset($customFields['ReqserSnippetCrawl']['baseLanguage']) && $customFields['ReqserSnippetCrawl']['baseLanguage'] === true) {
-                        $this->baseLanguageSnippetSetID = (string) $row['id'];
-                    }
-                }
-            } catch (\Exception $e) {
-                $this->logger->error('Reqser Plugin Error retrieving and reading custom_fields from snippet_set', [
-                    'id' => $row['id'] ?? 'unknown',    
-                    'iso' => $row['iso'] ?? 'unknown',
-                    'custom_fields' => $row['custom_fields'] ?? 'unknown',
-                    'message' => $e->getMessage(),
-                    'file' => __FILE__, 
-                    'line' => __LINE__,
-                ]);
-                continue;
+        try {
+            $sql = "SELECT HEX(id) as id, iso, name FROM snippet_set WHERE HEX(id) = :id";
+            $result = $this->connection->fetchAssociative($sql, ['id' => $snippetSetId]);
+            
+            if (!$result) {
+                return null;
             }
+            
+            return [
+                'id' => (string) $result['id'],
+                'iso' => $result['iso'],
+                'name' => $result['name'] ?? $result['iso']
+            ];
+        } catch (\Exception $e) {
+            $this->logger->error('Reqser Plugin Error retrieving snippet_set info', [
+                'snippetSetId' => $snippetSetId,
+                'message' => $e->getMessage(),
+                'file' => __FILE__, 
+                'line' => __LINE__,
+            ]);
+            return null;
         }
     }
 
@@ -84,23 +90,20 @@ class ReqserSnippetApiService
      * Search and collect snippet files
      * 
      * @param string $baseDirectory Base directory to start search
+     * @param array $snippetSetInfo Snippet set information
      * @param bool $includeCoreFiles Whether to include core files
      * @return array Collected snippets with metadata
      */
-    private function searchAndCollectSnippetFiles(string $baseDirectory, bool $includeCoreFiles): array
+    private function searchAndCollectSnippetFiles(string $baseDirectory, array $snippetSetInfo, bool $includeCoreFiles): array
     {
         $collectedData = [
-            'snippetSets' => $this->snippetSetMap,
-            'baseLanguageSetId' => $this->baseLanguageSnippetSetID,
+            'snippetSet' => $snippetSetInfo,
             'files' => [],
-            'snippets' => [],
             'includeCoreFiles' => $includeCoreFiles,
             'stats' => [
                 'totalFiles' => 0,
                 'totalSnippets' => 0,
-                'skippedFiles' => 0,
-                'errorFiles' => 0,
-                'coreFilesSkipped' => 0
+                'errorFiles' => 0
             ]
         ];
 
@@ -165,7 +168,6 @@ class ReqserSnippetApiService
 
                     // Check if the filename contains at least two dots
                     if (substr_count($fileName, '.') < 2) {
-                        $collectedData['stats']['skippedFiles']++;
                         continue;
                     }
                     
@@ -173,22 +175,19 @@ class ReqserSnippetApiService
                     if (!$collectedData['includeCoreFiles']) {
                         if (strpos($filePath, '/custom/plugins/SwagLanguagePack/src/Resources/snippet/') !== false || strpos($filePath, '/vendor/shopware/') !== false) {
                             // Exclude SwagLanguagePack and core files when includeCoreFiles is false
-                            $collectedData['stats']['skippedFiles']++;
-                            $collectedData['stats']['coreFilesSkipped']++;
                             continue;
                         }
                     }
 
-                    $snippetSetInfo = $this->getSnippetSetInfoFromFilePath($filePath);
-                    if ($snippetSetInfo === null || count($snippetSetInfo) === 0) {
-                        $collectedData['stats']['skippedFiles']++;
+                    // Check if this file matches the requested ISO code
+                    $fileIso = $this->getIsoFromFilePath($filePath);
+                    if ($fileIso !== $collectedData['snippetSet']['iso']) {
                         continue;
                     }
 
                     $content = file_get_contents($filePath);
                     
                     if ($content === false || empty(trim($content))) {
-                        $collectedData['stats']['skippedFiles']++;
                         continue;
                     }
                     
@@ -199,24 +198,21 @@ class ReqserSnippetApiService
                         continue;
                     }
 
-                    // Add file information
-                    $fileData = [
-                        'path' => $filePath,
-                        'fileName' => $fileName,
-                        'snippetSets' => $snippetSetInfo,
-                        'snippetCount' => 0
-                    ];
-
-                    $fileSnippets = [];
+                    // Flatten nested snippets
+                    $flatSnippets = [];
                     foreach ($snippets as $document => $value) {
-                        $this->processSnippet((string) $document, $value, $snippetSetInfo, $fileSnippets);
+                        $this->flattenSnippet((string) $document, $value, $flatSnippets);
                     }
 
-                    $fileData['snippetCount'] = count($fileSnippets);
-                    $collectedData['files'][] = $fileData;
-                    $collectedData['snippets'] = array_merge($collectedData['snippets'], $fileSnippets);
+                    // Add file with all its snippets
+                    $collectedData['files'][] = [
+                        'fileName' => $fileName,
+                        'filePath' => $filePath,
+                        'snippets' => $flatSnippets
+                    ];
+                    
                     $collectedData['stats']['totalFiles']++;
-                    $collectedData['stats']['totalSnippets'] += count($fileSnippets);
+                    $collectedData['stats']['totalSnippets'] += count($flatSnippets);
 
                 } catch (\Exception $e) {
                     $collectedData['stats']['errorFiles']++;
@@ -234,40 +230,32 @@ class ReqserSnippetApiService
     }
 
     /**
-     * Process a snippet and add to collection
+     * Flatten nested snippet structure into key-value pairs
      */
-    private function processSnippet(string $key, $value, array $snippetSetInfo, array &$fileSnippets): void
+    private function flattenSnippet(string $key, $value, array &$flatSnippets): void
     {
         if (is_array($value)) {
             foreach ($value as $subKey => $subValue) {
                 $newKey = $key . '.' . (string) $subKey;
-                $this->processSnippet((string) $newKey, $subValue, $snippetSetInfo, $fileSnippets);
+                $this->flattenSnippet((string) $newKey, $subValue, $flatSnippets);
             }
         } elseif (is_string($value)) {
-            foreach ($snippetSetInfo as $setInfo) {
-                $fileSnippets[] = [
-                    'key' => $key,
-                    'value' => $value,
-                    'snippetSetId' => $setInfo['id'],
-                    'snippetSetIso' => $setInfo['iso']
-                ];
-            }
+            $flatSnippets[$key] = $value;
         }
     }
 
     /**
-     * Get snippet set info from file path
+     * Extract ISO code from file path
      * 
      * @param string $filePath
-     * @return array|null
+     * @return string|null
      */
-    private function getSnippetSetInfoFromFilePath(string $filePath): ?array
+    private function getIsoFromFilePath(string $filePath): ?string
     {
         $fileName = pathinfo($filePath, PATHINFO_BASENAME);
         $parts = explode('.', $fileName);
-        $iso = $parts[count($parts) - 2]; // Get the second last part
-        
-        return ($this->snippetSetMap[$iso] ?? null);
+        // Get the second last part (e.g., "en-GB" from "snippets.en-GB.json")
+        return $parts[count($parts) - 2] ?? null;
     }
 }
 

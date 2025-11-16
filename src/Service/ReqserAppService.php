@@ -3,7 +3,9 @@
 namespace Reqser\Plugin\Service;
 
 use Doctrine\DBAL\Connection;
+use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -14,17 +16,20 @@ class ReqserAppService
     private RequestStack $requestStack;
     private CacheInterface $cache;
     private string $environment;
+    private LoggerInterface $logger;
 
     public function __construct(
         Connection $connection,
         RequestStack $requestStack,
         CacheInterface $cache,
-        string $environment
+        string $environment,
+        LoggerInterface $logger
     ) {
         $this->connection = $connection;
         $this->requestStack = $requestStack;
         $this->cache = $cache;
         $this->environment = $environment;
+        $this->logger = $logger;
     }
 
     public function isAppActive(): bool
@@ -82,26 +87,27 @@ class ReqserAppService
             // Get the source from the Context
             $source = $context->getSource();
             
-            // Check if source is an IntegrationSource (API integration authentication)
-            if (!($source instanceof \Shopware\Core\Framework\Api\Context\AdminApiSource)) {
+            // Check if source is an AdminApiSource (API integration authentication)
+            if (!($source instanceof AdminApiSource)) {
                 return false;
             }
 
             // Get integration ID from the source
             $integrationId = $source->getIntegrationId();
+            
             if (!$integrationId) {
                 return false;
             }
 
-            // Query database to check if this integration belongs to the Reqser App
+            // Convert integration ID to binary for database query
+            $integrationIdBinary = hex2bin($integrationId);
+
+            // Query database to check if this integration has the label 'ReqserApp'
             $result = $this->connection->fetchOne(
-                "SELECT app.name 
-                 FROM integration 
-                 LEFT JOIN app ON integration.app_id = app.id 
-                 WHERE integration.id = :integration_id AND app.name = :app_name",
+                "SELECT label FROM integration WHERE id = :integration_id AND label = :label",
                 [
-                    'integration_id' => $integrationId,
-                    'app_name' => 'ReqserApp'
+                    'integration_id' => $integrationIdBinary,
+                    'label' => 'ReqserApp'
                 ]
             );
 

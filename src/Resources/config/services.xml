@@ -53,6 +53,7 @@
             <argument type="service" id="request_stack"/>
             <argument type="service" id="cache.app"/>
             <argument>%kernel.environment%</argument>
+            <argument type="service" id="logger"/>
         </service>
 
         <service id="Reqser\Plugin\Service\ReqserSessionService"
