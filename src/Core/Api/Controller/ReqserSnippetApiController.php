@@ -103,59 +103,6 @@ class ReqserSnippetApiController extends AbstractController
     }
 
     /**
-     * API endpoint to get snippet collection status/info
-     * Lightweight endpoint to check configuration without collecting all snippets
-     * 
-     * @param Request $request
-     * @param Context $context
-     * @return JsonResponse
-     */
-    #[Route(
-        path: '/api/_action/reqser/snippets/status',
-        name: 'api.action.reqser.snippets.status',
-        methods: ['GET']
-    )]
-    public function getStatus(Request $request, Context $context): JsonResponse
-    {
-        try {
-            // Validate authentication
-            $authResponse = $this->validateAuthentication($request, $context);
-            if ($authResponse !== null) {
-                return $authResponse; // Return error response if validation failed
-            }
-            
-            // Check statuses for response
-            $isLocalhost = $this->isLocalhostRequest($request);
-            $isAppActive = $this->appService->isAppActive();
-            $isReqserAppAuthenticated = $isLocalhost ? true : $this->appService->isRequestFromReqserApp($context);
-
-            return new JsonResponse([
-                'success' => true,
-                'status' => [
-                    'reqserAppActive' => $isAppActive,
-                    'reqserAppAuthenticated' => $isReqserAppAuthenticated,
-                    'isLocalhost' => $isLocalhost,
-                    'apiAvailable' => true,
-                    'timestamp' => date('Y-m-d H:i:s')
-                ]
-            ]);
-
-        } catch (\Throwable $e) {
-            $this->logger->error('Reqser API: Error getting status', [
-                'error' => $e->getMessage(),
-                'file' => __FILE__, 
-                'line' => __LINE__,
-            ]);
-
-            return new JsonResponse([
-                'success' => false,
-                'error' => 'Internal server error',
-                'message' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
      * Validate authentication for API requests
      * Checks both localhost and Reqser App integration authentication
      * 
