@@ -76,22 +76,8 @@ class ReqserSnippetApiController extends AbstractController
                 ], 400);
             }
 
-            $this->logger->info('Reqser API: Starting snippet collection', [
-                'snippetSetId' => $snippetSetId,
-                'includeCoreFiles' => $includeCoreFiles,
-                'file' => __FILE__, 
-                'line' => __LINE__,
-            ]);
-
             // Collect all snippets from JSON files
             $snippetData = $this->snippetApiService->collectSnippets($snippetSetId, $includeCoreFiles);
-
-            $this->logger->info('Reqser API: Snippet collection completed', [
-                'totalFiles' => $snippetData['stats']['totalFiles'] ?? 0,
-                'totalSnippets' => $snippetData['stats']['totalSnippets'] ?? 0,
-                'file' => __FILE__, 
-                'line' => __LINE__,
-            ]);
 
             return new JsonResponse([
                 'success' => true,
@@ -183,10 +169,6 @@ class ReqserSnippetApiController extends AbstractController
         $isLocalhost = $this->isLocalhostRequest($request);
         
         if ($isLocalhost) {
-            $this->logger->info('Reqser API: Localhost request - authentication checks bypassed', [
-                'endpoint' => $request->getPathInfo(),
-                'method' => $request->getMethod(),
-            ]);
             return null; // Allow request
         }
         
@@ -217,11 +199,6 @@ class ReqserSnippetApiController extends AbstractController
                 'message' => 'This endpoint can only be accessed via the Reqser App integration credentials'
             ], 403);
         }
-        
-        $this->logger->info('Reqser API: Authentication successful', [
-            'endpoint' => $request->getPathInfo(),
-            'method' => $request->getMethod(),
-        ]);
         
         return null; // Validation passed
     }
