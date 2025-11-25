@@ -361,6 +361,7 @@ class ReqserLanguageRedirectService
 
         // Handle alternative language redirect if configured
         if (($this->redirectConfig['redirectToAlternativeLanguage'] ?? false) &&
+            isset($this->primaryBrowserLanguage) && //Added from 2.0.5 to prevent bots to be redirected to the alternative language if they have no language set
             !in_array($this->primaryBrowserLanguage, $this->getAlternativeBrowserLanguages()) &&
             isset($this->domainMappings['domainLanguageCode'][$this->redirectConfig['alternativeRedirectLanguageCode']])) {
             
