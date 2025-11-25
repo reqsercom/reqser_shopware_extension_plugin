@@ -1,7 +1,8 @@
 # Changelog
 
-## 2.0.5/1.7.5/1.6.5/1.5.5 11.2025
-- Improve Alternative Redirect to predefined langauge f.e. English only if there is a known Browser Language
+## 2.0.5 11.2025
+- Remove Snippet Schedule Task and replace with new custom route
+- Enables translation of languages outside of available language packs like arabic or chinese
 
 ## 2.0.4/1.7.4/1.6.4/1.5.4 10.2025
 - SEO Improvements prevent redirect if Bot detected
