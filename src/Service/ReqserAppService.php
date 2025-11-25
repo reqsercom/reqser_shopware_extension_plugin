@@ -122,21 +122,4 @@ class ReqserAppService
             return false;
         }
     }
-
-    /**
-     * Get the Reqser App ID from database
-     * 
-     * @return string|null
-     */
-    public function getReqserAppId(): ?string
-    {
-        try {
-            return $this->connection->fetchOne(
-                "SELECT id FROM `app` WHERE name = :app_name",
-                ['app_name' => 'ReqserApp']
-            );
-        } catch (\Throwable $e) {
-            return null;
-        }
-    }
 }

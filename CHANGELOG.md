@@ -1,7 +1,7 @@
 # Changelog
 
 ## 2.0.5 11.2025
-- Remove Snippet Schedule Task and repalce with new custom route
+- Remove Snippet Schedule Task and replace with new custom route
 - Enables translation of languages outside of available language packs like arabic or chinese
 
 ## 2.0.4/1.7.4/1.6.4/1.5.4 10.2025
