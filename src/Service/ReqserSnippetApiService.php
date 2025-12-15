@@ -32,9 +32,16 @@ class ReqserSnippetApiService
      *
      * @param string $snippetSetId The snippet set ID to collect snippets for
      * @param bool $includeCoreFiles Whether to include Shopware core and SwagLanguagePack files
+     * @param string|null $filePath Optional specific path to collect from (prevents scanning all folders)
+     * @param bool $onlyCollectPath If true, only return file paths without snippet data
      * @return array Array of snippet data with metadata
      */
-    public function collectSnippets(string $snippetSetId, bool $includeCoreFiles = false): array
+    public function collectSnippets(
+        string $snippetSetId, 
+        bool $includeCoreFiles = false,
+        ?string $filePath = null,
+        bool $onlyCollectPath = false
+    ): array
     {
         // Get snippet set info from database
         $snippetSetInfo = $this->getSnippetSetInfo($snippetSetId);
@@ -49,8 +56,205 @@ class ReqserSnippetApiService
         // Get the root directory of the Shopware installation
         $projectDir = $this->container->getParameter('kernel.project_dir');
 
-        // Start searching for snippet files
-        return $this->searchAndCollectSnippetFiles($projectDir, $snippetSetInfo, $includeCoreFiles, $projectDir);
+        // Determine the starting directory for collection
+        $searchDirectory = $projectDir;
+        $isSpecificFile = false;
+        
+        if ($filePath !== null) {
+            // If a specific path is provided, use it as the starting point
+            // Support both absolute paths and relative paths from project root
+            if (str_starts_with($filePath, '/')) {
+                $searchDirectory = $projectDir . $filePath;
+            } else {
+                $searchDirectory = $projectDir . '/' . $filePath;
+            }
+            
+            // Validate that the path exists
+            if (!file_exists($searchDirectory)) {
+                return [
+                    'error' => 'Specified path does not exist',
+                    'filePath' => $filePath,
+                    'resolvedPath' => $searchDirectory
+                ];
+            }
+            
+            // Check if this is a file or directory
+            if (is_file($searchDirectory)) {
+                $isSpecificFile = true;
+            }
+        }
+
+        // If a specific file is provided, process only that file
+        if ($isSpecificFile) {
+            return $this->processSingleFile(
+                $searchDirectory,
+                $snippetSetInfo,
+                $includeCoreFiles,
+                $projectDir,
+                $onlyCollectPath
+            );
+        }
+
+        // Start searching for snippet files in directory
+        return $this->searchAndCollectSnippetFiles(
+            $searchDirectory, 
+            $snippetSetInfo, 
+            $includeCoreFiles, 
+            $projectDir,
+            $onlyCollectPath
+        );
+    }
+
+    /**
+     * Process a single specific file
+     *
+     * @param string $filePath Full path to the specific file
+     * @param array $snippetSetInfo Snippet set information
+     * @param bool $includeCoreFiles Whether to include core files
+     * @param string $projectDir Project root directory for relative path calculation
+     * @param bool $onlyCollectPath If true, only collect file path without snippet data
+     * @return array Collected snippet data
+     */
+    private function processSingleFile(
+        string $filePath,
+        array $snippetSetInfo,
+        bool $includeCoreFiles,
+        string $projectDir,
+        bool $onlyCollectPath = false
+    ): array
+    {
+        $collectedData = [
+            'snippetSet' => $snippetSetInfo,
+            'includeCoreFiles' => $includeCoreFiles,
+            'stats' => [
+                'totalFiles' => 0,
+                'totalSnippets' => 0,
+                'errorFiles' => 0,
+                'coreFiles' => 0,
+                'customFiles' => 0
+            ],
+            'files' => []
+        ];
+
+        try {
+            $fileName = basename($filePath);
+
+            // Check if the filename contains at least two dots (e.g., messages.de-DE.json)
+            if (substr_count($fileName, '.') < 2) {
+                return [
+                    'error' => 'Invalid snippet file format',
+                    'message' => 'Snippet files must have format like "messages.{iso}.json"',
+                    'fileName' => $fileName
+                ];
+            }
+
+            // Check if we should exclude core files
+            if (!$includeCoreFiles && $this->isCoreFile($filePath)) {
+                return [
+                    'message' => 'File is a core file and includeCoreFiles is false',
+                    'filePath' => $filePath,
+                    'stats' => $collectedData['stats']
+                ];
+            }
+
+            // Check if this file matches the requested ISO code
+            $fileIso = $this->getIsoFromFilePath($filePath);
+            $expectedIso = $snippetSetInfo['iso'];
+
+            if (!$this->isIsoMatch($fileIso, $expectedIso)) {
+                return [
+                    'message' => 'File ISO code does not match requested snippet set',
+                    'fileIso' => $fileIso,
+                    'expectedIso' => $expectedIso,
+                    'filePath' => $filePath,
+                    'stats' => $collectedData['stats']
+                ];
+            }
+
+            // Convert to clean relative path
+            $realPath = realpath($filePath);
+            $realProjectDir = realpath($projectDir);
+            $relativePath = str_replace($realProjectDir, '', $realPath);
+            $relativePath = str_replace('\\', '/', $relativePath);
+            if (!str_starts_with($relativePath, '/')) {
+                $relativePath = '/' . $relativePath;
+            }
+
+            $isCoreFile = $this->isCoreFile($relativePath);
+
+            // If only collecting paths, skip reading file content
+            if ($onlyCollectPath) {
+                $collectedData['files'][] = [
+                    'fileName' => $fileName,
+                    'filePath' => $relativePath,
+                    'isCoreFile' => $isCoreFile
+                ];
+                $collectedData['stats']['totalFiles']++;
+                if ($isCoreFile) {
+                    $collectedData['stats']['coreFiles']++;
+                } else {
+                    $collectedData['stats']['customFiles']++;
+                }
+                return $collectedData;
+            }
+
+            // Full collection mode: read and parse file content
+            $content = file_get_contents($filePath);
+
+            if ($content === false || empty(trim($content))) {
+                return [
+                    'error' => 'Unable to read file or file is empty',
+                    'filePath' => $relativePath,
+                    'stats' => $collectedData['stats']
+                ];
+            }
+
+            $snippets = json_decode($content, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return [
+                    'error' => 'Invalid JSON in file',
+                    'jsonError' => json_last_error_msg(),
+                    'filePath' => $relativePath,
+                    'stats' => $collectedData['stats']
+                ];
+            }
+
+            // Flatten nested snippets
+            $flatSnippets = [];
+            foreach ($snippets as $document => $value) {
+                $this->flattenSnippet((string) $document, $value, $flatSnippets);
+            }
+
+            // Add file with all its snippets
+            $collectedData['files'][] = [
+                'fileName' => $fileName,
+                'filePath' => $relativePath,
+                'snippets' => $flatSnippets,
+                'isCoreFile' => $isCoreFile
+            ];
+
+            $collectedData['stats']['totalFiles']++;
+            $collectedData['stats']['totalSnippets'] += count($flatSnippets);
+
+            if ($isCoreFile) {
+                $collectedData['stats']['coreFiles']++;
+            } else {
+                $collectedData['stats']['customFiles']++;
+            }
+
+        } catch (\Throwable $e) {
+            // Return error without logging to prevent Shopware log pollution
+            return [
+                'error' => 'Error processing file',
+                'message' => $e->getMessage(),
+                'exceptionType' => get_class($e),
+                'filePath' => $filePath,
+                'stats' => $collectedData['stats']
+            ];
+        }
+
+        return $collectedData;
     }
 
     /**
@@ -74,13 +278,8 @@ class ReqserSnippetApiService
                 'iso' => $result['iso'],
                 'name' => $result['name'] ?? $result['iso']
             ];
-        } catch (\Exception $e) {
-            $this->logger->error('Reqser Plugin Error retrieving snippet_set info', [
-                'snippetSetId' => $snippetSetId,
-                'message' => $e->getMessage(),
-                'file' => __FILE__, 
-                'line' => __LINE__,
-            ]);
+        } catch (\Throwable $e) {
+            // Return null without logging - error will be handled at controller level
             return null;
         }
     }
@@ -92,13 +291,21 @@ class ReqserSnippetApiService
      * @param array $snippetSetInfo Snippet set information
      * @param bool $includeCoreFiles Whether to include core files
      * @param string $projectDir Project root directory for relative path calculation
+     * @param bool $onlyCollectPath If true, only collect file paths without snippet data
      * @return array Collected snippets with metadata
      */
-    private function searchAndCollectSnippetFiles(string $baseDirectory, array $snippetSetInfo, bool $includeCoreFiles, string $projectDir): array
+    private function searchAndCollectSnippetFiles(
+        string $baseDirectory, 
+        array $snippetSetInfo, 
+        bool $includeCoreFiles, 
+        string $projectDir,
+        bool $onlyCollectPath = false
+    ): array
     {
         $collectedData = [
             'snippetSet' => $snippetSetInfo,
             'includeCoreFiles' => $includeCoreFiles,
+            'onlyCollectPath' => $onlyCollectPath,
             'projectDir' => $projectDir, // Store for use in file processing
             'stats' => [
                 'totalFiles' => 0,
@@ -112,8 +319,9 @@ class ReqserSnippetApiService
 
         $this->processDirectoryRecursively($baseDirectory, $collectedData);
         
-        // Remove projectDir from final output (only needed internally)
+        // Remove internal fields from final output (only needed internally)
         unset($collectedData['projectDir']);
+        unset($collectedData['onlyCollectPath']);
 
         return $collectedData;
     }
@@ -130,23 +338,15 @@ class ReqserSnippetApiService
                 if ($item->isDir()) {
                     try {
                         $this->processSnippetFilesInDirectory($item->getPathname(), $collectedData);
-                    } catch (\Exception $e) {
-                        $this->logger->error('Reqser Plugin Error processing snippet directory', [
-                            'path' => $item->getPathname(),
-                            'message' => $e->getMessage(),
-                            'file' => __FILE__, 
-                            'line' => __LINE__,
-                        ]);
+                    } catch (\Throwable $e) {
+                        // Silently skip problematic directories - they'll be tracked in errorFiles stats
+                        $collectedData['stats']['errorFiles']++;
                     }
                 }
             }
         } catch (\Throwable $e) {
-            $this->logger->error('Reqser Plugin Error accessing directory', [
-                'directory' => $directory,
-                'message' => $e->getMessage(),
-                'file' => __FILE__, 
-                'line' => __LINE__,
-            ]);
+            // Silently skip inaccessible directories - prevents log pollution
+            // Error will be reflected in final stats if needed
         }
     }
 
@@ -192,6 +392,44 @@ class ReqserSnippetApiService
                         continue;
                     }
 
+                    // Convert to clean relative path
+                    // First resolve to absolute real path to handle symlinks and .. paths
+                    $realPath = realpath($filePath);
+                    $realProjectDir = realpath($collectedData['projectDir']);
+                    
+                    // Remove project directory and normalize
+                    $relativePath = str_replace($realProjectDir, '', $realPath);
+                    $relativePath = str_replace('\\', '/', $relativePath); // Convert Windows paths
+                    // Ensure path starts with / for consistency
+                    if (!str_starts_with($relativePath, '/')) {
+                        $relativePath = '/' . $relativePath;
+                    }
+                    
+                    // Determine if this is a core file or custom file
+                    $isCoreFile = $this->isCoreFile($relativePath);
+
+                    // If only collecting paths, skip reading file content
+                    if ($collectedData['onlyCollectPath']) {
+                        // Add file with only path information
+                        $collectedData['files'][] = [
+                            'fileName' => $fileName,
+                            'filePath' => $relativePath,
+                            'isCoreFile' => $isCoreFile
+                        ];
+                        
+                        $collectedData['stats']['totalFiles']++;
+                        
+                        // Track core vs custom files
+                        if ($isCoreFile) {
+                            $collectedData['stats']['coreFiles']++;
+                        } else {
+                            $collectedData['stats']['customFiles']++;
+                        }
+                        
+                        continue; // Skip to next file
+                    }
+
+                    // Full collection mode: read and parse file content
                     $content = file_get_contents($filePath);
                     
                     if ($content === false || empty(trim($content))) {
@@ -210,22 +448,6 @@ class ReqserSnippetApiService
                     foreach ($snippets as $document => $value) {
                         $this->flattenSnippet((string) $document, $value, $flatSnippets);
                     }
-
-                    // Convert to clean relative path
-                    // First resolve to absolute real path to handle symlinks and .. paths
-                    $realPath = realpath($filePath);
-                    $realProjectDir = realpath($collectedData['projectDir']);
-                    
-                    // Remove project directory and normalize
-                    $relativePath = str_replace($realProjectDir, '', $realPath);
-                    $relativePath = str_replace('\\', '/', $relativePath); // Convert Windows paths
-                    // Ensure path starts with / for consistency
-                    if (!str_starts_with($relativePath, '/')) {
-                        $relativePath = '/' . $relativePath;
-                    }
-                    
-                    // Determine if this is a core file or custom file
-                    $isCoreFile = $this->isCoreFile($relativePath);
                     
                     // Add file with all its snippets
                     $collectedData['files'][] = [
@@ -247,12 +469,6 @@ class ReqserSnippetApiService
 
                 } catch (\Exception $e) {
                     $collectedData['stats']['errorFiles']++;
-                    $this->logger->error('Reqser Plugin Error processing file', [
-                        'file' => $filePath ?? 'unknown',
-                        'message' => $e->getMessage(),
-                        'log_file' => __FILE__, 
-                        'line' => __LINE__,
-                    ]);
                 }
             }
         } catch (\Exception $e) {
