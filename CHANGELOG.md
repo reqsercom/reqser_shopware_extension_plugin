@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.7/1.7.7/1.6.7/1.5.7 12.2025
+- Add fallback country flag support
+
 ## 2.0.6/1.7.6/1.6.6/1.5.6 12.2025
 - Extend Snippet call with new parameters
 
