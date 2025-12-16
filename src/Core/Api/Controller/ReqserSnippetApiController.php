@@ -43,6 +43,8 @@ class ReqserSnippetApiController extends AbstractController
      * Request Body Parameters:
      * - snippetSetId (string, required): The snippet set ID to collect snippets for
      * - includeCoreFiles (bool, optional): Include Shopware core and SwagLanguagePack files. Default: false
+     * - file_path (string, optional): Specific path to collect from (prevents scanning all folders). Default: null
+     * - only_collect_path (bool, optional): Only return file paths without snippet data. Default: false
      * 
      * @param Request $request
      * @param Context $context
@@ -66,6 +68,8 @@ class ReqserSnippetApiController extends AbstractController
             $requestData = json_decode($request->getContent(), true) ?? [];
             $snippetSetId = $requestData['snippetSetId'] ?? null;
             $includeCoreFiles = (bool) ($requestData['includeCoreFiles'] ?? false);
+            $filePath = $requestData['file_path'] ?? null;
+            $onlyCollectPath = (bool) ($requestData['only_collect_path'] ?? false);
 
             // Validate required parameters
             if (!$snippetSetId) {
@@ -77,7 +81,12 @@ class ReqserSnippetApiController extends AbstractController
             }
 
             // Collect all snippets from JSON files
-            $snippetData = $this->snippetApiService->collectSnippets($snippetSetId, $includeCoreFiles);
+            $snippetData = $this->snippetApiService->collectSnippets(
+                $snippetSetId, 
+                $includeCoreFiles,
+                $filePath,
+                $onlyCollectPath
+            );
 
             return new JsonResponse([
                 'success' => true,
@@ -86,17 +95,15 @@ class ReqserSnippetApiController extends AbstractController
             ]);
 
         } catch (\Throwable $e) {
-            $this->logger->error('Reqser API: Error collecting snippets', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'file' => __FILE__, 
-                'line' => __LINE__,
-            ]);
-
+            // Return error in API response without creating Shopware log entries
+            // This prevents log pollution and handles all errors gracefully
             return new JsonResponse([
                 'success' => false,
-                'error' => 'Internal server error',
+                'error' => 'Error collecting snippets',
                 'message' => $e->getMessage(),
+                'exceptionType' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString()
             ], 500);
         }
