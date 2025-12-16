@@ -32,30 +32,3 @@ $countryCodes: ad, ae, af, ag, ai, al, am, ao, aq, ar, as, at, au, aw, ax, az, b
         }
     }
 }
-
-// Additional size variants
-.language-flag--small {
-    height: 10px;
-    width: 14px;
-}
-
-.language-flag--medium {
-    height: 16px;
-    width: 22px;
-}
-
-.language-flag--large {
-    height: 24px;
-    width: 32px;
-    border-width: 2px;
-}
-
-// Rounded corners variant
-.language-flag--rounded {
-    border-radius: 2px;
-}
-
-.language-flag--rounded-lg {
-    border-radius: 4px;
-}
-
