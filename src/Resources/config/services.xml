@@ -65,6 +65,15 @@
             <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookService" />
         </service>
 
+        <service id="Reqser\Plugin\Service\ReqserFlagService"
+                class="Reqser\Plugin\Service\ReqserFlagService">
+            <argument type="service" id="kernel" />
+        </service>
+
+        <service id="Reqser\Plugin\Service\Twig\ReqserFlagExtension">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserFlagService" />
+            <tag name="twig.extension" />
+        </service>
 
         <service id="Reqser\Plugin\Service\ReqserLanguageRedirectService"
                 class="Reqser\Plugin\Service\ReqserLanguageRedirectService">
