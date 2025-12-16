@@ -25,7 +25,6 @@ $countryCodes: ad, ae, af, ag, ai, al, am, ao, aq, ar, as, at, au, aw, ax, az, b
     // Generate classes for each country code
     @each $countryCode in $countryCodes {
         &.country-#{$countryCode} {
-            // Use relative URLs for proper port handling in Docker environments
             // Browser will try SwagLanguagePack first, then fall back to Reqser Plugin
             background-image: url("/bundles/swaglanguagepack/static/flags/#{$countryCode}.svg"), 
                               url("/bundles/reqserplugin/static/flags/#{$countryCode}.svg");
