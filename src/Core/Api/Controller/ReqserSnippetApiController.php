@@ -88,6 +88,14 @@ class ReqserSnippetApiController extends AbstractController
                 $onlyCollectPath
             );
 
+            if (isset($snippetData['error'])) {
+                return new JsonResponse([
+                    'success' => false,
+                    'error' => $snippetData['error'],
+                    'message' => $snippetData['message'] ?? ''
+                ], 400);
+            }
+
             return new JsonResponse([
                 'success' => true,
                 'data' => $snippetData,

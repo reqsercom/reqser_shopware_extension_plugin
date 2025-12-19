@@ -49,7 +49,7 @@ class ReqserSnippetApiService
         if (!$snippetSetInfo) {
             return [
                 'error' => 'Snippet set not found',
-                'snippetSetId' => $snippetSetId
+                'message' => 'The snippet set with ID ' . $snippetSetId . ' was not found'
             ];
         }
 
@@ -73,8 +73,7 @@ class ReqserSnippetApiService
             if (!file_exists($searchDirectory)) {
                 return [
                     'error' => 'Specified path does not exist',
-                    'filePath' => $filePath,
-                    'resolvedPath' => $searchDirectory
+                    'message' => 'The path ' . $filePath . ' does not exist'
                 ];
             }
             
