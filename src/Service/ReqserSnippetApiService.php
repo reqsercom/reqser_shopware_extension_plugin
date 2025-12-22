@@ -548,5 +548,135 @@ class ReqserSnippetApiService
         // Get the second last part (e.g., "en-GB" from "snippets.en-GB.json")
         return $parts[count($parts) - 2] ?? null;
     }
+
+    /**
+     * Search for a specific string in all .html.twig files
+     *
+     * @param string $searchString The exact string to search for
+     * @param string|null $searchPath Optional specific path to search in (prevents scanning all folders)
+     * @return array Array of matched files with content and metadata
+     */
+    public function searchTwigFiles(string $searchString, ?string $searchPath = null): array
+    {
+        // Get the root directory of the Shopware installation
+        $projectDir = $this->container->getParameter('kernel.project_dir');
+
+        // Determine the starting directory for search
+        $searchDirectory = $projectDir;
+        
+        if ($searchPath !== null) {
+            // If a specific path is provided, use it as the starting point
+            // Support both absolute paths and relative paths from project root
+            if (strpos($searchPath, '/') === 0) {
+                $searchDirectory = $projectDir . $searchPath;
+            } else {
+                $searchDirectory = $projectDir . '/' . $searchPath;
+            }
+            
+            // Validate that the path exists
+            if (!file_exists($searchDirectory)) {
+                return [
+                    'error' => 'Specified path does not exist',
+                    'filePath' => $searchPath,
+                    'resolvedPath' => $searchDirectory
+                ];
+            }
+        }
+
+        // Initialize result structure
+        $results = [
+            'searchString' => $searchString,
+            'searchPath' => $searchPath ?? '/',
+            'stats' => [
+                'totalFiles' => 0,
+                'matchedFiles' => 0,
+                'errorFiles' => 0
+            ],
+            'matches' => []
+        ];
+
+        // Start searching for twig files
+        $this->searchTwigFilesRecursively($searchDirectory, $searchString, $projectDir, $results);
+
+        return $results;
+    }
+
+    /**
+     * Recursively search through directories for .html.twig files containing the search string
+     *
+     * @param string $directory Directory to search in
+     * @param string $searchString String to search for
+     * @param string $projectDir Project root directory for relative path calculation
+     * @param array &$results Results array to populate
+     */
+    private function searchTwigFilesRecursively(
+        string $directory,
+        string $searchString,
+        string $projectDir,
+        array &$results
+    ): void
+    {
+        try {
+            $directoryIterator = new \RecursiveDirectoryIterator(
+                $directory,
+                \FilesystemIterator::FOLLOW_SYMLINKS | \FilesystemIterator::SKIP_DOTS
+            );
+            $iterator = new \RecursiveIteratorIterator($directoryIterator);
+            $regexIterator = new \RegexIterator($iterator, '/^.+\.html\.twig$/i', \RecursiveRegexIterator::GET_MATCH);
+
+            // Collect file paths and sort them
+            $sortedFiles = [];
+            foreach ($regexIterator as $file) {
+                $sortedFiles[] = $file[0];
+            }
+            sort($sortedFiles);
+            
+            foreach ($sortedFiles as $filePath) {
+                try {
+                    $results['stats']['totalFiles']++;
+                    
+                    // Read file content
+                    $content = file_get_contents($filePath);
+                    
+                    if ($content === false) {
+                        $results['stats']['errorFiles']++;
+                        continue;
+                    }
+
+                    // Check if the file contains the exact search string
+                    if (strpos($content, $searchString) !== false) {
+                        // Convert to clean relative path
+                        $realPath = realpath($filePath);
+                        $realProjectDir = realpath($projectDir);
+                        $relativePath = str_replace($realProjectDir, '', $realPath);
+                        $relativePath = str_replace('\\', '/', $relativePath);
+                        
+                        // Ensure path starts with / for consistency
+                        if (strpos($relativePath, '/') !== 0) {
+                            $relativePath = '/' . $relativePath;
+                        }
+                        
+                        $fileName = basename($filePath);
+                        
+                        // Add matched file to results
+                        $results['matches'][] = [
+                            'fileName' => $fileName,
+                            'filePath' => $relativePath,
+                            'content' => $content
+                        ];
+                        
+                        $results['stats']['matchedFiles']++;
+                    }
+                    
+                } catch (\Throwable $e) {
+                    $results['stats']['errorFiles']++;
+                    // Continue processing other files
+                }
+            }
+        } catch (\Throwable $e) {
+            // Log error but continue - some directories might be inaccessible
+            $this->logger->warning('Reqser Plugin: Error searching directory for twig files: ' . $e->getMessage(), ['file' => __FILE__, 'line' => __LINE__]);
+        }
+    }
 }
 

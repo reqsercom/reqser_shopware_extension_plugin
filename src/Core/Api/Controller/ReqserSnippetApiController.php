@@ -180,5 +180,71 @@ class ReqserSnippetApiController extends AbstractController
         
         return false;
     }
+
+    /**
+     * API endpoint to search for a string in all twig files
+     * 
+     * Requires:
+     * - Request MUST be authenticated via the Reqser App's integration credentials
+     * - Reqser App must be active
+     * - POST method only
+     * 
+     * Request Body Parameters:
+     * - searchString (string, required): The exact string to search for in twig files
+     * - searchPath (string, optional): Specific path to search in. Default: searches entire project
+     * 
+     * @param Request $request
+     * @param Context $context
+     * @return JsonResponse
+     * @Route(path="/api/_action/reqser/twig/search", name="api.action.reqser.twig.search", methods={"POST"})
+     */
+    public function searchTwigFiles(Request $request, Context $context): JsonResponse
+    {
+        try {
+            // Validate authentication
+            $authResponse = $this->validateAuthentication($request, $context);
+            if ($authResponse !== null) {
+                return $authResponse; // Return error response if validation failed
+            }
+
+            // Get request parameters
+            $requestData = json_decode($request->getContent(), true) ?? [];
+            $searchString = $requestData['searchString'] ?? null;
+            $searchPath = $requestData['searchPath'] ?? null;
+
+            // Validate required parameters
+            if (!$searchString) {
+                return new JsonResponse([
+                    'success' => false,
+                    'error' => 'Missing required parameter',
+                    'message' => 'The parameter "searchString" is required'
+                ], 400);
+            }
+
+            // Search for the string in twig files
+            $searchResults = $this->snippetApiService->searchTwigFiles(
+                $searchString,
+                $searchPath
+            );
+
+            return new JsonResponse([
+                'success' => true,
+                'data' => $searchResults,
+                'timestamp' => date('Y-m-d H:i:s')
+            ]);
+
+        } catch (\Throwable $e) {
+            // Return error in API response without creating Shopware log entries
+            return new JsonResponse([
+                'success' => false,
+                'error' => 'Error searching twig files',
+                'message' => $e->getMessage(),
+                'exceptionType' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
+        }
+    }
 }
 
