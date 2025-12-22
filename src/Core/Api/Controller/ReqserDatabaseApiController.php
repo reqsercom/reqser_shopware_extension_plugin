@@ -3,7 +3,7 @@
 namespace Reqser\Plugin\Core\Api\Controller;
 
 use Psr\Log\LoggerInterface;
-use Reqser\Plugin\Service\ReqserAppService;
+use Reqser\Plugin\Service\ReqserApiAuthService;
 use Reqser\Plugin\Service\ReqserDatabaseService;
 use Shopware\Core\Framework\Context;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -19,16 +19,16 @@ use Symfony\Component\Routing\Annotation\Route;
 class ReqserDatabaseApiController extends AbstractController
 {
     private ReqserDatabaseService $databaseService;
-    private ReqserAppService $appService;
+    private ReqserApiAuthService $authService;
     private LoggerInterface $logger;
 
     public function __construct(
         ReqserDatabaseService $databaseService,
-        ReqserAppService $appService,
+        ReqserApiAuthService $authService,
         LoggerInterface $logger
     ) {
         $this->databaseService = $databaseService;
-        $this->appService = $appService;
+        $this->authService = $authService;
         $this->logger = $logger;
     }
 
@@ -53,7 +53,7 @@ class ReqserDatabaseApiController extends AbstractController
     {
         try {
             // Validate authentication
-            $authResponse = $this->validateAuthentication($request, $context);
+            $authResponse = $this->authService->validateAuthentication($request, $context);
             if ($authResponse !== null) {
                 return $authResponse; // Return error response if validation failed
             }
@@ -95,82 +95,75 @@ class ReqserDatabaseApiController extends AbstractController
     }
 
     /**
-     * Validate authentication for API requests
-     * Checks both localhost and Reqser App integration authentication
+     * API endpoint to get schema information for a specific translation table
+     * Returns column details including data types to identify translatable fields
+     * 
+     * Requires:
+     * - Request MUST be authenticated via the Reqser App's integration credentials
+     * - Reqser App must be active
+     * - GET method only
+     * - tableName must end with '_translation' (security requirement)
      * 
      * @param Request $request
      * @param Context $context
-     * @return JsonResponse|null Returns error response if validation fails, null if validation passes
+     * @return JsonResponse
      */
-    private function validateAuthentication(Request $request, Context $context): ?JsonResponse
+    #[Route(
+        path: '/api/_action/reqser/database/translation-tables-schema/{tableName}',
+        name: 'api.action.reqser.database.translation_tables_schema',
+        methods: ['GET']
+    )]
+    public function getTranslationTableSchema(Request $request, Context $context): JsonResponse
     {
-        // Check if request is from localhost (for development testing only)
-        $isLocalhost = $this->isLocalhostRequest($request);
-        
-        if ($isLocalhost) {
-            return null; // Allow request
-        }
-        
-        // For production: check if Reqser App is active (skip cache for critical operations)
-        if (!$this->appService->isAppActive(skipCache: true)) {
-            $this->logger->warning('Reqser API: Unauthorized access attempt - Reqser App not active', [
-                'endpoint' => $request->getPathInfo(),
-                'method' => $request->getMethod(),
-                'file' => __FILE__,
-                'line' => __LINE__
+        try {
+            // Validate authentication
+            $authResponse = $this->authService->validateAuthentication($request, $context);
+            if ($authResponse !== null) {
+                return $authResponse; // Return error response if validation failed
+            }
+
+            // Get table name from route parameter
+            $tableName = $request->attributes->get('tableName');
+
+            if (empty($tableName)) {
+                return new JsonResponse([
+                    'success' => false,
+                    'error' => 'Missing parameter',
+                    'message' => 'The parameter "tableName" is required'
+                ], 400);
+            }
+
+            // Get translation table schema from database
+            $result = $this->databaseService->getTranslationTableSchema($tableName);
+
+            if (!$result['success']) {
+                $statusCode = ($result['error'] === 'Invalid table name') ? 404 : 500;
+                
+                return new JsonResponse([
+                    'success' => false,
+                    'error' => $result['error'] ?? 'Unknown error',
+                    'message' => $result['message'] ?? ''
+                ], $statusCode);
+            }
+
+            return new JsonResponse([
+                'success' => true,
+                'data' => $result['table'],
+                'database' => $result['database'],
+                'timestamp' => date('Y-m-d H:i:s')
             ]);
-            
+
+        } catch (\Throwable $e) {
+            // Return error in API response without creating Shopware log entries
             return new JsonResponse([
                 'success' => false,
-                'error' => 'Reqser App is not active',
-                'message' => 'The Reqser App must be installed and active to use this endpoint'
-            ], 403);
+                'error' => 'Error retrieving translation table schema',
+                'message' => $e->getMessage(),
+                'exceptionType' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
         }
-
-        // Verify request is authenticated via Reqser App integration
-        if (!$this->appService->isRequestFromReqserApp($context)) {
-            $this->logger->warning('Reqser API: Unauthorized access attempt - Not authenticated via Reqser App integration', [
-                'endpoint' => $request->getPathInfo(),
-                'method' => $request->getMethod(),
-                'file' => __FILE__,
-                'line' => __LINE__
-            ]);
-            
-            return new JsonResponse([
-                'success' => false,
-                'error' => 'Access denied',
-                'message' => 'This endpoint can only be accessed via the Reqser App integration credentials'
-            ], 403);
-        }
-        
-        return null; // Validation passed
-    }
-
-    /**
-     * Check if request is from localhost (for development testing only)
-     * 
-     * @param Request $request
-     * @return bool
-     */
-    private function isLocalhostRequest(Request $request): bool
-    {
-        $clientIp = $request->getClientIp();
-        $host = $request->getHost();
-        
-        // Check for localhost IP addresses
-        $localhostIps = ['127.0.0.1', '::1', 'localhost'];
-        
-        // Check if client IP is localhost
-        if (in_array($clientIp, $localhostIps, true)) {
-            return true;
-        }
-        
-        // Check if host is localhost
-        if (in_array($host, ['localhost', '127.0.0.1', '[::1]'], true)) {
-            return true;
-        }
-        
-        return false;
     }
 }
-
