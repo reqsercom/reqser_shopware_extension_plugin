@@ -124,10 +124,16 @@
             <argument type="service" id="service_container"/>
         </service>
 
+        <service id="Reqser\Plugin\Service\ReqserCmsElementService">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="service_container"/>
+        </service>
+
         <service id="Reqser\Plugin\Service\ReqserDatabaseService">
             <argument type="service" id="Doctrine\DBAL\Connection"/>
             <argument type="service" id="logger"/>
             <argument type="service" id="Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry"/>
+            <argument type="service" id="Reqser\Plugin\Service\ReqserCmsElementService"/>
         </service>
 
         <!-- API Controllers -->

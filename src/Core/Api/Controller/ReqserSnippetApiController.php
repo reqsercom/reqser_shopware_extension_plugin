@@ -60,7 +60,7 @@ class ReqserSnippetApiController extends AbstractController
         try {
             // Validate authentication
             $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== null) {
+            if ($authResponse !== true) {
                 return $authResponse; // Return error response if validation failed
             }
 

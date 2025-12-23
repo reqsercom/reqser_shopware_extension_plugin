@@ -29,13 +29,13 @@ class ReqserApiAuthService
      * 
      * @param Request $request
      * @param Context $context
-     * @return JsonResponse|null Returns error response if validation fails, null if validation passes
+     * @return JsonResponse|bool Returns error response (JsonResponse) if validation fails, true if validation passes
      */
-    public function validateAuthentication(Request $request, Context $context): ?JsonResponse
+    public function validateAuthentication(Request $request, Context $context): JsonResponse|bool
     {
         // Check if request is from localhost (for development testing only)
         if ($this->isLocalhostRequest($request)) {
-            return null; // Allow request
+            return true; // Allow request
         }
         
         // For production: check if Reqser App is active (skip cache for critical operations)
@@ -70,7 +70,7 @@ class ReqserApiAuthService
             ], 403);
         }
         
-        return null; // Validation passed
+        return true; // Validation passed
     }
 
     /**

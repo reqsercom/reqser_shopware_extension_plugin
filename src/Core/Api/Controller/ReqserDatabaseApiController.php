@@ -54,27 +54,18 @@ class ReqserDatabaseApiController extends AbstractController
         try {
             // Validate authentication
             $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== null) {
+            if ($authResponse !== true) {
                 return $authResponse; // Return error response if validation failed
             }
 
             // Get translation tables from database
-            $result = $this->databaseService->getTranslationTables();
-
-            if (!$result['success']) {
-                return new JsonResponse([
-                    'success' => false,
-                    'error' => $result['error'] ?? 'Unknown error',
-                    'message' => $result['message'] ?? ''
-                ], 500);
-            }
+            $tables = $this->databaseService->getTranslationTables();
 
             return new JsonResponse([
                 'success' => true,
                 'data' => [
-                    'tables' => $result['tables'],
-                    'count' => $result['count'],
-                    'database' => $result['database']
+                    'tables' => $tables,
+                    'count' => count($tables)
                 ],
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
@@ -109,16 +100,17 @@ class ReqserDatabaseApiController extends AbstractController
      * @return JsonResponse
      */
     #[Route(
-        path: '/api/_action/reqser/database/translation-tables-schema/{tableName}',
+        path: '/api/_action/reqser/database/translation-tables/{tableName}/{row}',
         name: 'api.action.reqser.database.translation_tables_schema',
-        methods: ['GET']
+        methods: ['GET'],
+        defaults: ['row' => null]
     )]
     public function getTranslationTableSchema(Request $request, Context $context): JsonResponse
     {
         try {
             // Validate authentication
             $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== null) {
+            if ($authResponse !== true) {
                 return $authResponse; // Return error response if validation failed
             }
 
@@ -126,33 +118,60 @@ class ReqserDatabaseApiController extends AbstractController
             $tableName = $request->attributes->get('tableName');
 
             if (empty($tableName)) {
-                return new JsonResponse([
-                    'success' => false,
-                    'error' => 'Missing parameter',
-                    'message' => 'The parameter "tableName" is required'
-                ], 400);
+                throw new \InvalidArgumentException("Table name is required");
             }
 
-            // Get translation table schema from database
-            $result = $this->databaseService->getTranslationTableSchema($tableName);
+            // Get translatable columns schema
+            $tableSchema = $this->databaseService->getTranslatableColumnsSchema($tableName);
+            
+            // Get optional row identifier from route
+            $row = $request->attributes->get('row');
 
-            if (!$result['success']) {
-                $statusCode = ($result['error'] === 'Invalid table name') ? 404 : 500;
-                
+            if (!empty($row)) {
+                if (isset($tableSchema[$row])) {
+                    //lest get extended detals for this row
+                    $rowData = $this->databaseService->getTranslationTableRowDetails($tableName, $row, $tableSchema[$row]);
+                    return new JsonResponse([
+                        'success' => true,
+                        'data' => [
+                            'tableName' => $tableName,
+                            'row' => $row,
+                            'rowData' => $rowData
+                        ]
+                    ]);
+                } else {
+                    throw new \InvalidArgumentException("Row identifier '$row' not found in table schema");
+                }
+            } else  {
                 return new JsonResponse([
-                    'success' => false,
-                    'error' => $result['error'] ?? 'Unknown error',
-                    'message' => $result['message'] ?? ''
-                ], $statusCode);
+                    'success' => true,
+                    'data' => [
+                        'tableName' => $tableName,
+                        'schema' => $tableSchema
+                    ]
+                ]);
             }
-
+        } catch (\InvalidArgumentException $e) {
             return new JsonResponse([
-                'success' => true,
-                'data' => $result['table'],
-                'database' => $result['database'],
-                'timestamp' => date('Y-m-d H:i:s')
-            ]);
-
+                'success' => false,
+                'error' => 'Invalid parameter',
+                'message' => $e->getMessage()
+            ], 400);
+        } catch (\RuntimeException $e) {
+            // Check if it's a "not found" error
+            if (str_contains($e->getMessage(), 'No row found')) {
+                return new JsonResponse([
+                    'success' => false,
+                    'error' => 'Row not found',
+                    'message' => $e->getMessage()
+                ], 404);
+            }
+            
+            return new JsonResponse([
+                'success' => false,
+                'error' => 'Database error',
+                'message' => $e->getMessage()
+            ], 500);
         } catch (\Throwable $e) {
             // Return error in API response without creating Shopware log entries
             return new JsonResponse([
