@@ -58,12 +58,11 @@ class ReqserDatabaseService
     }
 
     /**
-     * Get schema information for translatable columns only
-     * Returns an associative array with column names as keys and their schema as values
-     * Only includes columns that are marked as translatable in the entity definition
+     * Get complete schema information for a translation table
+     * Returns ALL columns plus a list of which columns are translatable
      * 
      * @param string $tableName The translation table name
-     * @return array<string, array<string, mixed>> Associative array: [columnName => schema]
+     * @return array{schema: array<string, array<string, mixed>>, translatableRows: array<int, string>}
      * @throws \InvalidArgumentException If table name is invalid
      * @throws \RuntimeException If database query fails
      */
@@ -76,25 +75,16 @@ class ReqserDatabaseService
             throw new \InvalidArgumentException("Table '$tableName' is not a valid translation table");
         }
 
+        // Get ALL columns from the table
+        $allColumns = $this->getTableFullSchema($tableName); // Already keyed by field name
+        
         // Get translatable field names for this specific table
         $translatableFields = $this->getTranslatableFieldsForTable($tableName);
-        $allColumns = $this->getTableFullSchema($tableName);
         
-        // Convert allColumns from indexed array to keyed array by columnName
-        $columnsByName = [];
-        foreach ($allColumns as $columnInfo) {
-            $columnsByName[$columnInfo['columnName']] = $columnInfo;
-        }
-        
-        // Build result with only translatable columns
-        $schemaResult = [];
-        foreach ($translatableFields as $column) {
-            if (isset($columnsByName[$column])) {  
-                $schemaResult[$column] = $columnsByName[$column];
-            }
-        }
-
-        return $schemaResult;
+        return [
+            'schema' => $allColumns,
+            'translatableRows' => $translatableFields
+        ];
     }
 
     /**
@@ -109,9 +99,9 @@ class ReqserDatabaseService
     public function getTranslationTableRowDetails(string $tableName, string $columnName, array $columnSchema): array
     {
         $rowDetails = [];
-        // Check if the column data type is JSON
-        $dataType = strtolower($columnSchema['dataType'] ?? '');
-        $isJson = $dataType === 'json';
+        // Check if the column type is JSON (using 'type' from SHOW COLUMNS)
+        $type = strtolower($columnSchema['type'] ?? '');
+        $isJson = $type === 'json';
 
         $rowDetails['isJson'] = $isJson;
 
@@ -184,38 +174,37 @@ class ReqserDatabaseService
 
     /**
      * Get full schema information for a table (including all columns, not just translatable ones)
+     * Uses SHOW COLUMNS command for standard MySQL schema format
      * 
      * @param string $tableName The table name
-     * @return array<int, array<string, mixed>> Array of column definitions
+     * @return array<string, array<string, mixed>> Associative array [columnName => schema]
      * @throws \RuntimeException If schema query fails
      */
     private function getTableFullSchema(string $tableName): array
     {
-        $databaseName = $this->connection->getDatabase();
-
-        // Query to get column information for the table
-        $sql = "
-            SELECT 
-                COLUMN_NAME as columnName,
-                DATA_TYPE as dataType,
-                COLUMN_TYPE as columnType,
-                IS_NULLABLE as isNullable,
-                COLUMN_DEFAULT as columnDefault,
-                CHARACTER_MAXIMUM_LENGTH as maxLength,
-                COLUMN_KEY as columnKey,
-                EXTRA as extra,
-                COLUMN_COMMENT as comment
-            FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = :database
-            AND TABLE_NAME = :table
-            ORDER BY ORDINAL_POSITION
-        ";
-
-        $columns = $this->connection->fetchAllAssociative($sql, [
-            'database' => $databaseName,
-            'table' => $tableName
-        ]);
-
+        // Use SHOW COLUMNS for standard MySQL schema format
+        $sql = "SHOW COLUMNS FROM `" . $tableName . "`";
+        
+        $columnsRaw = $this->connection->fetchAllAssociative($sql);
+        
+        if ($columnsRaw === false) {
+            throw new \RuntimeException("Failed to retrieve schema for table '$tableName'");
+        }
+        
+        // Transform to associative array with lowercase keys
+        $columns = [];
+        foreach ($columnsRaw as $column) {
+            $fieldName = $column['Field'];
+            
+            // Convert all keys to lowercase and include all fields dynamically
+            $columnData = [];
+            foreach ($column as $key => $value) {
+                $columnData[strtolower($key)] = $value;
+            }
+            
+            $columns[$fieldName] = $columnData;
+        }
+        
         return $columns;
     }
 

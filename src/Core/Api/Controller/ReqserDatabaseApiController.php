@@ -87,7 +87,7 @@ class ReqserDatabaseApiController extends AbstractController
 
     /**
      * API endpoint to get schema information for a specific translation table
-     * Returns column details including data types to identify translatable fields
+     * Returns ALL columns plus a list of which columns are translatable
      * 
      * Requires:
      * - Request MUST be authenticated via the Reqser App's integration credentials
@@ -121,8 +121,10 @@ class ReqserDatabaseApiController extends AbstractController
                 throw new \InvalidArgumentException("Table name is required");
             }
 
-            // Get translatable columns schema
-            $tableSchema = $this->databaseService->getTranslatableColumnsSchema($tableName);
+            // Get complete table schema with translatable columns list
+            $result = $this->databaseService->getTranslatableColumnsSchema($tableName);
+            $tableSchema = $result['schema'];
+            $translatableRows = $result['translatableRows'];
             
             // Get optional row identifier from route
             $row = $request->attributes->get('row');
@@ -147,7 +149,8 @@ class ReqserDatabaseApiController extends AbstractController
                     'success' => true,
                     'data' => [
                         'tableName' => $tableName,
-                        'schema' => $tableSchema
+                        'schema' => $tableSchema,
+                        'translatableRows' => $translatableRows
                     ]
                 ]);
             }
