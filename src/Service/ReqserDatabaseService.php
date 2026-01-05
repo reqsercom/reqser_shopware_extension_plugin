@@ -99,9 +99,11 @@ class ReqserDatabaseService
     public function getTranslationTableRowDetails(string $tableName, string $columnName, array $columnSchema): array
     {
         $rowDetails = [];
-        // Check if the column type is JSON (using 'type' from SHOW COLUMNS)
+        
+        // Check if the column contains JSON data
+        // MySQL can store JSON as native 'json' type OR as 'text'/'longtext'
         $type = strtolower($columnSchema['type'] ?? '');
-        $isJson = $type === 'json';
+        $isJson = $this->isJsonColumn($tableName, $columnName, $type);
 
         $rowDetails['isJson'] = $isJson;
 
@@ -116,9 +118,16 @@ class ReqserDatabaseService
                 
                 if ($cmsAnalysis['isCmsColumn']) {
                     $rowDetails['jsonType'] = 'cms_element';
-                    $rowDetails['cmsElementTypes'] = $cmsAnalysis['elementTypes'];
-                    $rowDetails['translatableFieldsFound'] = $cmsAnalysis['translatableFieldsFound'];
-                    $rowDetails['sampleStructure'] = $cmsAnalysis['sampleStructure'];
+                    
+                    // Only include non-empty data (use isset to avoid undefined key errors)
+                    if (isset($cmsAnalysis['elementTypes']) && !empty($cmsAnalysis['elementTypes'])) {
+                        $rowDetails['cmsElementTypes'] = $cmsAnalysis['elementTypes'];
+                    }
+                    
+                    if (isset($cmsAnalysis['translatableFieldsFound']) && !empty($cmsAnalysis['translatableFieldsFound'])) {
+                        $rowDetails['translatableFieldsFound'] = $cmsAnalysis['translatableFieldsFound'];
+                    }
+                    
                     $rowDetails['availableElementDefinitions'] = $this->cmsElementService->getAllCmsElementDefinitions();
                 } else {
                     $rowDetails['jsonType'] = 'other';
@@ -131,6 +140,91 @@ class ReqserDatabaseService
             'schema' => $columnSchema,
             'rowDetails' => $rowDetails
         ];
+    }
+
+    /**
+     * Determine if a column contains JSON data
+     * Uses ONLY actual data verification - no hardcoded patterns
+     * 
+     * @param string $tableName The table name
+     * @param string $columnName The column name
+     * @param string $type The MySQL column type (lowercase)
+     * @return bool
+     */
+    private function isJsonColumn(string $tableName, string $columnName, string $type): bool
+    {
+        // 1. Native JSON type (MySQL 5.7+) - definitive
+        if ($type === 'json') {
+            return true;
+        }
+        
+        // 2. For text types, verify actual content
+        // No assumptions based on column names - check the data itself
+        $textTypes = ['text', 'longtext', 'mediumtext', 'tinytext'];
+        if (in_array($type, $textTypes)) {
+            // Actually check if the data is JSON by sampling
+            return $this->verifyJsonContent($tableName, $columnName);
+        }
+        
+        // 3. Not a text type and not JSON type - definitely not JSON
+        return false;
+    }
+    
+    /**
+     * Verify if a text column actually contains JSON data
+     * Samples actual data to determine if it's JSON (no assumptions)
+     * 
+     * @param string $tableName The table name
+     * @param string $columnName The column name
+     * @return bool
+     */
+    private function verifyJsonContent(string $tableName, string $columnName): bool
+    {
+        try {
+            // Sample multiple rows to get a reliable result
+            $sql = "SELECT `{$columnName}` FROM `{$tableName}` 
+                    WHERE `{$columnName}` IS NOT NULL 
+                    AND TRIM(`{$columnName}`) != '' 
+                    LIMIT 3";
+            
+            $samples = $this->connection->fetchFirstColumn($sql);
+            
+            if (empty($samples)) {
+                // No data available - cannot determine
+                // Return false (be conservative - assume it's text unless proven otherwise)
+                return false;
+            }
+            
+            // Check all samples - if any is valid JSON, column likely contains JSON
+            $jsonCount = 0;
+            foreach ($samples as $sample) {
+                if (empty($sample)) {
+                    continue;
+                }
+                
+                // Trim whitespace
+                $sample = trim($sample);
+                
+                // Quick check: JSON starts with { or [
+                if (!empty($sample) && ($sample[0] === '{' || $sample[0] === '[')) {
+                    // Try to decode as JSON
+                    $decoded = json_decode($sample, true);
+                    
+                    // Count valid JSON
+                    if ($decoded !== null && json_last_error() === JSON_ERROR_NONE) {
+                        $jsonCount++;
+                    }
+                }
+            }
+            
+            // If at least one sample is valid JSON, consider it a JSON column
+            return $jsonCount > 0;
+            
+        } catch (\Throwable $e) {
+            // On error, be conservative and return false
+            // Better to miss a JSON column than falsely identify text as JSON
+            return false;
+        }
     }
 
     /**
