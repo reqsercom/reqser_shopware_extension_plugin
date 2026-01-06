@@ -200,23 +200,28 @@ class ReqserSnippetApiService
             // Full collection mode: read and parse file content
             $content = file_get_contents($filePath);
 
-            if ($content === false || empty(trim($content))) {
+            if ($content === false) {
                 return [
-                    'error' => 'Unable to read file or file is empty',
+                    'error' => 'Unable to read file',
                     'filePath' => $relativePath,
                     'stats' => $collectedData['stats']
                 ];
             }
 
-            $snippets = json_decode($content, true);
+            // Empty files are valid - treat as empty snippet array
+            if (empty(trim($content))) {
+                $snippets = [];
+            } else {
+                $snippets = json_decode($content, true);
 
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                return [
-                    'error' => 'Invalid JSON in file',
-                    'jsonError' => json_last_error_msg(),
-                    'filePath' => $relativePath,
-                    'stats' => $collectedData['stats']
-                ];
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    return [
+                        'error' => 'Invalid JSON in file',
+                        'jsonError' => json_last_error_msg(),
+                        'filePath' => $relativePath,
+                        'stats' => $collectedData['stats']
+                    ];
+                }
             }
 
             // Flatten nested snippets
