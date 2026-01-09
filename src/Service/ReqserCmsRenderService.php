@@ -41,36 +41,32 @@ class ReqserCmsRenderService
      * @param string $type The element type (e.g., 'text', 'image', 'html')
      * @param array $config The element configuration data
      * @return string Rendered HTML
+     * @throws \RuntimeException If template not found or rendering fails
      */
     private function renderElementTemplate(string $type, array $config): string
     {
         // Shopware template naming convention
         $templateName = '@Storefront/storefront/element/cms-element-' . $type . '.html.twig';
 
-        try {
-            // Check if template exists
-            if (!$this->twig->getLoader()->exists($templateName)) {
-                return "<!-- Template not found: {$templateName} -->";
-            }
-
-            // Prepare element data structure similar to how Shopware does it
-            $elementData = $this->prepareElementData($config);
-
-            // Render the template with element data
-            $html = $this->twig->render($templateName, [
-                'element' => (object)[
-                    'type' => $type,
-                    'config' => $config,
-                    'data' => $elementData,
-                    'id' => null  // No ID needed for preview rendering
-                ]
-            ]);
-
-            return $html;
-
-        } catch (\Throwable $e) {
-            return "<!-- Error rendering element: " . $e->getMessage() . " -->";
+        // Check if template exists
+        if (!$this->twig->getLoader()->exists($templateName)) {
+            throw new \RuntimeException("Template not found: {$templateName}");
         }
+
+        // Prepare element data structure similar to how Shopware does it
+        $elementData = $this->prepareElementData($config);
+
+        // Render the template with element data - let exceptions bubble up
+        $html = $this->twig->render($templateName, [
+            'element' => (object)[
+                'type' => $type,
+                'config' => $config,
+                'data' => $elementData,
+                'id' => null  // No ID needed for preview rendering
+            ]
+        ]);
+
+        return $html;
     }
 
     /**

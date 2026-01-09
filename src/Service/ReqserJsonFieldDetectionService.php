@@ -5,6 +5,7 @@ namespace Reqser\Plugin\Service;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Cms\DataAbstractionLayer\Field\SlotConfigField;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\JsonField;
 
 /**
  * Service for detecting special JSON field types in Shopware
@@ -106,7 +107,7 @@ class ReqserJsonFieldDetectionService
     
     /**
      * Check if a column contains JSON data
-     * Uses ONLY actual data verification - no hardcoded patterns
+     * Checks entity definitions first, then falls back to data sampling
      * 
      * @param string $tableName The table name
      * @param string $columnName The column name
@@ -120,16 +121,63 @@ class ReqserJsonFieldDetectionService
             return true;
         }
         
-        // 2. For text types, verify actual content
-        // No assumptions based on column names - check the data itself
+        // 2. For text types, check entity definition first, then verify content
         $textTypes = ['text', 'longtext', 'mediumtext', 'tinytext'];
         if (in_array($type, $textTypes)) {
-            // Actually check if the data is JSON by sampling
+            // First check if Shopware defines this as a JSON field in entity definition
+            if ($this->isJsonFieldInEntityDefinition($tableName, $columnName)) {
+                return true;
+            }
+            
+            // Fallback: Actually check if the data is JSON by sampling
             return $this->verifyJsonContent($tableName, $columnName);
         }
         
         // 3. Not a text type and not JSON type - definitely not JSON
         return false;
+    }
+    
+    /**
+     * Check if a field is defined as a JSON field in Shopware's entity definition
+     * Works even when the table has no data yet
+     * 
+     * @param string $tableName The table name
+     * @param string $columnName The column name
+     * @return bool True if defined as JsonField in entity
+     */
+    private function isJsonFieldInEntityDefinition(string $tableName, string $columnName): bool
+    {
+        try {
+            // Try to get the entity definition for this table
+            // For translation tables, we need to check the translation entity
+            $definition = $this->definitionRegistry->getByEntityName($tableName);
+            
+            if (!$definition) {
+                return false;
+            }
+            
+            // Get all fields from the entity definition
+            $fields = $definition->getFields();
+            
+            foreach ($fields as $field) {
+                // Check if this is the column we're looking for
+                if ($field->getStorageName() === $columnName) {
+                    // Check if it's a JsonField (includes CustomFields, JsonField, SlotConfigField, etc.)
+                    // Use instanceof to check for JsonField or any subclass
+                    if ($field instanceof JsonField) {
+                        return true;
+                    }
+                    
+                    break;
+                }
+            }
+            
+            return false;
+            
+        } catch (\Throwable $e) {
+            // If we can't check the entity definition, fall back to data sampling
+            return false;
+        }
     }
     
     /**
