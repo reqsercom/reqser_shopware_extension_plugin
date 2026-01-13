@@ -3,7 +3,7 @@
 namespace Reqser\Plugin\Core\Api\Controller;
 
 use Psr\Log\LoggerInterface;
-use Reqser\Plugin\Service\ReqserAppService;
+use Reqser\Plugin\Service\ReqserApiAuthService;
 use Reqser\Plugin\Service\ReqserSnippetApiService;
 use Shopware\Core\Framework\Context;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -19,16 +19,16 @@ use Symfony\Component\Routing\Attribute\Route;
 class ReqserSnippetApiController extends AbstractController
 {
     private ReqserSnippetApiService $snippetApiService;
-    private ReqserAppService $appService;
+    private ReqserApiAuthService $authService;
     private LoggerInterface $logger;
 
     public function __construct(
         ReqserSnippetApiService $snippetApiService,
-        ReqserAppService $appService,
+        ReqserApiAuthService $authService,
         LoggerInterface $logger
     ) {
         $this->snippetApiService = $snippetApiService;
-        $this->appService = $appService;
+        $this->authService = $authService;
         $this->logger = $logger;
     }
 
@@ -59,8 +59,8 @@ class ReqserSnippetApiController extends AbstractController
     {
         try {
             // Validate authentication
-            $authResponse = $this->validateAuthentication($request, $context);
-            if ($authResponse !== null) {
+            $authResponse = $this->authService->validateAuthentication($request, $context);
+            if ($authResponse !== true) {
                 return $authResponse; // Return error response if validation failed
             }
 
@@ -88,6 +88,14 @@ class ReqserSnippetApiController extends AbstractController
                 $onlyCollectPath
             );
 
+            if (isset($snippetData['error'])) {
+                return new JsonResponse([
+                    'success' => false,
+                    'error' => $snippetData['error'],
+                    'message' => $snippetData['message'] ?? ''
+                ], 400);
+            }
+
             return new JsonResponse([
                 'success' => true,
                 'data' => $snippetData,
@@ -108,80 +116,4 @@ class ReqserSnippetApiController extends AbstractController
             ], 500);
         }
     }
-
-    /**
-     * Validate authentication for API requests
-     * Checks both localhost and Reqser App integration authentication
-     * 
-     * @param Request $request
-     * @param Context $context
-     * @return JsonResponse|null Returns error response if validation fails, null if validation passes
-     */
-    private function validateAuthentication(Request $request, Context $context): ?JsonResponse
-    {
-        // Check if request is from localhost (for development testing only)
-        $isLocalhost = $this->isLocalhostRequest($request);
-        
-        if ($isLocalhost) {
-            return null; // Allow request
-        }
-        
-        // For production: check if Reqser App is active (skip cache for critical snippet operations)
-        if (!$this->appService->isAppActive(skipCache: true)) {
-            $this->logger->warning('Reqser API: Unauthorized access attempt - Reqser App not active', [
-                'endpoint' => $request->getPathInfo(),
-                'method' => $request->getMethod(),
-            ]);
-            
-            return new JsonResponse([
-                'success' => false,
-                'error' => 'Reqser App is not active',
-                'message' => 'The Reqser App must be installed and active to use this endpoint'
-            ], 403);
-        }
-
-        // Verify request is authenticated via Reqser App integration
-        if (!$this->appService->isRequestFromReqserApp($context)) {
-            $this->logger->warning('Reqser API: Unauthorized access attempt - Not authenticated via Reqser App integration', [
-                'endpoint' => $request->getPathInfo(),
-                'method' => $request->getMethod(),
-            ]);
-            
-            return new JsonResponse([
-                'success' => false,
-                'error' => 'Access denied',
-                'message' => 'This endpoint can only be accessed via the Reqser App integration credentials'
-            ], 403);
-        }
-        
-        return null; // Validation passed
-    }
-
-    /**
-     * Check if request is from localhost (for development testing only)
-     * 
-     * @param Request $request
-     * @return bool
-     */
-    private function isLocalhostRequest(Request $request): bool
-    {
-        $clientIp = $request->getClientIp();
-        $host = $request->getHost();
-        
-        // Check for localhost IP addresses
-        $localhostIps = ['127.0.0.1', '::1', 'localhost'];
-        
-        // Check if client IP is localhost
-        if (in_array($clientIp, $localhostIps, true)) {
-            return true;
-        }
-        
-        // Check if host is localhost
-        if (in_array($host, ['localhost', '127.0.0.1', '[::1]'], true)) {
-            return true;
-        }
-        
-        return false;
-    }
 }
-

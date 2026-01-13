@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.9/1.7.9/1.6.9/1.5.9 12.2025
+- New custom route to support 3th party plugin detection
+
+## 2.0.8/1.7.8/1.6.8/1.5.8 12.2025
+- Update Snippet Custom Route Answer Structure
+
 ## 2.0.7/1.7.7/1.6.7/1.5.7 12.2025
 - Add fallback country flag support
 
