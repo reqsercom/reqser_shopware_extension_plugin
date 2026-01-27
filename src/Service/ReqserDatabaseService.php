@@ -33,7 +33,7 @@ class ReqserDatabaseService
     /**
      * Get all database tables ending with _translation
      * 
-     * @return array<int, string> Array of translation table names
+     * @return array<int, array{table: string, entity_exists: bool, entity_name: string}> Array of translation table info
      * @throws \RuntimeException If database query fails
      */
     public function getTranslationTables(): array
@@ -54,7 +54,36 @@ class ReqserDatabaseService
             'database' => $databaseName
         ]);
 
-        return $tables;
+        // Check which tables have valid entity definitions
+        $result = [];
+        foreach ($tables as $tableName) {
+            $entityName = str_replace('_translation', '', $tableName);
+            $entityExists = $this->entityDefinitionExists($entityName);
+            
+            $result[] = [
+                'table' => $tableName,
+                'entity_exists' => $entityExists,
+                'entity_name' => $entityName
+            ];
+        }
+
+        return $result;
+    }
+    
+    /**
+     * Check if an entity definition exists in the registry
+     * 
+     * @param string $entityName The entity name to check
+     * @return bool True if entity definition exists, false otherwise
+     */
+    private function entityDefinitionExists(string $entityName): bool
+    {
+        try {
+            $this->definitionRegistry->getByEntityName($entityName);
+            return true;
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     /**
@@ -71,7 +100,10 @@ class ReqserDatabaseService
         // Verify this is a valid translation table
         $tables = $this->getTranslationTables();
         
-        if (!in_array($tableName, $tables, true)) {
+        // Extract just the table names for validation
+        $tableNames = array_column($tables, 'table');
+        
+        if (!in_array($tableName, $tableNames, true)) {
             throw new \InvalidArgumentException("Table '$tableName' is not a valid translation table");
         }
 

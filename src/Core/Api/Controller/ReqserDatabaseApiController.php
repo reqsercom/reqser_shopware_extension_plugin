@@ -34,11 +34,17 @@ class ReqserDatabaseApiController extends AbstractController
 
     /**
      * API endpoint to get all database tables ending with _translation
+     * Returns table information including whether the entity definition exists
      * 
      * Requires:
      * - Request MUST be authenticated via the Reqser App's integration credentials
      * - Reqser App must be active
      * - GET method only
+     * 
+     * Response includes:
+     * - table: The translation table name
+     * - entity_exists: Whether the entity definition exists in Shopware
+     * - entity_name: The extracted entity name
      * 
      * @param Request $request
      * @param Context $context
