@@ -1,7 +1,7 @@
 # Changelog
 
 ## 2.0.10/1.7.10/1.6.10/1.5.10 01.2026
-- Bugfix on custom route
+- Replace Custom Route with new logic
 
 ## 2.0.9/1.7.9/1.6.9/1.5.9 12.2025
 - New custom route to support 3th party plugin detection
