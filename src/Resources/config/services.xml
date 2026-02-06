@@ -35,6 +35,13 @@
             <argument type="service" id="logger"/>
             <tag name="kernel.event_subscriber" />
         </service>
+
+        <service id="Reqser\Plugin\Subscriber\ReqserEntityWebhookSubscriber"
+                class="Reqser\Plugin\Subscriber\ReqserEntityWebhookSubscriber">
+            <argument type="service" id="cache.app" />
+            <argument type="service" id="logger" />
+            <tag name="kernel.event_subscriber" />
+        </service>
         
         <service id="Reqser\Plugin\Service\ReqserNotificationService"
                 class="Reqser\Plugin\Service\ReqserNotificationService">

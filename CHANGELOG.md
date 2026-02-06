@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.11/1.7.11/1.6.11/1.5.11 02.2026
+- Webook limiter
+
 ## 2.0.10/1.7.10/1.6.10/1.5.10 01.2026
 - Replace Custom Route with new logic
 
