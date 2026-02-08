@@ -2,28 +2,29 @@
 
 namespace Reqser\Plugin\Subscriber;
 
-use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenContainerEvent;
 use Shopware\Core\Framework\Webhook\Event\PreWebhooksDispatchEvent;
 use Shopware\Core\Framework\Webhook\Webhook;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
 {
     private const MAX_PER_DAY = 100;
-    private const COOLDOWN_SECONDS = 60;
+    private const COOLDOWN_SECONDS = 10;
     private const WEBHOOK_URL = 'https://www.reqser.com/app/shopware/webhook';
     private const FILTERED_EVENTS = ['product.written', 'category.written'];
 
     private bool $isAdminUserAction = false;
 
-    private CacheItemPoolInterface $cache;
+    private CacheInterface $cache;
     private LoggerInterface $logger;
 
     public function __construct(
-        CacheItemPoolInterface $cache,
+        CacheInterface $cache,
         LoggerInterface $logger
     ) {
         $this->cache = $cache;
@@ -38,11 +39,6 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
         ];
     }
 
-    /**
-     * Captures whether the current write operation comes from an admin user (manual save).
-     * This fires BEFORE PreWebhooksDispatchEvent because WebhookDispatcher dispatches
-     * the entity event through the inner dispatcher first, then calls WebhookManager.
-     */
     public function onEntityWritten(EntityWrittenContainerEvent $event): void
     {
         $source = $event->getContext()->getSource();
@@ -51,11 +47,6 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
             && $source->getUserId() !== null;
     }
 
-    /**
-     * Filters ReqserApp product/category webhooks before Shopware dispatches them.
-     * Only allows webhooks through when triggered by a manual admin user save
-     * and the rate limit has not been exceeded.
-     */
     public function onPreWebhooksDispatch(PreWebhooksDispatchEvent $event): void
     {
         try {
@@ -68,25 +59,44 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
                     continue;
                 }
 
-                // Block if not a manual admin user save
                 if (!$this->isAdminUserAction) {
+                    $this->logger->debug('[ReqserWebhookFilter] BLOCKED (not an admin user action)', [
+                        'event' => $webhook->eventName,
+                        'file' => __FILE__,
+                        'line' => __LINE__,
+                    ]);
+
                     continue;
                 }
 
-                // Block if rate limited
                 $entityName = str_replace('.written', '', $webhook->eventName);
-                if ($this->isRateLimited($entityName)) {
+
+                if ($this->isCooldownActive($entityName) || $this->getDailyCount($entityName) >= self::MAX_PER_DAY) {
+                    $this->logger->debug('[ReqserWebhookFilter] BLOCKED (rate limited)', [
+                        'event' => $webhook->eventName,
+                        'dailyCount' => $this->getDailyCount($entityName),
+                        'file' => __FILE__,
+                        'line' => __LINE__,
+                    ]);
+
                     continue;
                 }
 
-                // Allow webhook through and update rate limit counters
                 $this->updateRateLimitCounters($entityName);
+
+                $this->logger->debug('[ReqserWebhookFilter] ALLOWED', [
+                    'event' => $webhook->eventName,
+                    'dailyCount' => $this->getDailyCount($entityName),
+                    'file' => __FILE__,
+                    'line' => __LINE__,
+                ]);
+
                 $webhooksAllowed[] = $webhook;
             }
 
             $event->webhooks = array_values($webhooksAllowed);
         } catch (\Throwable $e) {
-            $this->logger->error('ReqserEntityWebhookSubscriber error: ' . $e->getMessage(), [
+            $this->logger->error('[ReqserWebhookFilter] Error: ' . $e->getMessage(), [
                 'file' => __FILE__,
                 'line' => __LINE__,
             ]);
@@ -99,38 +109,47 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
             && \in_array($webhook->eventName, self::FILTERED_EVENTS, true);
     }
 
-    private function isRateLimited(string $entityName): bool
+    private function isCooldownActive(string $entityName): bool
     {
-        // Check cooldown — max 1 webhook per minute per entity type
-        $cooldownItem = $this->cache->getItem('reqser_webhook_cooldown_' . $entityName);
-        if ($cooldownItem->isHit()) {
-            return true;
-        }
+        $cooldownKey = 'reqser_webhook_cooldown_' . $entityName;
 
-        // Check daily limit — max 100 per day per entity type
-        $dailyItem = $this->cache->getItem('reqser_webhook_daily_' . $entityName . '_' . date('Ymd'));
-        if ($dailyItem->isHit() && (int) $dailyItem->get() >= self::MAX_PER_DAY) {
-            return true;
-        }
+        return $this->cache->get($cooldownKey, function (ItemInterface $item) {
+            $item->expiresAfter(1);
 
-        return false;
+            return false;
+        }) === true;
+    }
+
+    private function getDailyCount(string $entityName): int
+    {
+        $dailyKey = 'reqser_webhook_daily_' . $entityName . '_' . date('Ymd');
+
+        return (int) $this->cache->get($dailyKey, function (ItemInterface $item) {
+            $endOfDay = (int) strtotime('tomorrow') - time();
+            $item->expiresAfter($endOfDay > 0 ? $endOfDay : 86400);
+
+            return 0;
+        });
     }
 
     private function updateRateLimitCounters(string $entityName): void
     {
-        // Set cooldown marker — expires after COOLDOWN_SECONDS
-        $cooldownItem = $this->cache->getItem('reqser_webhook_cooldown_' . $entityName);
-        $cooldownItem->set(true);
-        $cooldownItem->expiresAfter(self::COOLDOWN_SECONDS);
-        $this->cache->save($cooldownItem);
+        $cooldownKey = 'reqser_webhook_cooldown_' . $entityName;
+        $this->cache->delete($cooldownKey);
+        $this->cache->get($cooldownKey, function (ItemInterface $item) {
+            $item->expiresAfter(self::COOLDOWN_SECONDS);
 
-        // Increment daily counter — expires at end of current day
+            return true;
+        });
+
         $dailyKey = 'reqser_webhook_daily_' . $entityName . '_' . date('Ymd');
-        $dailyItem = $this->cache->getItem($dailyKey);
-        $currentCount = $dailyItem->isHit() ? (int) $dailyItem->get() : 0;
-        $dailyItem->set($currentCount + 1);
-        $endOfDay = (int) strtotime('tomorrow') - time();
-        $dailyItem->expiresAfter($endOfDay > 0 ? $endOfDay : 86400);
-        $this->cache->save($dailyItem);
+        $currentCount = $this->getDailyCount($entityName);
+        $this->cache->delete($dailyKey);
+        $this->cache->get($dailyKey, function (ItemInterface $item) use ($currentCount) {
+            $endOfDay = (int) strtotime('tomorrow') - time();
+            $item->expiresAfter($endOfDay > 0 ? $endOfDay : 86400);
+
+            return $currentCount + 1;
+        });
     }
 }
