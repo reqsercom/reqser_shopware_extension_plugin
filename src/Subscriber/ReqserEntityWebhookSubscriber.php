@@ -2,14 +2,13 @@
 
 namespace Reqser\Plugin\Subscriber;
 
+use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenContainerEvent;
 use Shopware\Core\Framework\Webhook\Event\PreWebhooksDispatchEvent;
 use Shopware\Core\Framework\Webhook\Webhook;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
-use Symfony\Contracts\Cache\CacheInterface;
-use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * Filters Reqser webhook dispatches for product.written and category.written events.
@@ -34,11 +33,11 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
 
     private bool $isAdminUserAction = false;
 
-    private CacheInterface $cache;
+    private CacheItemPoolInterface $cache;
     private LoggerInterface $logger;
 
     public function __construct(
-        CacheInterface $cache,
+        CacheItemPoolInterface $cache,
         LoggerInterface $logger
     ) {
         $this->cache = $cache;
@@ -146,9 +145,12 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
             $event->webhooks = array_values($webhooksAllowed);
         } catch (\Throwable $e) {
             $this->logger->error('[ReqserWebhookFilter] Error: ' . $e->getMessage(), [
+                'exception' => $e,
                 'file' => __FILE__,
                 'line' => __LINE__,
             ]);
+        } finally {
+            $this->isAdminUserAction = false;
         }
     }
 
@@ -169,6 +171,10 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
         }
 
         $parsedUrl = parse_url($webhook->url);
+        if (!\is_array($parsedUrl)) {
+            return false;
+        }
+
         $host = $parsedUrl['host'] ?? '';
         $path = rtrim($parsedUrl['path'] ?? '', '/');
 
@@ -188,11 +194,7 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
     {
         $cooldownKey = 'reqser_webhook_cooldown_' . $entityName;
 
-        return $this->cache->get($cooldownKey, function (ItemInterface $item) {
-            $item->expiresAfter(1);
-
-            return false;
-        }) === true;
+        return $this->cache->hasItem($cooldownKey);
     }
 
     /**
@@ -203,13 +205,9 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
     private function getDailyCount(string $entityName): int
     {
         $dailyKey = 'reqser_webhook_daily_' . $entityName . '_' . date('Ymd');
+        $item = $this->cache->getItem($dailyKey);
 
-        return (int) $this->cache->get($dailyKey, function (ItemInterface $item) {
-            $endOfDay = (int) strtotime('tomorrow') - time();
-            $item->expiresAfter($endOfDay > 0 ? $endOfDay : 86400);
-
-            return 0;
-        });
+        return $item->isHit() ? (int) $item->get() : 0;
     }
 
     /**
@@ -221,21 +219,17 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
     private function updateRateLimitCounters(string $entityName): void
     {
         $cooldownKey = 'reqser_webhook_cooldown_' . $entityName;
-        $this->cache->delete($cooldownKey);
-        $this->cache->get($cooldownKey, function (ItemInterface $item) {
-            $item->expiresAfter(self::COOLDOWN_SECONDS);
-
-            return true;
-        });
+        $cooldownItem = $this->cache->getItem($cooldownKey);
+        $cooldownItem->set(true);
+        $cooldownItem->expiresAfter(self::COOLDOWN_SECONDS);
+        $this->cache->save($cooldownItem);
 
         $dailyKey = 'reqser_webhook_daily_' . $entityName . '_' . date('Ymd');
-        $currentCount = $this->getDailyCount($entityName);
-        $this->cache->delete($dailyKey);
-        $this->cache->get($dailyKey, function (ItemInterface $item) use ($currentCount) {
-            $endOfDay = (int) strtotime('tomorrow') - time();
-            $item->expiresAfter($endOfDay > 0 ? $endOfDay : 86400);
-
-            return $currentCount + 1;
-        });
+        $dailyItem = $this->cache->getItem($dailyKey);
+        $currentCount = $dailyItem->isHit() ? (int) $dailyItem->get() : 0;
+        $endOfDay = (int) strtotime('tomorrow') - time();
+        $dailyItem->set($currentCount + 1);
+        $dailyItem->expiresAfter($endOfDay > 0 ? $endOfDay : 86400);
+        $this->cache->save($dailyItem);
     }
 }
