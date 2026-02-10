@@ -35,6 +35,19 @@
             <argument type="service" id="logger"/>
             <tag name="kernel.event_subscriber" />
         </service>
+
+        <service id="reqser.webhook_filter.cache" class="Symfony\Component\Cache\Adapter\FilesystemAdapter">
+            <argument>reqser_webhook_filter</argument>
+            <argument>0</argument>
+            <argument>%kernel.cache_dir%</argument>
+        </service>
+
+        <service id="Reqser\Plugin\Subscriber\ReqserEntityWebhookSubscriber"
+                class="Reqser\Plugin\Subscriber\ReqserEntityWebhookSubscriber">
+            <argument type="service" id="reqser.webhook_filter.cache" />
+            <argument type="service" id="logger" />
+            <tag name="kernel.event_subscriber" />
+        </service>
         
         <service id="Reqser\Plugin\Service\ReqserNotificationService"
                 class="Reqser\Plugin\Service\ReqserNotificationService">
@@ -143,6 +156,12 @@
             <argument type="service" id="twig"/>
         </service>
 
+        <!-- Analytics Services -->
+        <service id="Reqser\Plugin\Service\ReqserAnalyticsService">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="logger"/>
+        </service>
+
         <!-- API Controllers -->
         <service id="Reqser\Plugin\Core\Api\Controller\ReqserSnippetListApiController" public="true">
             <argument type="service" id="Reqser\Plugin\Service\ReqserSnippetListService" />
@@ -154,6 +173,15 @@
 
         <service id="Reqser\Plugin\Core\Api\Controller\ReqserDatabaseApiController" public="true">
             <argument type="service" id="Reqser\Plugin\Service\ReqserDatabaseService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserApiAuthService" />
+            <argument type="service" id="logger" />
+            <call method="setContainer">
+                <argument type="service" id="service_container" />
+            </call>
+        </service>
+
+        <service id="Reqser\Plugin\Core\Api\Controller\ReqserAnalyticsApiController" public="true">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserAnalyticsService" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserApiAuthService" />
             <argument type="service" id="logger" />
             <call method="setContainer">
