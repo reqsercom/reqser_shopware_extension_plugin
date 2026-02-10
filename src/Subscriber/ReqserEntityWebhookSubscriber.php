@@ -145,7 +145,6 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
             $event->webhooks = array_values($webhooksAllowed);
         } catch (\Throwable $e) {
             $this->logger->error('[ReqserWebhookFilter] Error: ' . $e->getMessage(), [
-                'exception' => $e,
                 'file' => __FILE__,
                 'line' => __LINE__,
             ]);
@@ -171,10 +170,6 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
         }
 
         $parsedUrl = parse_url($webhook->url);
-        if (!\is_array($parsedUrl)) {
-            return false;
-        }
-
         $host = $parsedUrl['host'] ?? '';
         $path = rtrim($parsedUrl['path'] ?? '', '/');
 
