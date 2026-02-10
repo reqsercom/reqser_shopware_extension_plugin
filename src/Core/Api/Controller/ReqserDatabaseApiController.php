@@ -4,6 +4,7 @@ namespace Reqser\Plugin\Core\Api\Controller;
 
 use Psr\Log\LoggerInterface;
 use Reqser\Plugin\Service\ReqserApiAuthService;
+use Reqser\Plugin\Service\ReqserCustomFieldUsageService;
 use Reqser\Plugin\Service\ReqserDatabaseService;
 use Shopware\Core\Framework\Context;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -21,15 +22,18 @@ class ReqserDatabaseApiController extends AbstractController
     private ReqserDatabaseService $databaseService;
     private ReqserApiAuthService $authService;
     private LoggerInterface $logger;
+    private ReqserCustomFieldUsageService $customFieldUsageService;
 
     public function __construct(
         ReqserDatabaseService $databaseService,
         ReqserApiAuthService $authService,
-        LoggerInterface $logger
+        LoggerInterface $logger,
+        ReqserCustomFieldUsageService $customFieldUsageService
     ) {
         $this->databaseService = $databaseService;
         $this->authService = $authService;
         $this->logger = $logger;
+        $this->customFieldUsageService = $customFieldUsageService;
     }
 
     /**
@@ -180,6 +184,54 @@ class ReqserDatabaseApiController extends AbstractController
             return new JsonResponse([
                 'success' => false,
                 'error' => 'Error retrieving translation table schema',
+                'message' => $e->getMessage(),
+                'exceptionType' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
+        }
+    }
+
+    /**
+     * API endpoint to analyze which custom fields are referenced in Twig templates.
+     * Returns each custom field name, its type, and the Twig files it appears in.
+     * 
+     * Requires:
+     * - Request MUST be authenticated via the Reqser App's integration credentials
+     * - Reqser App must be active
+     * - GET method only
+     * 
+     * @param Request $request
+     * @param Context $context
+     * @return JsonResponse
+     */
+    #[Route(
+        path: '/api/_action/reqser/database/custom-field-usage',
+        name: 'api.action.reqser.database.custom_field_usage',
+        methods: ['GET']
+    )]
+    public function getCustomFieldUsage(Request $request, Context $context): JsonResponse
+    {
+        try {
+            // Validate authentication
+            $authResponse = $this->authService->validateAuthentication($request, $context);
+            if ($authResponse !== true) {
+                return $authResponse;
+            }
+
+            $result = $this->customFieldUsageService->getCustomFieldTwigUsage();
+
+            return new JsonResponse([
+                'success' => true,
+                'data' => $result,
+                'timestamp' => date('Y-m-d H:i:s')
+            ]);
+
+        } catch (\Throwable $e) {
+            return new JsonResponse([
+                'success' => false,
+                'error' => 'Error analyzing custom field usage',
                 'message' => $e->getMessage(),
                 'exceptionType' => get_class($e),
                 'file' => $e->getFile(),

@@ -1,0 +1,19 @@
+{#
+    Reqser Custom Field Test Template
+
+    This template exists solely to verify that the ReqserCustomFieldUsageService
+    correctly detects custom field references in Twig files.
+    It is placed under a unique "reqser/" path so it does NOT override any
+    Shopware core Storefront or Administration template.
+
+    This file is never rendered — it only needs to exist on disk so the
+    scanner can find the custom field key "reqser_custom_field_test" inside it.
+#}
+
+{% block reqser_custom_field_test %}
+    {# Dot access pattern #}
+    {{ product.customFields.reqser_custom_field_test }}
+
+    {# Translated dot access pattern #}
+    {{ product.translated.customFields.reqser_custom_field_test }}
+{% endblock %}
