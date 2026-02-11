@@ -35,7 +35,7 @@
             <argument type="service" id="logger"/>
             <tag name="kernel.event_subscriber" />
         </service>
-        
+
         <service id="Reqser\Plugin\Service\ReqserNotificationService"
                 class="Reqser\Plugin\Service\ReqserNotificationService">
             <argument type="service" id="notification.repository" />
@@ -113,16 +113,79 @@
         </service>
 
         <!-- API Services -->
-        <service id="Reqser\Plugin\Service\ReqserSnippetApiService">
+        <service id="Reqser\Plugin\Service\ReqserApiAuthService">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserAppService"/>
+            <argument type="service" id="logger"/>
+        </service>
+
+        <service id="Reqser\Plugin\Service\ReqserSnippetListService">
+            <argument type="service" id="Shopware\Core\System\Snippet\SnippetService"/>
+        </service>
+
+        <service id="Reqser\Plugin\Service\ReqserJsonFieldDetectionService">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry"/>
+        </service>
+
+        <service id="Reqser\Plugin\Service\ReqserDatabaseService">
             <argument type="service" id="Doctrine\DBAL\Connection"/>
             <argument type="service" id="logger"/>
+            <argument type="service" id="Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry"/>
+            <argument type="service" id="Reqser\Plugin\Service\ReqserJsonFieldDetectionService"/>
+        </service>
+
+        <service id="Reqser\Plugin\Service\ReqserCmsTwigFileService">
             <argument type="service" id="service_container"/>
+            <argument type="service" id="twig"/>
+        </service>
+
+        <service id="Reqser\Plugin\Service\ReqserCustomFieldUsageService">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="twig.loader.native_filesystem"/>
+        </service>
+
+        <service id="Reqser\Plugin\Service\ReqserCmsRenderService">
+            <argument type="service" id="twig"/>
+        </service>
+
+        <!-- Analytics Services -->
+        <service id="Reqser\Plugin\Service\ReqserAnalyticsService">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="logger"/>
         </service>
 
         <!-- API Controllers -->
-        <service id="Reqser\Plugin\Core\Api\Controller\ReqserSnippetApiController" public="true">
-            <argument type="service" id="Reqser\Plugin\Service\ReqserSnippetApiService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserAppService" />
+        <service id="Reqser\Plugin\Core\Api\Controller\ReqserSnippetListApiController" public="true">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserSnippetListService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserApiAuthService" />
+            <call method="setContainer">
+                <argument type="service" id="service_container" />
+            </call>
+        </service>
+
+        <service id="Reqser\Plugin\Core\Api\Controller\ReqserDatabaseApiController" public="true">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserDatabaseService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserApiAuthService" />
+            <argument type="service" id="logger" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserCustomFieldUsageService" />
+            <call method="setContainer">
+                <argument type="service" id="service_container" />
+            </call>
+        </service>
+
+        <service id="Reqser\Plugin\Core\Api\Controller\ReqserAnalyticsApiController" public="true">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserAnalyticsService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserApiAuthService" />
+            <argument type="service" id="logger" />
+            <call method="setContainer">
+                <argument type="service" id="service_container" />
+            </call>
+        </service>
+
+        <service id="Reqser\Plugin\Core\Api\Controller\ReqserCmsApiController" public="true">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserCmsTwigFileService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserCmsRenderService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserApiAuthService" />
             <argument type="service" id="logger" />
             <call method="setContainer">
                 <argument type="service" id="service_container" />
