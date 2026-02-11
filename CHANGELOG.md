@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.0.11/1.7.11/1.6.11/1.5.11 02.2026
+- Webook limiter
+- Analytic routes
+- New custom fields usage route
+
+## 2.0.10/1.7.10/1.6.10/1.5.10 01.2026
+- Replace Custom Route with new logic
+
+## 2.0.9/1.7.9/1.6.9/1.5.9 12.2025
+- New custom route to support 3th party plugin detection
+
+## 2.0.8/1.7.8/1.6.8/1.5.8 12.2025
+- Update Snippet Custom Route Answer Structure
+
 ## 2.0.7/1.7.7/1.6.7/1.5.7 12.2025
 - Add fallback country flag support
 
