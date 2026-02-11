@@ -36,19 +36,6 @@
             <tag name="kernel.event_subscriber" />
         </service>
 
-        <service id="reqser.webhook_filter.cache" class="Symfony\Component\Cache\Adapter\FilesystemAdapter">
-            <argument>reqser_webhook_filter</argument>
-            <argument>0</argument>
-            <argument>%kernel.cache_dir%</argument>
-        </service>
-
-        <service id="Reqser\Plugin\Subscriber\ReqserEntityWebhookSubscriber"
-                class="Reqser\Plugin\Subscriber\ReqserEntityWebhookSubscriber">
-            <argument type="service" id="reqser.webhook_filter.cache" />
-            <argument type="service" id="logger" />
-            <tag name="kernel.event_subscriber" />
-        </service>
-        
         <service id="Reqser\Plugin\Service\ReqserNotificationService"
                 class="Reqser\Plugin\Service\ReqserNotificationService">
             <argument type="service" id="notification.repository" />
