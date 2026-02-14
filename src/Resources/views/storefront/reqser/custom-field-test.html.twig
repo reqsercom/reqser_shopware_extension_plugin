@@ -8,12 +8,21 @@
 
     This file is never rendered — it only needs to exist on disk so the
     scanner can find the custom field key "reqser_custom_field_test" inside it.
+
+    The template exercises all four access patterns so the endpoint can be
+    verified to return both "direct" and "translated" in accessPatterns.
 #}
 
 {% block reqser_custom_field_test %}
-    {# Dot access pattern #}
+    {# Direct dot access #}
     {{ product.customFields.reqser_custom_field_test }}
 
-    {# Translated dot access pattern #}
+    {# Translated dot access #}
     {{ product.translated.customFields.reqser_custom_field_test }}
+
+    {# Direct bracket access #}
+    {{ product.customFields['reqser_custom_field_test'] }}
+
+    {# Translated bracket access #}
+    {{ product.translated.customFields['reqser_custom_field_test'] }}
 {% endblock %}

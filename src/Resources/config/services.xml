@@ -35,7 +35,7 @@
             <argument type="service" id="logger"/>
             <tag name="kernel.event_subscriber" />
         </service>
-
+        
         <service id="Reqser\Plugin\Service\ReqserNotificationService"
                 class="Reqser\Plugin\Service\ReqserNotificationService">
             <argument type="service" id="notification.repository" />
