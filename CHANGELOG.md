@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.12/1.7.12/1.6.12/1.5.12 02.2026
+- Custom fields usage route updates
+
 ## 2.0.11/1.7.11/1.6.11/1.5.11 02.2026
 - Webook limiter
 - Analytic routes
