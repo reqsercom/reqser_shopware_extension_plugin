@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.13/1.7.13/1.6.13/1.5.13 02.2026
+- Bugfix on compile template
+
 ## 2.0.12/1.7.12/1.6.12/1.5.12 02.2026
 - Custom fields usage route updates
 
