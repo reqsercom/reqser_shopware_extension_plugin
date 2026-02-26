@@ -16,6 +16,7 @@ use Reqser\Plugin\Service\ScheduledTask\ReqserNotificiationRemovalHandler;
 
 class ReqserPlugin extends Plugin
 {
+    public const APP_NAME = 'ReqserApp';
 
     public function install(InstallContext $installContext): void
     {
