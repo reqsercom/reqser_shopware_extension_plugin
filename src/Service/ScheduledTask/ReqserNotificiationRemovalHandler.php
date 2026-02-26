@@ -8,6 +8,7 @@ use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTaskHandler;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Reqser\Plugin\ReqserPlugin;
 use Reqser\Plugin\Service\ReqserNotificationService;
 use Reqser\Plugin\Service\ReqserWebhookService;
 use Symfony\Contracts\Cache\CacheInterface;
@@ -68,12 +69,10 @@ class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
 
     private function removeReqserNotifications(): void
     {
-        $app_name = "ReqserApp";
-        
         // Fetch the integration ID associated with your app
         $integration_id = $this->connection->fetchOne(
             "SELECT id FROM `integration` WHERE label = :label",
-            ['label' => $app_name]
+            ['label' => ReqserPlugin::APP_NAME]
         );
     
         if ($integration_id) {
