@@ -3,7 +3,6 @@
 namespace Reqser\Plugin\Service;
 
 use Doctrine\DBAL\Connection;
-use Psr\Log\LoggerInterface;
 use Reqser\Plugin\ReqserPlugin;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
@@ -13,16 +12,13 @@ class ReqserWebhookManagementService
 {
     private Connection $connection;
     private EntityRepository $webhookRepository;
-    private LoggerInterface $logger;
 
     public function __construct(
         Connection $connection,
-        EntityRepository $webhookRepository,
-        LoggerInterface $logger
+        EntityRepository $webhookRepository
     ) {
         $this->connection = $connection;
         $this->webhookRepository = $webhookRepository;
-        $this->logger = $logger;
     }
 
     /**
@@ -88,14 +84,6 @@ class ReqserWebhookManagementService
                 'active' => $active,
             ],
         ], $context);
-
-        $this->logger->info('[ReqserWebhookManagement] Webhook status updated', [
-            'webhookName' => $webhook['name'],
-            'eventName' => $eventName,
-            'active' => $active,
-            'file' => __FILE__,
-            'line' => __LINE__,
-        ]);
 
         return [
             'webhookName' => $webhook['name'],

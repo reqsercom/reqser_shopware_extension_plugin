@@ -2,7 +2,6 @@
 
 namespace Reqser\Plugin\Core\Api\Controller;
 
-use Psr\Log\LoggerInterface;
 use Reqser\Plugin\Service\ReqserApiAuthService;
 use Reqser\Plugin\Service\ReqserWebhookManagementService;
 use Shopware\Core\Framework\Context;
@@ -20,16 +19,13 @@ class ReqserWebhookApiController extends AbstractController
 {
     private ReqserWebhookManagementService $webhookManagementService;
     private ReqserApiAuthService $authService;
-    private LoggerInterface $logger;
 
     public function __construct(
         ReqserWebhookManagementService $webhookManagementService,
-        ReqserApiAuthService $authService,
-        LoggerInterface $logger
+        ReqserApiAuthService $authService
     ) {
         $this->webhookManagementService = $webhookManagementService;
         $this->authService = $authService;
-        $this->logger = $logger;
     }
 
     /**
@@ -155,11 +151,6 @@ class ReqserWebhookApiController extends AbstractController
             ], 404);
 
         } catch (\Throwable $e) {
-            $this->logger->error('Reqser Webhook Management: Error updating webhook status: ' . $e->getMessage(), [
-                'file' => __FILE__,
-                'line' => __LINE__,
-            ]);
-
             return new JsonResponse([
                 'success' => false,
                 'error' => 'Error updating webhook status',
