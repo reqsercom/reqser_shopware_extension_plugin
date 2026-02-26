@@ -76,7 +76,6 @@ class ReqserWebhookApiController extends AbstractController
             ], 404);
 
         } catch (\Throwable $e) {
-
             return new JsonResponse([
                 'success' => false,
                 'error' => 'Error reading webhook status',
