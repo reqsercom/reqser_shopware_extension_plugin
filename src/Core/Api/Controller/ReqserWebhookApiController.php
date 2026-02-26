@@ -80,10 +80,6 @@ class ReqserWebhookApiController extends AbstractController
             ], 404);
 
         } catch (\Throwable $e) {
-            $this->logger->error('Reqser Webhook Management: Error reading webhook status: ' . $e->getMessage(), [
-                'file' => __FILE__,
-                'line' => __LINE__,
-            ]);
 
             return new JsonResponse([
                 'success' => false,
