@@ -4,6 +4,7 @@ namespace Reqser\Plugin\Service;
 
 use Doctrine\DBAL\Connection;
 use Psr\Log\LoggerInterface;
+use Reqser\Plugin\ReqserPlugin;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -63,10 +64,9 @@ class ReqserAppService
     private function queryDatabaseForAppStatus(): bool
     {
         try {
-            $app_name = "ReqserApp";
             $is_app_active = $this->connection->fetchOne(
                 "SELECT active FROM `app` WHERE name = :app_name",
-                ['app_name' => $app_name]
+                ['app_name' => ReqserPlugin::APP_NAME]
             );
             
             return (bool)$is_app_active;
@@ -107,16 +107,15 @@ class ReqserAppService
             // Convert integration ID to binary for database query
             $integrationIdBinary = hex2bin($integrationId);
 
-            // Query database to check if this integration has the label 'ReqserApp'
             $result = $this->connection->fetchOne(
                 "SELECT label FROM integration WHERE id = :integration_id AND label = :label",
                 [
                     'integration_id' => $integrationIdBinary,
-                    'label' => 'ReqserApp'
+                    'label' => ReqserPlugin::APP_NAME
                 ]
             );
 
-            return $result === 'ReqserApp';
+            return $result === ReqserPlugin::APP_NAME;
 
         } catch (\Throwable $e) {
             return false;
