@@ -10,15 +10,10 @@ use Shopware\Core\Framework\Uuid\Uuid;
 
 class ReqserWebhookManagementService
 {
-    private Connection $connection;
-    private EntityRepository $webhookRepository;
-
     public function __construct(
-        Connection $connection,
-        EntityRepository $webhookRepository
+        private readonly Connection $connection,
+        private readonly EntityRepository $webhookRepository
     ) {
-        $this->connection = $connection;
-        $this->webhookRepository = $webhookRepository;
     }
 
     /**

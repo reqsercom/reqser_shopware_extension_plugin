@@ -17,15 +17,10 @@ use Symfony\Component\Routing\Annotation\Route;
 #[Route(defaults: ['_routeScope' => ['api']])]
 class ReqserWebhookApiController extends AbstractController
 {
-    private ReqserWebhookManagementService $webhookManagementService;
-    private ReqserApiAuthService $authService;
-
     public function __construct(
-        ReqserWebhookManagementService $webhookManagementService,
-        ReqserApiAuthService $authService
+        private readonly ReqserWebhookManagementService $webhookManagementService,
+        private readonly ReqserApiAuthService $authService
     ) {
-        $this->webhookManagementService = $webhookManagementService;
-        $this->authService = $authService;
     }
 
     /**
