@@ -2,6 +2,7 @@
 
 ## 2.0.15/1.7.15/1.6.15/1.5.15 03.2026
 - Remove testing exception
+- Webhook status change fix
 
 ## 2.0.14/1.7.14/1.6.14/1.5.14 02.2026
 - New webhook status management route
