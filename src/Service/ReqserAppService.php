@@ -16,32 +16,23 @@ class ReqserAppService
     private Connection $connection;
     private RequestStack $requestStack;
     private CacheInterface $cache;
-    private string $environment;
     private LoggerInterface $logger;
 
     public function __construct(
         Connection $connection,
         RequestStack $requestStack,
         CacheInterface $cache,
-        string $environment,
         LoggerInterface $logger
     ) {
         $this->connection = $connection;
         $this->requestStack = $requestStack;
         $this->cache = $cache;
-        $this->environment = $environment;
         $this->logger = $logger;
     }
 
     public function isAppActive(bool $skipCache = false): bool
     {
         try {
-            // In development/testing environments, always return true (bypass app check)
-            if ($this->environment !== 'prod') {
-                return true;
-            }
-            
-            // Skip cache if explicitly requested (e.g., for critical operations like snippet sync)
             if ($skipCache) {
                 return $this->queryDatabaseForAppStatus();
             }
@@ -84,12 +75,6 @@ class ReqserAppService
     public function isRequestFromReqserApp(Context $context): bool
     {
         try {
-            // In development/testing environments, bypass verification
-            if ($this->environment !== 'prod') {
-                return true;
-            }
-
-            // Get the source from the Context
             $source = $context->getSource();
             
             // Check if source is an AdminApiSource (API integration authentication)

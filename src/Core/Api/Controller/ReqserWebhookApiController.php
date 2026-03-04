@@ -134,7 +134,7 @@ class ReqserWebhookApiController extends AbstractController
 
             $active = $body['active'];
 
-            $result = $this->webhookManagementService->setWebhookStatus($eventName, $active, $context);
+            $result = $this->webhookManagementService->setWebhookStatus($eventName, $active);
 
             return new JsonResponse([
                 'success' => true,
