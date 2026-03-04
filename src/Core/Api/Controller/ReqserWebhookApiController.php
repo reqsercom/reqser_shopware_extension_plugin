@@ -17,10 +17,15 @@ use Symfony\Component\Routing\Annotation\Route;
 #[Route(defaults: ['_routeScope' => ['api']])]
 class ReqserWebhookApiController extends AbstractController
 {
+    private ReqserWebhookManagementService $webhookManagementService;
+    private ReqserApiAuthService $authService;
+
     public function __construct(
-        private readonly ReqserWebhookManagementService $webhookManagementService,
-        private readonly ReqserApiAuthService $authService
+        ReqserWebhookManagementService $webhookManagementService,
+        ReqserApiAuthService $authService
     ) {
+        $this->webhookManagementService = $webhookManagementService;
+        $this->authService = $authService;
     }
 
     /**
@@ -129,7 +134,7 @@ class ReqserWebhookApiController extends AbstractController
 
             $active = $body['active'];
 
-            $result = $this->webhookManagementService->setWebhookStatus($eventName, $active, $context);
+            $result = $this->webhookManagementService->setWebhookStatus($eventName, $active);
 
             return new JsonResponse([
                 'success' => true,

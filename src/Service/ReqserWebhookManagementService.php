@@ -10,10 +10,15 @@ use Shopware\Core\Framework\Uuid\Uuid;
 
 class ReqserWebhookManagementService
 {
+    private Connection $connection;
+    private EntityRepository $webhookRepository;
+
     public function __construct(
-        private readonly Connection $connection,
-        private readonly EntityRepository $webhookRepository
+        Connection $connection,
+        EntityRepository $webhookRepository
     ) {
+        $this->connection = $connection;
+        $this->webhookRepository = $webhookRepository;
     }
 
     /**
@@ -62,23 +67,23 @@ class ReqserWebhookManagementService
      *
      * @param string  $eventName The Shopware event name (e.g. "product.written")
      * @param bool    $active    True to activate, false to deactivate
-     * @param Context $context   Shopware context for the DAL write
      * @return array{webhookName: string, eventName: string, active: bool}
      *
      * @throws \InvalidArgumentException When the ReqserApp or the webhook cannot be found
      */
-    public function setWebhookStatus(string $eventName, bool $active, Context $context): array
+    public function setWebhookStatus(string $eventName, bool $active): array
     {
         $webhook = $this->findWebhook($eventName);
 
         $webhookId = Uuid::fromBytesToHex($webhook['id']);
 
+        //Allow default context as it only controls webhooks of the ReqserApp
         $this->webhookRepository->update([
             [
                 'id' => $webhookId,
                 'active' => $active,
             ],
-        ], $context);
+        ], Context::createDefaultContext());
 
         return [
             'webhookName' => $webhook['name'],
