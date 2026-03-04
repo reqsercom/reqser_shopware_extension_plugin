@@ -24,8 +24,7 @@ class ReqserApiAuthService
     }
 
     /**
-     * Validate authentication for API requests
-     * Checks both localhost and Reqser App integration authentication
+     * Validate authentication for API requests via Reqser App integration.
      * 
      * @param Request $request
      * @param Context $context
@@ -33,12 +32,6 @@ class ReqserApiAuthService
      */
     public function validateAuthentication(Request $request, Context $context): JsonResponse|bool
     {
-        // Check if request is from localhost (for development testing only)
-        if ($this->isLocalhostRequest($request)) {
-            return true; // Allow request
-        }
-        
-        // For production: check if Reqser App is active (skip cache for critical operations)
         if (!$this->appService->isAppActive(skipCache: true)) {
             $this->logger->warning('Reqser API: Unauthorized access attempt - Reqser App not active', [
                 'endpoint' => $request->getPathInfo(),
@@ -54,7 +47,6 @@ class ReqserApiAuthService
             ], 403);
         }
 
-        // Verify request is authenticated via Reqser App integration
         if (!$this->appService->isRequestFromReqserApp($context)) {
             $this->logger->warning('Reqser API: Unauthorized access attempt - Not authenticated via Reqser App integration', [
                 'endpoint' => $request->getPathInfo(),
@@ -70,34 +62,7 @@ class ReqserApiAuthService
             ], 403);
         }
         
-        return true; // Validation passed
-    }
-
-    /**
-     * Check if request is from localhost (for development testing only)
-     * 
-     * @param Request $request
-     * @return bool
-     */
-    private function isLocalhostRequest(Request $request): bool
-    {
-        $clientIp = $request->getClientIp();
-        $host = $request->getHost();
-        
-        // Check for localhost IP addresses
-        $localhostIps = ['127.0.0.1', '::1', 'localhost'];
-        
-        // Check if client IP is localhost
-        if (in_array($clientIp, $localhostIps, true)) {
-            return true;
-        }
-        
-        // Check if host is localhost
-        if (in_array($host, ['localhost', '127.0.0.1', '[::1]'], true)) {
-            return true;
-        }
-        
-        return false;
+        return true;
     }
 }
 
