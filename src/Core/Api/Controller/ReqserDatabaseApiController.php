@@ -265,7 +265,7 @@ class ReqserDatabaseApiController extends AbstractController
      * 
      * Requires:
      * - Reqser App authentication
-     * - Entity must have a corresponding _translation table (or be on the allowlist)
+     * - Entity must have a corresponding _translation table
      * 
      * @param Request $request
      * @param Context $context
@@ -338,7 +338,7 @@ class ReqserDatabaseApiController extends AbstractController
      * 
      * Requires:
      * - Reqser App authentication
-     * - Entity must have a corresponding _translation table (or be on the allowlist)
+     * - Entity must have a corresponding _translation table
      * 
      * @param Request $request
      * @param Context $context
@@ -512,7 +512,7 @@ class ReqserDatabaseApiController extends AbstractController
      * 
      * Requires:
      * - Reqser App authentication
-     * - Entity must have a corresponding _translation table (or be on the allowlist)
+     * - Entity must have a corresponding _translation table
      * 
      * @param Request $request
      * @param Context $context
