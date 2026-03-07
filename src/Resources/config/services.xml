@@ -187,7 +187,7 @@
             <argument type="service" id="logger" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserCustomFieldUsageService" />
             <argument type="service" id="Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry" />
-            <argument type="service" id="Shopware\Core\Framework\DataAbstractionLayer\Search\RequestCriteriaBuilder" />
+            <argument type="service" id="api.request_criteria_builder" />
             <argument type="service" id="Shopware\Core\Framework\Api\Sync\SyncService" />
             <call method="setContainer">
                 <argument type="service" id="service_container" />

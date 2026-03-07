@@ -12,6 +12,7 @@ use Shopware\Core\Framework\Api\Sync\SyncOperation;
 use Shopware\Core\Framework\Api\Sync\SyncService;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
+use Shopware\Core\Framework\DataAbstractionLayer\Exception\SearchRequestException;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\RequestCriteriaBuilder;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -315,6 +316,19 @@ class ReqserDatabaseApiController extends AbstractController
                 'error' => 'Invalid entity',
                 'message' => $e->getMessage()
             ], 400);
+        } catch (SearchRequestException $e) {
+            $errors = iterator_to_array($e->getErrors(true));
+
+            return new JsonResponse([
+                'success' => false,
+                'error' => 'Search criteria mapping failed',
+                'message' => $e->getMessage(),
+                'failures' => $errors,
+                'requestData' => $request->request->all(),
+                'queryData' => $request->query->all(),
+                'contentType' => $request->headers->get('Content-Type'),
+                'rawContentLength' => strlen($request->getContent()),
+            ], $e->getStatusCode());
         } catch (\Throwable $e) {
             return new JsonResponse([
                 'success' => false,
@@ -388,6 +402,19 @@ class ReqserDatabaseApiController extends AbstractController
                 'error' => 'Invalid entity',
                 'message' => $e->getMessage()
             ], 400);
+        } catch (SearchRequestException $e) {
+            $errors = iterator_to_array($e->getErrors(true));
+
+            return new JsonResponse([
+                'success' => false,
+                'error' => 'Search criteria mapping failed',
+                'message' => $e->getMessage(),
+                'failures' => $errors,
+                'requestData' => $request->request->all(),
+                'queryData' => $request->query->all(),
+                'contentType' => $request->headers->get('Content-Type'),
+                'rawContentLength' => strlen($request->getContent()),
+            ], $e->getStatusCode());
         } catch (\Throwable $e) {
             return new JsonResponse([
                 'success' => false,
