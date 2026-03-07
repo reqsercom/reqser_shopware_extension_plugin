@@ -291,7 +291,7 @@ class ReqserDatabaseApiController extends AbstractController
                 return $authResponse;
             }
 
-            $entityUnderscored = str_replace('-', '_', $entity);
+            $entityUnderscored = $this->urlToSnakeCase($entity);
             $this->validateEntityIsTranslationRelated($entityUnderscored);
 
             $definition = $this->definitionRegistry->getByEntityName($entityUnderscored);
@@ -377,7 +377,7 @@ class ReqserDatabaseApiController extends AbstractController
                 return $authResponse;
             }
 
-            $entityUnderscored = str_replace('-', '_', $entity);
+            $entityUnderscored = $this->urlToSnakeCase($entity);
             $this->validateEntityIsTranslationRelated($entityUnderscored);
 
             $definition = $this->definitionRegistry->getByEntityName($entityUnderscored);
@@ -564,7 +564,7 @@ class ReqserDatabaseApiController extends AbstractController
                 return $authResponse;
             }
 
-            $entityUnderscored = str_replace('-', '_', $entity);
+            $entityUnderscored = $this->urlToSnakeCase($entity);
             $this->validateEntityIsTranslationRelated($entityUnderscored);
 
             $definition = $this->definitionRegistry->getByEntityName($entityUnderscored);
@@ -611,5 +611,16 @@ class ReqserDatabaseApiController extends AbstractController
     {
         $translationTable = $entityName . '_translation';
         $this->databaseService->validateTranslationTable($translationTable);
+    }
+
+    /**
+     * Convert URL kebab-case entity name to snake_case for DAL registry lookup.
+     * This is the same approach used by Shopware core's ApiController::urlToSnakeCase().
+     *
+     * @see \Shopware\Core\Framework\Api\Controller\ApiController::urlToSnakeCase()
+     */
+    private function urlToSnakeCase(string $name): string
+    {
+        return str_replace('-', '_', $name);
     }
 }
