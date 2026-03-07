@@ -13,6 +13,8 @@ use Shopware\Core\Framework\Api\Sync\SyncService;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\Exception\SearchRequestException;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\TranslatedField;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\RequestCriteriaBuilder;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -571,6 +573,8 @@ class ReqserDatabaseApiController extends AbstractController
             $repository = $this->definitionRegistry->getRepository($definition->getEntityName());
 
             $payload = $request->request->all();
+            $this->validatePayloadContainsOnlyTranslationFields($definition, $payload);
+
             $payload['id'] = $id;
 
             $context->scope(Context::SYSTEM_SCOPE, function (Context $context) use ($repository, $payload) {
@@ -595,6 +599,45 @@ class ReqserDatabaseApiController extends AbstractController
                 'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString()
             ], 500);
+        }
+    }
+
+    /**
+     * Validate that a PATCH payload only contains translation-safe fields.
+     * Rejects any root-level key that is not a TranslatedField on the entity definition.
+     * This prevents non-translation fields (e.g. price, stock, active) from being
+     * written through the proxy route, which bypasses ACL via SYSTEM_SCOPE.
+     *
+     * Allowed root-level keys:
+     * - 'translations' — nested translation payload (standard Shopware format)
+     * - 'versionId' — required by Shopware's DAL for versioned entities
+     * - Any property name that is a TranslatedField on the entity definition
+     *   (e.g. 'name', 'description', 'metaTitle' for product)
+     *
+     * @param EntityDefinition $definition The entity definition to check against
+     * @param array $payload The request payload (without 'id', which is added after this check)
+     * @throws \InvalidArgumentException If payload contains non-translation fields
+     */
+    private function validatePayloadContainsOnlyTranslationFields(EntityDefinition $definition, array $payload): void
+    {
+        $allowedKeys = ['translations', 'versionId'];
+
+        foreach ($definition->getFields() as $field) {
+            if ($field instanceof TranslatedField) {
+                $allowedKeys[] = $field->getPropertyName();
+            }
+        }
+
+        $disallowedKeys = array_diff(array_keys($payload), $allowedKeys);
+
+        if (!empty($disallowedKeys)) {
+            throw new \InvalidArgumentException(
+                "Payload contains non-translation fields that are not allowed through proxy routes: " .
+                implode(', ', $disallowedKeys) . ". " .
+                "Only 'translations', 'versionId', and TranslatedField properties (" .
+                implode(', ', array_diff($allowedKeys, ['translations', 'versionId'])) .
+                ") are permitted."
+            );
         }
     }
 
