@@ -58,6 +58,26 @@ class ReqserDatabaseService
     }
 
     /**
+     * Validate that a table name is a legitimate translation table.
+     * Checks the suffix is '_translation' AND the table exists in the database.
+     * 
+     * @param string $tableName The table name to validate (e.g. 'product_translation')
+     * @throws \InvalidArgumentException If table name doesn't end with '_translation' or doesn't exist
+     */
+    public function validateTranslationTable(string $tableName): void
+    {
+        if (!str_ends_with($tableName, '_translation')) {
+            throw new \InvalidArgumentException("Table '$tableName' must end with '_translation'");
+        }
+
+        $tables = $this->getTranslationTables();
+
+        if (!in_array($tableName, $tables, true)) {
+            throw new \InvalidArgumentException("Table '$tableName' is not a valid translation table");
+        }
+    }
+
+    /**
      * Get complete schema information for a translation table
      * Returns ALL columns plus a list of which columns are translatable
      * 
@@ -68,12 +88,7 @@ class ReqserDatabaseService
      */
     public function getTranslatableColumnsSchema(string $tableName): array
     {
-        // Verify this is a valid translation table
-        $tables = $this->getTranslationTables();
-        
-        if (!in_array($tableName, $tables, true)) {
-            throw new \InvalidArgumentException("Table '$tableName' is not a valid translation table");
-        }
+        $this->validateTranslationTable($tableName);
 
         // Get ALL columns from the table
         $allColumns = $this->getTableFullSchema($tableName); // Already keyed by field name

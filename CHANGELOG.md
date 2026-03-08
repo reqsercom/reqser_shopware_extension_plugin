@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.16/1.7.16/1.6.16/1.5.16 03.2026
+- New Routes for accessing _translation tables
+
 ## 2.0.15/1.7.15/1.6.15/1.5.15 03.2026
 - Remove testing exception
 - Webhook status change fix
