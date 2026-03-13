@@ -29,7 +29,7 @@ class ReqserSnippetListApiController extends AbstractController
      * - limit (int, optional, default 25)
      * - filters (array, optional)
      * - sort (array, optional)
-     * - translationKeys (array, optional) — since 2.0.17: when provided, only
+     * - translationKeys (array, optional) — since 1.7.17: when provided, only
      *   snippets whose translationKey is in this list are returned. Pagination
      *   is still applied by Shopware before the key filter, so set a high limit
      *   when filtering by key. The response total reflects the filtered count.
