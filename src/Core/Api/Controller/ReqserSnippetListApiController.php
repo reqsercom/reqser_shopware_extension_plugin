@@ -5,7 +5,6 @@ namespace Reqser\Plugin\Core\Api\Controller;
 use Reqser\Plugin\Service\ReqserApiAuthService;
 use Reqser\Plugin\Service\ReqserSnippetListService;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\System\Snippet\SnippetException;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -29,10 +28,10 @@ class ReqserSnippetListApiController extends AbstractController
      * - limit (int, optional, default 25)
      * - filters (array, optional)
      * - sort (array, optional)
-     * - translationKeys (array, optional) — since 2.0.17: when provided, only
-     *   snippets whose translationKey is in this list are returned. Pagination
-     *   is still applied by Shopware before the key filter, so set a high limit
-     *   when filtering by key. The response total reflects the filtered count.
+     * - translationKeys (array, optional) — when provided, only snippets whose
+     *   translationKey is in this list are returned. Pagination is still applied
+     *   by Shopware before the key filter, so set a high limit when filtering
+     *   by key. The response total reflects the filtered count.
      */
     #[Route(
         path: '/api/_action/reqser/snippets/list',
@@ -65,13 +64,21 @@ class ReqserSnippetListApiController extends AbstractController
         $limit = (int) ($payload['limit'] ?? 25);
 
         if ($limit < 1) {
-            throw SnippetException::invalidLimitQuery($limit);
+            return new JsonResponse([
+                'success' => false,
+                'error' => 'Invalid parameter',
+                'message' => 'The "limit" parameter must be a positive integer'
+            ], 400);
         }
 
         $filters = $payload['filters'] ?? [];
         foreach (array_keys($filters) as $filterName) {
             if (!\is_string($filterName)) {
-                throw SnippetException::invalidFilterName();
+                return new JsonResponse([
+                    'success' => false,
+                    'error' => 'Invalid parameter',
+                    'message' => 'Filter names must be strings'
+                ], 400);
             }
         }
 
