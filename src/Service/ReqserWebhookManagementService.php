@@ -7,18 +7,22 @@ use Reqser\Plugin\ReqserPlugin;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Uuid\Uuid;
+use Shopware\Core\Framework\Webhook\WebhookCacheClearer;
 
 class ReqserWebhookManagementService
 {
     private Connection $connection;
     private EntityRepository $webhookRepository;
+    private WebhookCacheClearer $webhookCacheClearer;
 
     public function __construct(
         Connection $connection,
-        EntityRepository $webhookRepository
+        EntityRepository $webhookRepository,
+        WebhookCacheClearer $webhookCacheClearer
     ) {
         $this->connection = $connection;
         $this->webhookRepository = $webhookRepository;
+        $this->webhookCacheClearer = $webhookCacheClearer;
     }
 
     /**
@@ -84,6 +88,10 @@ class ReqserWebhookManagementService
                 'active' => $active,
             ],
         ], Context::createDefaultContext());
+
+        // Shopware's WebhookManager caches the webhook list in memory. Without clearing the cache,
+        // disabled webhooks would still be dispatched until the PHP process restarts (e.g. cache:clear).
+        $this->webhookCacheClearer->clearWebhookCache();
 
         return [
             'webhookName' => $webhook['name'],
