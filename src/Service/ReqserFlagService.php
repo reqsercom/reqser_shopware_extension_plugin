@@ -2,20 +2,32 @@
 
 namespace Reqser\Plugin\Service;
 
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\NotFilter;
 use Symfony\Component\HttpKernel\KernelInterface;
 
 /**
- * Simplified flag service - No app check, just flag utilities
- * Since template override is not active, flags always show via CSS
+ * Flag service providing flag utilities and language switcher flag overrides
+ * via ReqserLanguageSwitch custom fields on sales channel domains.
  */
 class ReqserFlagService
 {
+    private const LANGUAGE_SWITCH_PREFIX = 'ReqserLanguageSwitch';
+
     private KernelInterface $kernel;
+    private EntityRepository $domainRepository;
     private ?bool $swagLanguagePackInstalled = null;
 
-    public function __construct(KernelInterface $kernel)
+    /** @var array<string, array<string, string>> In-memory cache per sales channel ID */
+    private array $flagOverrideCache = [];
+
+    public function __construct(KernelInterface $kernel, EntityRepository $domainRepository)
     {
         $this->kernel = $kernel;
+        $this->domainRepository = $domainRepository;
     }
 
     /**
@@ -41,10 +53,8 @@ class ReqserFlagService
      */
     public function getFlagPath(string $localeCode): string
     {
-        // Extract country code from locale (de-DE -> de, en-GB -> gb)
         $countryCode = strtolower(substr($localeCode, -2));
 
-        // If SwagLanguagePack is installed, prefer its flags
         if ($this->isSwagLanguagePackInstalled()) {
             $swagPath = sprintf('bundles/swaglanguagepack/static/flags/%s.svg', $countryCode);
             if ($this->flagExists($swagPath)) {
@@ -52,7 +62,6 @@ class ReqserFlagService
             }
         }
 
-        // Fallback to plugin's own flags
         return sprintf('bundles/reqserplugin/static/flags/%s.svg', $countryCode);
     }
 
@@ -80,6 +89,43 @@ class ReqserFlagService
         $fullPath = $projectDir . '/public/' . $relativePath;
 
         return file_exists($fullPath);
+    }
+
+    /**
+     * Get flag country code overrides for a sales channel.
+     * Returns a map of languageId => flagCountryCode for domains that have
+     * a ReqserLanguageSwitch.flagCountryCode custom field set.
+     *
+     * @param string $salesChannelId
+     * @param Context $context
+     * @return array<string, string> Map of languageId => 2-letter country code
+     */
+    public function getFlagOverrides(string $salesChannelId, Context $context): array
+    {
+        if (isset($this->flagOverrideCache[$salesChannelId])) {
+            return $this->flagOverrideCache[$salesChannelId];
+        }
+
+        $criteria = new Criteria();
+        $criteria->addFilter(new EqualsFilter('salesChannel.id', $salesChannelId));
+        $criteria->addFilter(new NotFilter(NotFilter::CONNECTION_AND, [
+            new EqualsFilter('customFields.' . self::LANGUAGE_SWITCH_PREFIX, null)
+        ]));
+
+        $domains = $this->domainRepository->search($criteria, $context)->getEntities();
+
+        $overrides = [];
+        foreach ($domains as $domain) {
+            $customFields = $domain->getCustomFields();
+            $flagCode = $customFields[self::LANGUAGE_SWITCH_PREFIX]['flagCountryCode'] ?? null;
+            if ($flagCode !== null && is_string($flagCode)) {
+                $overrides[$domain->getLanguageId()] = strtolower($flagCode);
+            }
+        }
+
+        $this->flagOverrideCache[$salesChannelId] = $overrides;
+
+        return $overrides;
     }
 
     /**

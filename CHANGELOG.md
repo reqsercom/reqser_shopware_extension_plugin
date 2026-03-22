@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.18/1.7.18/1.6.18/1.5.18 03.2026
+- Language switcher flag override
+
 ## 2.0.17/1.7.17/1.6.17/1.5.17 03.2026
 - Snippet list route: add optional `translationKeys` filter for efficient single-entry lookups
 
