@@ -2,6 +2,7 @@
 
 namespace Reqser\Plugin\Service\Twig;
 
+use Reqser\Plugin\Service\ReqserAppService;
 use Reqser\Plugin\Service\ReqserFlagService;
 use Shopware\Core\PlatformRequest;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
@@ -16,11 +17,13 @@ class ReqserFlagExtension extends AbstractExtension
 {
     private ReqserFlagService $flagService;
     private RequestStack $requestStack;
+    private ReqserAppService $appService;
 
-    public function __construct(ReqserFlagService $flagService, RequestStack $requestStack)
+    public function __construct(ReqserFlagService $flagService, RequestStack $requestStack, ReqserAppService $appService)
     {
         $this->flagService = $flagService;
         $this->requestStack = $requestStack;
+        $this->appService = $appService;
     }
 
     /**
@@ -40,11 +43,18 @@ class ReqserFlagExtension extends AbstractExtension
      * Returns a map of languageId => flagCountryCode for the given sales channel.
      * Used in the language-widget template to override the flag CSS class.
      *
+     * Returns empty array when Reqser App is not active, matching the
+     * redirect logic in ReqserLanguageDetectionController.
+     *
      * @param string $salesChannelId
      * @return array<string, string>
      */
     public function getFlagOverrides(string $salesChannelId): array
     {
+        if (!$this->appService->isAppActive()) {
+            return [];
+        }
+
         $request = $this->requestStack->getCurrentRequest();
         if ($request === null) {
             return [];

@@ -8,6 +8,8 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\NotFilter;
 use Symfony\Component\HttpKernel\KernelInterface;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * Flag service providing flag utilities and language switcher flag overrides
@@ -16,18 +18,27 @@ use Symfony\Component\HttpKernel\KernelInterface;
 class ReqserFlagService
 {
     private const LANGUAGE_SWITCH_PREFIX = 'ReqserLanguageSwitch';
+    private const CACHE_EXPIRATION_TIME = 3600;
 
     private KernelInterface $kernel;
     private EntityRepository $domainRepository;
+    private CacheInterface $cache;
+    private string $environment;
     private ?bool $swagLanguagePackInstalled = null;
 
     /** @var array<string, array<string, string>> In-memory cache per sales channel ID */
     private array $flagOverrideCache = [];
 
-    public function __construct(KernelInterface $kernel, EntityRepository $domainRepository)
-    {
+    public function __construct(
+        KernelInterface $kernel,
+        EntityRepository $domainRepository,
+        CacheInterface $cache,
+        string $environment
+    ) {
         $this->kernel = $kernel;
         $this->domainRepository = $domainRepository;
+        $this->cache = $cache;
+        $this->environment = $environment;
     }
 
     /**
@@ -96,6 +107,10 @@ class ReqserFlagService
      * Returns a map of languageId => flagCountryCode for domains that have
      * a ReqserLanguageSwitch.flagCountryCode custom field set.
      *
+     * Uses server-side cache (cache.app) in production to avoid DAL queries on
+     * every storefront page request. Caching is disabled in non-production
+     * environments for testing, matching ReqserLanguageRedirectService.
+     *
      * @param string $salesChannelId
      * @param Context $context
      * @return array<string, string> Map of languageId => 2-letter country code
@@ -106,6 +121,37 @@ class ReqserFlagService
             return $this->flagOverrideCache[$salesChannelId];
         }
 
+        if ($this->isNonProductionEnvironment()) {
+            $result = $this->queryFlagOverrides($salesChannelId, $context);
+            $this->flagOverrideCache[$salesChannelId] = $result;
+            return $result;
+        }
+
+        $cacheKey = 'reqser_flag_overrides_' . $salesChannelId;
+
+        try {
+            $result = $this->cache->get($cacheKey, function (ItemInterface $item) use ($salesChannelId, $context) {
+                $item->expiresAfter(self::CACHE_EXPIRATION_TIME);
+                return $this->queryFlagOverrides($salesChannelId, $context);
+            });
+        } catch (\Throwable $e) {
+            $result = $this->queryFlagOverrides($salesChannelId, $context);
+        }
+
+        $this->flagOverrideCache[$salesChannelId] = $result;
+
+        return $result;
+    }
+
+    /**
+     * Query DAL for flag overrides on a given sales channel.
+     *
+     * @param string $salesChannelId
+     * @param Context $context
+     * @return array<string, string>
+     */
+    private function queryFlagOverrides(string $salesChannelId, Context $context): array
+    {
         $criteria = new Criteria();
         $criteria->addFilter(new EqualsFilter('salesChannel.id', $salesChannelId));
         $criteria->addFilter(new NotFilter(NotFilter::CONNECTION_AND, [
@@ -123,9 +169,17 @@ class ReqserFlagService
             }
         }
 
-        $this->flagOverrideCache[$salesChannelId] = $overrides;
-
         return $overrides;
+    }
+
+    /**
+     * Check if we're in a non-production environment.
+     * Disables caching in any environment that is not production,
+     * matching ReqserLanguageRedirectService behavior.
+     */
+    private function isNonProductionEnvironment(): bool
+    {
+        return $this->environment !== 'prod';
     }
 
     /**
