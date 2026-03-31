@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.19/1.7.19/1.6.19/1.5.19 03.2026
+- Improve snippet route for filtering option
+
 ## 2.0.18/1.7.18/1.6.18/1.5.18 03.2026
 - Language switcher flag override
 
