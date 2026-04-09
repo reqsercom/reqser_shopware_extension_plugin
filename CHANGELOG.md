@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.20/1.7.20/1.6.20/1.5.20 04.2026
+- Use Shopware's TemplateFinder for namespace-aware template discovery and rendering
+
 ## 2.0.19/1.7.19/1.6.19/1.5.19 03.2026
 - Improve snippet route for filtering option
 

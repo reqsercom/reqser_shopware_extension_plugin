@@ -2,31 +2,44 @@
 
 namespace Reqser\Plugin\Service;
 
+use Shopware\Core\Framework\Adapter\Twig\TemplateFinder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Twig\Environment as TwigEnvironment;
+use Twig\Error\LoaderError;
 
 /**
  * Service for discovering CMS element Twig template files
  * 
- * Uses Shopware's Twig template inheritance system to find the actual active templates,
- * respecting plugin overrides and template inheritance.
+ * Discovers all cms-element-*.html.twig files by scanning the filesystem (core +
+ * plugin directories), then resolves each through Shopware's TemplateFinder to
+ * get the actual active template respecting plugin overrides and the bundle
+ * namespace hierarchy.
+ *
+ * This mirrors how Shopware's DocumentTemplateRenderer resolves templates
+ * outside of the storefront request context.
  */
 class ReqserCmsTwigFileService
 {
     private ContainerInterface $container;
     private TwigEnvironment $twig;
+    private TemplateFinder $templateFinder;
 
-    public function __construct(ContainerInterface $container, TwigEnvironment $twig)
-    {
+    public function __construct(
+        ContainerInterface $container,
+        TwigEnvironment $twig,
+        TemplateFinder $templateFinder
+    ) {
         $this->container = $container;
         $this->twig = $twig;
+        $this->templateFinder = $templateFinder;
     }
 
     /**
      * Get all CMS element Twig template files with content
      * 
-     * Discovers all cms-element-*.html.twig template names and resolves them through
-     * Shopware's Twig loader to get the actual active template (respecting overrides).
+     * Discovers all cms-element-*.html.twig template filenames from the filesystem,
+     * then resolves each through TemplateFinder to get the active version (respecting
+     * overrides across the full bundle hierarchy).
      * 
      * @return array<array{fileName: string, path: string, source: string, content: string}>
      */
@@ -34,18 +47,17 @@ class ReqserCmsTwigFileService
     {
         $result = [];
 
-        // Discover all unique CMS element template names
-        $templateNames = $this->discoverAllCmsElementTemplateNames();
+        $elementFileNames = $this->discoverAllCmsElementFileNames();
 
-        // Resolve each template through Twig to get the actual active version
-        foreach ($templateNames as $templateName) {
-            $resolved = $this->resolveTemplate($templateName);
+        $this->templateFinder->reset();
+
+        foreach ($elementFileNames as $fileName) {
+            $resolved = $this->resolveTemplate($fileName);
             if ($resolved !== null) {
                 $result[] = $resolved;
             }
         }
 
-        // Sort alphabetically by filename
         usort($result, function($a, $b) {
             return strcmp($a['fileName'], $b['fileName']);
         });
@@ -54,117 +66,90 @@ class ReqserCmsTwigFileService
     }
 
     /**
-     * Discover all CMS element template names from core and plugins
+     * Discover all unique CMS element template filenames from core and plugins
+     *
+     * Scans the filesystem to find what element templates exist. Returns just
+     * the filenames (e.g., "cms-element-text.html.twig") without namespace
+     * prefixes, since TemplateFinder handles namespace resolution.
      * 
-     * @return array<string> Array of template names (e.g., '@Storefront/storefront/element/cms-element-text.html.twig')
+     * @return array<string> Array of filenames
      */
-    private function discoverAllCmsElementTemplateNames(): array
+    private function discoverAllCmsElementFileNames(): array
     {
-        $templateNames = [];
-
-        // Scan core templates
-        $templateNames = array_merge($templateNames, $this->scanCoreTemplateNames());
-
-        // Scan plugin templates
-        $templateNames = array_merge($templateNames, $this->scanPluginTemplateNames());
-
-        // Return unique template names
-        return array_unique($templateNames);
-    }
-
-    /**
-     * Scan Shopware core for CMS element template names
-     * 
-     * @return array<string>
-     */
-    private function scanCoreTemplateNames(): array
-    {
-        $templateNames = [];
+        $fileNames = [];
         $projectDir = $this->container->getParameter('kernel.project_dir');
+
+        // Scan core Storefront templates
         $coreElementPath = $projectDir . '/vendor/shopware/storefront/Resources/views/storefront/element';
+        $fileNames = array_merge($fileNames, $this->scanDirectoryForCmsElements($coreElementPath));
 
-        if (!is_dir($coreElementPath)) {
-            return $templateNames;
+        // Scan custom plugin templates
+        $pluginsPath = $projectDir . '/custom/plugins';
+        if (is_dir($pluginsPath)) {
+            $pluginDirs = scandir($pluginsPath);
+            foreach ($pluginDirs as $pluginDir) {
+                if ($pluginDir === '.' || $pluginDir === '..') {
+                    continue;
+                }
+                $elementPath = $pluginsPath . '/' . $pluginDir . '/src/Resources/views/storefront/element';
+                $fileNames = array_merge($fileNames, $this->scanDirectoryForCmsElements($elementPath));
+            }
         }
 
-        $files = glob($coreElementPath . '/cms-element-*.html.twig');
-        if ($files === false) {
-            return $templateNames;
-        }
-
-        foreach ($files as $file) {
-            $filename = basename($file);
-            // Shopware template name format
-            $templateNames[] = '@Storefront/storefront/element/' . $filename;
-        }
-
-        return $templateNames;
+        return array_unique($fileNames);
     }
 
     /**
-     * Scan custom plugins for CMS element template names
+     * Scan a directory for cms-element-*.html.twig filenames
      * 
      * @return array<string>
      */
-    private function scanPluginTemplateNames(): array
+    private function scanDirectoryForCmsElements(string $directoryPath): array
     {
-        $templateNames = [];
-        $projectDir = $this->container->getParameter('kernel.project_dir');
-        $pluginsPath = $projectDir . '/custom/plugins';
-
-        if (!is_dir($pluginsPath)) {
-            return $templateNames;
+        if (!is_dir($directoryPath)) {
+            return [];
         }
 
-        $pluginDirs = scandir($pluginsPath);
-
-        foreach ($pluginDirs as $pluginDir) {
-            if ($pluginDir === '.' || $pluginDir === '..') {
-                continue;
-            }
-
-            $elementPath = $pluginsPath . '/' . $pluginDir . '/src/Resources/views/storefront/element';
-
-            if (!is_dir($elementPath)) {
-                continue;
-            }
-
-            $files = glob($elementPath . '/cms-element-*.html.twig');
-            if ($files === false) {
-                continue;
-            }
-
-            foreach ($files as $file) {
-                $filename = basename($file);
-                // Plugin overrides use the same template name as core
-                $templateNames[] = '@Storefront/storefront/element/' . $filename;
-            }
+        $files = glob($directoryPath . '/cms-element-*.html.twig');
+        if ($files === false) {
+            return [];
         }
 
-        return $templateNames;
+        return array_map('basename', $files);
     }
 
     /**
-     * Resolve a template through Shopware's Twig loader to get the actual active file
+     * Resolve a CMS element template filename through Shopware's TemplateFinder
+     *
+     * Uses TemplateFinder::find() which searches the full bundle namespace
+     * hierarchy (core, plugins, apps) to find the active template version.
      * 
-     * This respects template inheritance - if a plugin overrides a core template,
-     * this will return the plugin's version.
-     * 
-     * @param string $templateName Twig template name
+     * @param string $fileName e.g. "cms-element-text.html.twig"
      * @return array{fileName: string, path: string, source: string, content: string}|null
      */
-    private function resolveTemplate(string $templateName): ?array
+    private function resolveTemplate(string $fileName): ?array
     {
         try {
-            $loader = $this->twig->getLoader();
+            $templateRef = '@Storefront/storefront/element/' . $fileName;
 
-            // Check if template exists
-            if (!$loader->exists($templateName)) {
+            try {
+                $resolvedName = $this->templateFinder->find($templateRef, true);
+            } catch (LoaderError) {
                 return null;
             }
 
-            // Get the actual source (respects inheritance/overrides)
-            $source = $loader->getSourceContext($templateName);
+            // TemplateFinder returns the bare path when ignoreMissing=true and
+            // the template doesn't exist in any namespace
+            if (!str_contains($resolvedName, '@')) {
+                return null;
+            }
+
+            $loader = $this->twig->getLoader();
+            if (!$loader->exists($resolvedName)) {
+                return null;
+            }
+
+            $source = $loader->getSourceContext($resolvedName);
             $actualPath = $source->getPath();
             $content = $source->getCode();
 
@@ -172,12 +157,10 @@ class ReqserCmsTwigFileService
                 return null;
             }
 
-            // Determine source (core or plugin name) from the actual file path
             $projectDir = $this->container->getParameter('kernel.project_dir');
             $relativePath = str_replace($projectDir . '/', '', $actualPath);
             $relativePath = str_replace('\\', '/', $relativePath);
 
-            // Parse the path to determine source and directory
             $pathInfo = $this->parseTemplatePath($relativePath);
 
             return [
@@ -188,7 +171,6 @@ class ReqserCmsTwigFileService
             ];
 
         } catch (\Throwable $e) {
-            // Template resolution failed - skip this one
             return null;
         }
     }
@@ -201,14 +183,11 @@ class ReqserCmsTwigFileService
      */
     private function parseTemplatePath(string $relativePath): array
     {
-        // Extract directory without filename
         $directory = dirname($relativePath);
 
-        // Determine source from path
         if (str_starts_with($relativePath, 'vendor/shopware/')) {
             $source = 'core';
         } elseif (str_starts_with($relativePath, 'custom/plugins/')) {
-            // Extract plugin name from path: custom/plugins/PluginName/...
             $parts = explode('/', $relativePath);
             $source = $parts[2] ?? 'unknown';
         } else {
