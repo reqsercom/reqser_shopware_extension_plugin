@@ -9,7 +9,7 @@ use Reqser\Plugin\Service\ReqserDatabaseService;
 use Shopware\Core\Framework\Api\Response\ResponseFactoryInterface;
 use Shopware\Core\Framework\Api\Sync\SyncBehavior;
 use Shopware\Core\Framework\Api\Sync\SyncOperation;
-use Shopware\Core\Framework\Api\Sync\SyncService;
+use Shopware\Core\Framework\Api\Sync\SyncServiceInterface;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\Exception\SearchRequestException;
@@ -36,7 +36,7 @@ class ReqserDatabaseApiController extends AbstractController
     private ReqserCustomFieldUsageService $customFieldUsageService;
     private DefinitionInstanceRegistry $definitionRegistry;
     private RequestCriteriaBuilder $criteriaBuilder;
-    private SyncService $syncService;
+    private SyncServiceInterface $syncService;
 
     public function __construct(
         ReqserDatabaseService $databaseService,
@@ -45,7 +45,7 @@ class ReqserDatabaseApiController extends AbstractController
         ReqserCustomFieldUsageService $customFieldUsageService,
         DefinitionInstanceRegistry $definitionRegistry,
         RequestCriteriaBuilder $criteriaBuilder,
-        SyncService $syncService
+        SyncServiceInterface $syncService
     ) {
         $this->databaseService = $databaseService;
         $this->authService = $authService;
