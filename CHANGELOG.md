@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.21/1.7.21/1.6.21/1.5.21 04.2026
+- Fix DI compatibility with third-party SyncService decorators
+
 ## 2.0.20/1.7.20/1.6.20/1.5.20 04.2026
 - Use Shopware's TemplateFinder for namespace-aware template discovery and rendering
 
