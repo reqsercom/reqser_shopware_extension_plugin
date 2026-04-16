@@ -67,10 +67,15 @@
         <service id="Reqser\Plugin\Service\ReqserFlagService"
                 class="Reqser\Plugin\Service\ReqserFlagService">
             <argument type="service" id="kernel" />
+            <argument type="service" id="sales_channel_domain.repository" />
+            <argument type="service" id="cache.app" />
+            <argument>%kernel.environment%</argument>
         </service>
 
         <service id="Reqser\Plugin\Service\Twig\ReqserFlagExtension">
             <argument type="service" id="Reqser\Plugin\Service\ReqserFlagService" />
+            <argument type="service" id="request_stack" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserAppService" />
             <tag name="twig.extension" />
         </service>
 
@@ -136,6 +141,7 @@
         <service id="Reqser\Plugin\Service\ReqserCmsTwigFileService">
             <argument type="service" id="service_container"/>
             <argument type="service" id="twig"/>
+            <argument type="service" id="Shopware\Core\Framework\Adapter\Twig\TemplateFinder"/>
         </service>
 
         <service id="Reqser\Plugin\Service\ReqserCustomFieldUsageService">
@@ -145,6 +151,7 @@
 
         <service id="Reqser\Plugin\Service\ReqserCmsRenderService">
             <argument type="service" id="twig"/>
+            <argument type="service" id="Shopware\Core\Framework\Adapter\Twig\TemplateFinder"/>
         </service>
 
         <!-- Analytics Services -->

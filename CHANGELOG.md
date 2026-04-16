@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.0.21/1.7.21/1.6.21/1.5.21 04.2026
+- Fix DI compatibility with third-party SyncService decorators
+
+## 2.0.20/1.7.20/1.6.20/1.5.20 04.2026
+- Use Shopware's TemplateFinder for namespace-aware template discovery and rendering
+
+## 2.0.19/1.7.19/1.6.19/1.5.19 03.2026
+- Improve snippet route for filtering option
+
+## 2.0.18/1.7.18/1.6.18/1.5.18 03.2026
+- Language switcher flag override
+
 ## 2.0.17/1.7.17/1.6.17/1.5.17 03.2026
 - Snippet list route: add optional `translationKeys` filter for efficient single-entry lookups
 
