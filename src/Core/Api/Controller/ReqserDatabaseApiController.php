@@ -506,11 +506,13 @@ class ReqserDatabaseApiController extends AbstractController
                 );
             }
 
-            $result = $context->scope(Context::SYSTEM_SCOPE, function (Context $context) use ($operations) {
-                return $this->syncService->sync($operations, $context, new SyncBehavior());
+            $syncBehavior = $this->createSyncBehavior();
+
+            $result = $context->scope(Context::SYSTEM_SCOPE, function (Context $context) use ($operations, $syncBehavior) {
+                return $this->syncService->sync($operations, $context, $syncBehavior);
             });
 
-            return new JsonResponse($result);
+            return new JsonResponse($this->normalizeSyncResult($result));
 
         } catch (\InvalidArgumentException $e) {
             return new JsonResponse([
@@ -665,5 +667,70 @@ class ReqserDatabaseApiController extends AbstractController
     private function urlToSnakeCase(string $name): string
     {
         return str_replace('-', '_', $name);
+    }
+
+    /**
+     * Builds a SyncBehavior compatible with both Shopware 6.4.x and 6.5+.
+     *
+     * The constructor signature changed between versions and is not compatible
+     * positionally:
+     *   - 6.4.x (FEATURE_NEXT_15815 default branch):
+     *       __construct(bool $failOnError, bool $singleOperation = false,
+     *                   ?string $indexingBehavior = null, array $skipIndexers = [])
+     *     → first argument is required.
+     *   - 6.5+ / 6.6+:
+     *       __construct(?string $indexingBehavior = null, array $skipIndexers = [])
+     *     → all optional, but passing a bool would trigger a TypeError.
+     *
+     * We inspect the constructor at runtime so the 1.6.x branch works on the
+     * full 6.4.11–6.5.7 range without depending on a specific core version.
+     */
+    private function createSyncBehavior(): SyncBehavior
+    {
+        $constructor = (new \ReflectionClass(SyncBehavior::class))->getConstructor();
+        $firstParam = $constructor !== null ? ($constructor->getParameters()[0] ?? null) : null;
+
+        if ($firstParam !== null && $firstParam->getName() === 'failOnError') {
+            return new SyncBehavior(false);
+        }
+
+        return new SyncBehavior();
+    }
+
+    /**
+     * Normalizes the SyncService result so the proxy response shape is stable
+     * across the full 1.6.x target range (Shopware 6.4.11–6.5.7).
+     *
+     * On Shopware 6.4.x with FEATURE_NEXT_15815 inactive (the default on 6.4),
+     * SyncResult is the legacy 4-arg variant that carries an additional
+     * $success property. Serialising it as-is yields:
+     *   [data, success, notFound, deleted, extensions]
+     *
+     * On 6.4 with the flag active, and on 6.5+/6.6+ (where the legacy branch
+     * was removed entirely), SyncResult is the 3-arg variant and the
+     * canonical JSON shape is:
+     *   [data, notFound, deleted, extensions]
+     *
+     * This helper strips the feature-flag-dependent `success` key so the
+     * proxy always returns the canonical 6.5+ shape — matching the shape the
+     * standard /api/_action/sync endpoint returns on modern Shopware.
+     *
+     * @return array<string, mixed>
+     */
+    private function normalizeSyncResult(\Shopware\Core\Framework\Struct\Struct $result): array
+    {
+        $payload = $result->jsonSerialize();
+
+        if (\is_array($payload)) {
+            unset($payload['success']);
+            return $payload;
+        }
+
+        return [
+            'data'       => method_exists($result, 'getData') ? $result->getData() : [],
+            'notFound'   => method_exists($result, 'getNotFound') ? $result->getNotFound() : [],
+            'deleted'    => method_exists($result, 'getDeleted') ? $result->getDeleted() : [],
+            'extensions' => [],
+        ];
     }
 }
