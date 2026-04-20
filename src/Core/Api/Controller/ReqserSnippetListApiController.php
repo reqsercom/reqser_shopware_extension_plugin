@@ -29,9 +29,10 @@ class ReqserSnippetListApiController extends AbstractController
      * - filters (array, optional)
      * - sort (array, optional)
      * - translationKeys (array, optional) — when provided, only snippets whose
-     *   translationKey is in this list are returned. Pagination is still applied
-     *   by Shopware before the key filter, so set a high limit when filtering
-     *   by key. The response total reflects the filtered count.
+     *   translationKey is in this list are returned. Uses Shopware's native
+     *   TranslationKeyFilter so filtering happens before pagination inside
+     *   SnippetService::getList(). The response total reflects the filtered count.
+     *   unfilteredTotal contains the total snippet count without the filter.
      */
     #[Route(
         path: '/api/_action/reqser/snippets/list',

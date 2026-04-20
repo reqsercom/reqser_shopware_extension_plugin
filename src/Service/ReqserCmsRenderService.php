@@ -2,34 +2,41 @@
 
 namespace Reqser\Plugin\Service;
 
+use Shopware\Core\Framework\Adapter\Twig\TemplateFinder;
 use Twig\Environment as TwigEnvironment;
+use Twig\Error\LoaderError;
 
 /**
  * Service for rendering CMS slot elements
  * 
- * Renders CMS element data using Shopware's Twig templates
- * Accepts raw configuration data, allowing flexible rendering from any source
+ * Renders CMS element data using Shopware's Twig templates.
+ * Uses Shopware's TemplateFinder to resolve templates through the full bundle
+ * hierarchy, the same way Shopware's DocumentTemplateRenderer works. This
+ * ensures third-party plugin elements (e.g., ck-accordion from FietzRevplusChild)
+ * are found even in admin API context where the storefront theme inheritance
+ * chain is not active.
  */
 class ReqserCmsRenderService
 {
     private TwigEnvironment $twig;
+    private TemplateFinder $templateFinder;
 
-    public function __construct(TwigEnvironment $twig)
+    public function __construct(TwigEnvironment $twig, TemplateFinder $templateFinder)
     {
         $this->twig = $twig;
+        $this->templateFinder = $templateFinder;
     }
 
     /**
      * Render CMS element data to HTML
      * 
-     * @param string $type The CMS element type (e.g., 'text', 'image', 'html')
+     * @param string $type The CMS element type (e.g., 'text', 'image', 'html', 'ck-accordion')
      * @param array $config The element configuration data
      * @return string Base64 encoded rendered HTML
      * @throws \RuntimeException If rendering fails
      */
     public function renderCmsElement(string $type, array $config): string
     {
-        // Render the element using Shopware's template
         $html = $this->renderElementTemplate($type, $config);
 
         return base64_encode($html);
@@ -38,31 +45,34 @@ class ReqserCmsRenderService
     /**
      * Render the element using its Twig template
      * 
-     * @param string $type The element type (e.g., 'text', 'image', 'html')
-     * @param array $config The element configuration data
-     * @return string Rendered HTML
-     * @throws \RuntimeException If template not found or rendering fails
+     * Uses TemplateFinder::find() to resolve the template through Shopware's
+     * bundle namespace hierarchy (same approach as DocumentTemplateRenderer).
      */
     private function renderElementTemplate(string $type, array $config): string
     {
-        // Shopware template naming convention
-        $templateName = '@Storefront/storefront/element/cms-element-' . $type . '.html.twig';
+        $templatePath = '@Storefront/storefront/element/cms-element-' . $type . '.html.twig';
 
-        // Check if template exists
-        if (!$this->twig->getLoader()->exists($templateName)) {
-            throw new \RuntimeException("Template not found: {$templateName}");
+        $this->templateFinder->reset();
+
+        try {
+            $resolvedTemplate = $this->templateFinder->find($templatePath);
+        } catch (LoaderError $e) {
+            throw new \RuntimeException(
+                "Template not found for CMS element type: {$type}. "
+                . "TemplateFinder searched all registered bundle namespaces. "
+                . "Original error: " . $e->getMessage()
+            );
         }
 
-        // Prepare element data structure similar to how Shopware does it
         $elementData = $this->prepareElementData($config);
 
-        // Render the template with element data - let exceptions bubble up
-        $html = $this->twig->render($templateName, [
+        $html = $this->twig->render($resolvedTemplate, [
             'element' => (object)[
                 'type' => $type,
                 'config' => $config,
                 'data' => $elementData,
-                'id' => null  // No ID needed for preview rendering
+                'id' => null,
+                'fieldConfig' => (object)['elements' => (object)$config],
             ]
         ]);
 
@@ -72,9 +82,6 @@ class ReqserCmsRenderService
     /**
      * Prepare element data from configuration
      * Extracts 'value' from {value: ..., source: "static"} structures
-     * 
-     * @param array $config Element configuration
-     * @return object
      */
     private function prepareElementData(array $config): object
     {
@@ -82,7 +89,6 @@ class ReqserCmsRenderService
 
         foreach ($config as $key => $value) {
             if (is_array($value) && isset($value['value'])) {
-                // Extract value from {value: ..., source: ...} structure
                 $data[$key] = $value['value'];
             } else {
                 $data[$key] = $value;
