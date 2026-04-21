@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.22/1.7.22/1.6.22/1.5.22 04.2026
+- Remove language switcher flag override logic
+
 ## 2.0.21/1.7.21/1.6.21/1.5.21 04.2026
 - Fix DI compatibility with third-party SyncService decorators
 
