@@ -31,6 +31,111 @@ class ReqserDatabaseService
     }
 
     /**
+     * Dump every DAL entity definition registered in the installation, with
+     * translation-entity linkage, translatable field list, and the source
+     * bundle/plugin that registered it. Lets the caller detect allowlist-miss
+     * situations (e.g. a custom plugin that ships its own *_translation table
+     * the caller was never told about).
+     *
+     * The `source` field is derived from the EntityDefinition's file location:
+     *   - `core` when the definition lives under `vendor/shopware/`
+     *   - plugin directory name when under `custom/plugins/<name>/`
+     *   - `unknown` otherwise (e.g. compiled cache, symlink-resolved path)
+     *
+     * @return array<int, array{
+     *     entity: string,
+     *     class: string,
+     *     source: string,
+     *     sourcePath: string,
+     *     hasTranslation: bool,
+     *     translationEntity: string|null,
+     *     translatableFields: array<int, string>
+     * }>
+     */
+    public function getEntityDefinitionsDump(): array
+    {
+        $projectDir = '';
+        // Best-effort project dir resolution — EntityDefinition source paths
+        // are prefixed with the real project dir.
+        if (\defined('PHPUNIT_COMPOSER_INSTALL') === false
+            && isset($_SERVER['DOCUMENT_ROOT'])
+            && is_string($_SERVER['DOCUMENT_ROOT'])) {
+            $projectDir = str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT']);
+        }
+        // Fallback: walk up from this file to locate composer.json of the
+        // project (three levels above src/Service/ReqserDatabaseService.php).
+        if ($projectDir === '' || !is_dir($projectDir . '/vendor')) {
+            $candidate = \dirname(__DIR__, 5);
+            if (is_dir($candidate . '/vendor')) {
+                $projectDir = str_replace('\\', '/', $candidate);
+            }
+        }
+
+        $out = [];
+
+        foreach ($this->definitionRegistry->getDefinitions() as $definition) {
+            try {
+                $reflection = new \ReflectionClass($definition);
+                $file = $reflection->getFileName();
+                $fileNorm = is_string($file) ? str_replace('\\', '/', $file) : '';
+
+                $relative = $fileNorm;
+                if ($projectDir !== '' && str_starts_with($fileNorm, $projectDir)) {
+                    $relative = ltrim(substr($fileNorm, strlen($projectDir)), '/');
+                }
+
+                if (str_contains($relative, 'vendor/shopware/')) {
+                    $source = 'core';
+                } elseif (str_contains($relative, 'custom/plugins/')) {
+                    $after = substr($relative, strpos($relative, 'custom/plugins/') + strlen('custom/plugins/'));
+                    $parts = explode('/', $after);
+                    $source = $parts[0] ?? 'unknown';
+                } else {
+                    $source = 'unknown';
+                }
+
+                $translationEntity = null;
+                try {
+                    $translationDefinition = $definition->getTranslationDefinition();
+                    if ($translationDefinition instanceof EntityDefinition) {
+                        $translationEntity = $translationDefinition->getEntityName();
+                    }
+                } catch (\Throwable) {
+                    // Definitions missing translation wiring — treat as no translation.
+                }
+
+                $translatableFields = [];
+                try {
+                    foreach ($definition->getFields() as $field) {
+                        if ($field instanceof TranslatedField) {
+                            $translatableFields[] = $field->getPropertyName();
+                        }
+                    }
+                } catch (\Throwable) {
+                    // Skip fields we cannot introspect; still emit the entity.
+                }
+
+                $out[] = [
+                    'entity' => $definition->getEntityName(),
+                    'class' => $reflection->getName(),
+                    'source' => $source,
+                    'sourcePath' => $relative,
+                    'hasTranslation' => $translationEntity !== null,
+                    'translationEntity' => $translationEntity,
+                    'translatableFields' => $translatableFields,
+                ];
+            } catch (\Throwable) {
+                // Never let a single broken definition break the dump.
+                continue;
+            }
+        }
+
+        usort($out, static fn(array $a, array $b): int => strcmp($a['entity'], $b['entity']));
+
+        return $out;
+    }
+
+    /**
      * Get all database tables ending with _translation
      * 
      * @return array<int, string> Array of translation table names

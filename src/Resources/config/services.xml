@@ -162,6 +162,10 @@
             <argument type="service" id="Shopware\Core\Framework\Adapter\Twig\TemplateFinder"/>
         </service>
 
+        <service id="Reqser\Plugin\Service\ReqserThemeConfigService">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+        </service>
+
         <!-- Analytics Services -->
         <service id="Reqser\Plugin\Service\ReqserAnalyticsService">
             <argument type="service" id="Doctrine\DBAL\Connection"/>
@@ -217,6 +221,14 @@
 
         <service id="Reqser\Plugin\Core\Api\Controller\ReqserWebhookApiController" public="true">
             <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookManagementService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserApiAuthService" />
+            <call method="setContainer">
+                <argument type="service" id="service_container" />
+            </call>
+        </service>
+
+        <service id="Reqser\Plugin\Core\Api\Controller\ReqserThemeApiController" public="true">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserThemeConfigService" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserApiAuthService" />
             <call method="setContainer">
                 <argument type="service" id="service_container" />

@@ -214,6 +214,60 @@ class ReqserDatabaseApiController extends AbstractController
     }
 
     /**
+     * API endpoint to dump every DAL entity definition in the installation
+     * with its translation-entity linkage, translatable fields, and the source
+     * bundle/plugin that registered it.
+     *
+     * Lets the caller detect custom plugin entities that ship their own
+     * `*_translation` table but aren't yet on the caller's allowlist.
+     *
+     * Requires:
+     * - Request MUST be authenticated via the Reqser App's integration credentials
+     * - Reqser App must be active
+     * - GET method only
+     *
+     * @param Request $request
+     * @param Context $context
+     * @return JsonResponse
+     */
+    #[Route(
+        path: '/api/_action/reqser/database/entity-definitions',
+        name: 'api.action.reqser.database.entity_definitions',
+        methods: ['GET']
+    )]
+    public function getEntityDefinitions(Request $request, Context $context): JsonResponse
+    {
+        try {
+            $authResponse = $this->authService->validateAuthentication($request, $context);
+            if ($authResponse !== true) {
+                return $authResponse;
+            }
+
+            $entities = $this->databaseService->getEntityDefinitionsDump();
+
+            return new JsonResponse([
+                'success' => true,
+                'data' => [
+                    'entities' => $entities,
+                    'count' => count($entities),
+                ],
+                'timestamp' => date('Y-m-d H:i:s'),
+            ]);
+
+        } catch (\Throwable $e) {
+            return new JsonResponse([
+                'success' => false,
+                'error' => 'Error retrieving entity definitions',
+                'message' => $e->getMessage(),
+                'exceptionType' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ], 500);
+        }
+    }
+
+    /**
      * API endpoint to analyze which custom fields are referenced in Twig templates.
      * Returns each custom field name, its type, and the Twig files it appears in.
      * 

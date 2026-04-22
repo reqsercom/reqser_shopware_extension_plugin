@@ -37,13 +37,32 @@ class ReqserCmsApiController extends AbstractController
     }
 
     /**
-     * API endpoint to get all CMS element Twig template files
-     * 
+     * API endpoint to get every active storefront Twig template file.
+     *
+     * Recursively collects every `*.html.twig` under
+     * `vendor/shopware/storefront/Resources/views/storefront/` and every
+     * `custom/plugins/*​/src/Resources/views/storefront/`, then resolves each
+     * through Shopware's TemplateFinder so only the single *active* template
+     * per path is returned (theme > plugin > core). Templates from deactivated
+     * plugins are never returned.
+     *
+     * Response shape:
+     *   {
+     *     "success": true,
+     *     "data": { "twigFiles": [ { fileName, path, source, content }, ... ] },
+     *     "timestamp": "..."
+     *   }
+     *
+     * `content` is base64-encoded. `source` is `core` for templates shipped by
+     * `shopware/storefront` or the plugin directory name otherwise, so the
+     * consumer (e.g. the synced `_manifest.json`) can tell core from plugin
+     * files without re-parsing `path`.
+     *
      * Requires:
      * - Request MUST be authenticated via the Reqser App's integration credentials
      * - Reqser App must be active
      * - GET method only
-     * 
+     *
      * @param Request $request
      * @param Context $context
      * @return JsonResponse
@@ -56,14 +75,12 @@ class ReqserCmsApiController extends AbstractController
     public function getTwigFiles(Request $request, Context $context): JsonResponse
     {
         try {
-            // Validate authentication
             $authResponse = $this->authService->validateAuthentication($request, $context);
             if ($authResponse !== true) {
-                return $authResponse; // Return error response if validation failed
+                return $authResponse;
             }
 
-            // Get all CMS element template files
-            $twigFiles = $this->cmsTwigFileService->getAllCmsElementTwigFiles();
+            $twigFiles = $this->cmsTwigFileService->getAllActiveTwigFiles();
 
             return new JsonResponse([
                 'success' => true,
@@ -74,10 +91,9 @@ class ReqserCmsApiController extends AbstractController
             ]);
 
         } catch (\Throwable $e) {
-            // Return error in API response without creating Shopware log entries
             return new JsonResponse([
                 'success' => false,
-                'error' => 'Error retrieving CMS Twig files',
+                'error' => 'Error retrieving storefront Twig files',
                 'message' => $e->getMessage(),
                 'exceptionType' => get_class($e),
                 'file' => $e->getFile(),
