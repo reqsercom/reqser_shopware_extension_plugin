@@ -119,6 +119,13 @@
             <argument type="service" id="logger"/>
         </service>
 
+        <!-- API Auth: auto-validates every controller/method tagged with #[ReqserApiAuth] -->
+        <service id="Reqser\Plugin\Core\Api\EventSubscriber\ReqserApiAuthSubscriber">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserApiAuthService"/>
+            <argument type="service" id="logger"/>
+            <tag name="kernel.event_subscriber"/>
+        </service>
+
         <service id="Reqser\Plugin\Service\ReqserSnippetListService">
             <argument type="service" id="Shopware\Core\System\Snippet\SnippetService"/>
         </service>
@@ -170,7 +177,6 @@
         <!-- API Controllers -->
         <service id="Reqser\Plugin\Core\Api\Controller\ReqserSnippetListApiController" public="true">
             <argument type="service" id="Reqser\Plugin\Service\ReqserSnippetListService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserApiAuthService" />
             <call method="setContainer">
                 <argument type="service" id="service_container" />
             </call>
@@ -178,7 +184,6 @@
 
         <service id="Reqser\Plugin\Core\Api\Controller\ReqserDatabaseApiController" public="true">
             <argument type="service" id="Reqser\Plugin\Service\ReqserDatabaseService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserApiAuthService" />
             <argument type="service" id="logger" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserCustomFieldUsageService" />
             <argument type="service" id="Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry" />
@@ -191,7 +196,6 @@
 
         <service id="Reqser\Plugin\Core\Api\Controller\ReqserAnalyticsApiController" public="true">
             <argument type="service" id="Reqser\Plugin\Service\ReqserAnalyticsService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserApiAuthService" />
             <argument type="service" id="logger" />
             <call method="setContainer">
                 <argument type="service" id="service_container" />
@@ -201,7 +205,6 @@
         <service id="Reqser\Plugin\Core\Api\Controller\ReqserCmsApiController" public="true">
             <argument type="service" id="Reqser\Plugin\Service\ReqserCmsTwigFileService" />
             <argument type="service" id="Reqser\Plugin\Service\ReqserCmsRenderService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserApiAuthService" />
             <argument type="service" id="logger" />
             <call method="setContainer">
                 <argument type="service" id="service_container" />
@@ -210,7 +213,6 @@
 
         <service id="Reqser\Plugin\Core\Api\Controller\ReqserWebhookApiController" public="true">
             <argument type="service" id="Reqser\Plugin\Service\ReqserWebhookManagementService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserApiAuthService" />
             <call method="setContainer">
                 <argument type="service" id="service_container" />
             </call>
@@ -218,7 +220,6 @@
 
         <service id="Reqser\Plugin\Core\Api\Controller\ReqserThemeApiController" public="true">
             <argument type="service" id="Reqser\Plugin\Service\ReqserThemeConfigService" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserApiAuthService" />
             <call method="setContainer">
                 <argument type="service" id="service_container" />
             </call>

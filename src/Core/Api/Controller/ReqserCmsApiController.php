@@ -3,7 +3,7 @@
 namespace Reqser\Plugin\Core\Api\Controller;
 
 use Psr\Log\LoggerInterface;
-use Reqser\Plugin\Service\ReqserApiAuthService;
+use Reqser\Plugin\Core\Api\Attribute\ReqserApiAuth;
 use Reqser\Plugin\Service\ReqserCmsRenderService;
 use Reqser\Plugin\Service\ReqserCmsTwigFileService;
 use Shopware\Core\Framework\Context;
@@ -17,22 +17,20 @@ use Symfony\Component\Routing\Annotation\Route;
  * Accessible only via authenticated API requests
  */
 #[Route(defaults: ['_routeScope' => ['api']])]
+#[ReqserApiAuth]
 class ReqserCmsApiController extends AbstractController
 {
     private ReqserCmsTwigFileService $cmsTwigFileService;
     private ReqserCmsRenderService $cmsRenderService;
-    private ReqserApiAuthService $authService;
     private LoggerInterface $logger;
 
     public function __construct(
         ReqserCmsTwigFileService $cmsTwigFileService,
         ReqserCmsRenderService $cmsRenderService,
-        ReqserApiAuthService $authService,
         LoggerInterface $logger
     ) {
         $this->cmsTwigFileService = $cmsTwigFileService;
         $this->cmsRenderService = $cmsRenderService;
-        $this->authService = $authService;
         $this->logger = $logger;
     }
 
@@ -47,11 +45,6 @@ class ReqserCmsApiController extends AbstractController
     public function getTwigFiles(Request $request, Context $context): JsonResponse
     {
         try {
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse;
-            }
-
             $twigFiles = $this->cmsTwigFileService->getAllActiveTwigFiles();
 
             return new JsonResponse([
@@ -111,13 +104,6 @@ class ReqserCmsApiController extends AbstractController
     public function renderElement(Request $request, Context $context): JsonResponse
     {
         try {
-            // Validate authentication
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse; // Return error response if validation failed
-            }
-
-            // Parse request body
             $data = json_decode($request->getContent(), true);
             
             if (!is_array($data)) {

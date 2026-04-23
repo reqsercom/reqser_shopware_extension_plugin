@@ -2,7 +2,7 @@
 
 namespace Reqser\Plugin\Core\Api\Controller;
 
-use Reqser\Plugin\Service\ReqserApiAuthService;
+use Reqser\Plugin\Core\Api\Attribute\ReqserApiAuth;
 use Reqser\Plugin\Service\ReqserThemeConfigService;
 use Shopware\Core\Framework\Context;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -20,17 +20,15 @@ use Symfony\Component\Routing\Annotation\Route;
  * Shipped in plugin 2.0.23.
  */
 #[Route(defaults: ['_routeScope' => ['api']])]
+#[ReqserApiAuth]
 class ReqserThemeApiController extends AbstractController
 {
     private ReqserThemeConfigService $themeConfigService;
-    private ReqserApiAuthService $authService;
 
     public function __construct(
-        ReqserThemeConfigService $themeConfigService,
-        ReqserApiAuthService $authService
+        ReqserThemeConfigService $themeConfigService
     ) {
         $this->themeConfigService = $themeConfigService;
-        $this->authService = $authService;
     }
 
     /**
@@ -54,11 +52,6 @@ class ReqserThemeApiController extends AbstractController
     public function getThemeConfig(Request $request, Context $context): JsonResponse
     {
         try {
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse;
-            }
-
             $themes = $this->themeConfigService->dumpThemes();
 
             return new JsonResponse([

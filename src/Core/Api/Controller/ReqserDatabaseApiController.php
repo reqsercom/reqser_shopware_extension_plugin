@@ -3,7 +3,7 @@
 namespace Reqser\Plugin\Core\Api\Controller;
 
 use Psr\Log\LoggerInterface;
-use Reqser\Plugin\Service\ReqserApiAuthService;
+use Reqser\Plugin\Core\Api\Attribute\ReqserApiAuth;
 use Reqser\Plugin\Service\ReqserCustomFieldUsageService;
 use Reqser\Plugin\Service\ReqserDatabaseService;
 use Shopware\Core\Framework\Api\Response\ResponseFactoryInterface;
@@ -25,13 +25,14 @@ use Symfony\Component\Routing\Annotation\Route;
 
 /**
  * Admin API Controller for Reqser Database Operations
- * Accessible only via authenticated API requests
+ * Accessible only via authenticated API requests (enforced by
+ * #[ReqserApiAuth] + ReqserApiAuthSubscriber).
  */
 #[Route(defaults: ['_routeScope' => ['api']])]
+#[ReqserApiAuth]
 class ReqserDatabaseApiController extends AbstractController
 {
     private ReqserDatabaseService $databaseService;
-    private ReqserApiAuthService $authService;
     private LoggerInterface $logger;
     private ReqserCustomFieldUsageService $customFieldUsageService;
     private DefinitionInstanceRegistry $definitionRegistry;
@@ -40,7 +41,6 @@ class ReqserDatabaseApiController extends AbstractController
 
     public function __construct(
         ReqserDatabaseService $databaseService,
-        ReqserApiAuthService $authService,
         LoggerInterface $logger,
         ReqserCustomFieldUsageService $customFieldUsageService,
         DefinitionInstanceRegistry $definitionRegistry,
@@ -48,7 +48,6 @@ class ReqserDatabaseApiController extends AbstractController
         SyncServiceInterface $syncService
     ) {
         $this->databaseService = $databaseService;
-        $this->authService = $authService;
         $this->logger = $logger;
         $this->customFieldUsageService = $customFieldUsageService;
         $this->definitionRegistry = $definitionRegistry;
@@ -76,13 +75,6 @@ class ReqserDatabaseApiController extends AbstractController
     public function getTranslationTables(Request $request, Context $context): JsonResponse
     {
         try {
-            // Validate authentication
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse; // Return error response if validation failed
-            }
-
-            // Get translation tables from database
             $tables = $this->databaseService->getTranslationTables();
 
             return new JsonResponse([
@@ -132,13 +124,6 @@ class ReqserDatabaseApiController extends AbstractController
     public function getTranslationTableSchema(Request $request, Context $context): JsonResponse
     {
         try {
-            // Validate authentication
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse; // Return error response if validation failed
-            }
-
-            // Get table name from route parameter
             $tableName = $request->attributes->get('tableName');
 
             if (empty($tableName)) {
@@ -224,11 +209,6 @@ class ReqserDatabaseApiController extends AbstractController
     public function getEntityDefinitions(Request $request, Context $context): JsonResponse
     {
         try {
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse;
-            }
-
             $entities = $this->databaseService->getEntityDefinitionsDump();
 
             return new JsonResponse([
@@ -274,12 +254,6 @@ class ReqserDatabaseApiController extends AbstractController
     public function getCustomFieldUsage(Request $request, Context $context): JsonResponse
     {
         try {
-            // Validate authentication
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse;
-            }
-
             $result = $this->customFieldUsageService->getCustomFieldTwigUsage();
 
             return new JsonResponse([
@@ -328,11 +302,6 @@ class ReqserDatabaseApiController extends AbstractController
         string $entity
     ): Response {
         try {
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse;
-            }
-
             $entityUnderscored = $this->urlToSnakeCase($entity);
             $this->validateEntityIsTranslationRelated($entityUnderscored);
 
@@ -414,11 +383,6 @@ class ReqserDatabaseApiController extends AbstractController
         string $entity
     ): Response {
         try {
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse;
-            }
-
             $entityUnderscored = $this->urlToSnakeCase($entity);
             $this->validateEntityIsTranslationRelated($entityUnderscored);
 
@@ -491,11 +455,6 @@ class ReqserDatabaseApiController extends AbstractController
     public function syncTranslationData(Request $request, Context $context): JsonResponse
     {
         try {
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse;
-            }
-
             $payload = $request->request->all();
 
             if (empty($payload)) {
@@ -601,11 +560,6 @@ class ReqserDatabaseApiController extends AbstractController
         string $id
     ): Response {
         try {
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse;
-            }
-
             $entityUnderscored = $this->urlToSnakeCase($entity);
             $this->validateEntityIsTranslationRelated($entityUnderscored);
 

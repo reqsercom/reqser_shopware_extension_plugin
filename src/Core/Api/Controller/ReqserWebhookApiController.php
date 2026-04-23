@@ -2,7 +2,7 @@
 
 namespace Reqser\Plugin\Core\Api\Controller;
 
-use Reqser\Plugin\Service\ReqserApiAuthService;
+use Reqser\Plugin\Core\Api\Attribute\ReqserApiAuth;
 use Reqser\Plugin\Service\ReqserWebhookManagementService;
 use Shopware\Core\Framework\Context;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -15,17 +15,15 @@ use Symfony\Component\Routing\Annotation\Route;
  * Allows the Reqser server to read, activate, or deactivate ReqserApp webhooks
  */
 #[Route(defaults: ['_routeScope' => ['api']])]
+#[ReqserApiAuth]
 class ReqserWebhookApiController extends AbstractController
 {
     private ReqserWebhookManagementService $webhookManagementService;
-    private ReqserApiAuthService $authService;
 
     public function __construct(
-        ReqserWebhookManagementService $webhookManagementService,
-        ReqserApiAuthService $authService
+        ReqserWebhookManagementService $webhookManagementService
     ) {
         $this->webhookManagementService = $webhookManagementService;
-        $this->authService = $authService;
     }
 
     /**
@@ -47,11 +45,6 @@ class ReqserWebhookApiController extends AbstractController
     public function getWebhookStatus(Request $request, Context $context): JsonResponse
     {
         try {
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse;
-            }
-
             $eventName = $request->query->get('eventName');
 
             if (!empty($eventName)) {
@@ -107,12 +100,6 @@ class ReqserWebhookApiController extends AbstractController
     public function updateWebhookStatus(Request $request, Context $context): JsonResponse
     {
         try {
-            // Validate authentication
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse;
-            }
-
             $body = json_decode($request->getContent(), true) ?? [];
 
             $eventName = $body['eventName'] ?? null;
