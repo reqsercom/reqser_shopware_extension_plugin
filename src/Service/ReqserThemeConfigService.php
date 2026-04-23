@@ -1,0 +1,188 @@
+<?php declare(strict_types=1);
+
+namespace Reqser\Plugin\Service;
+
+use Doctrine\DBAL\Connection;
+
+/**
+ * Service that dumps every Shopware theme with its configuration and
+ * translations for the Reqser backend. Exposed via
+ * /api/_action/reqser/theme/config (ReqserThemeApiController).
+ *
+ * Not a DAL read — the `theme` and `theme_translation` tables are queried
+ * directly through Doctrine DBAL because the backend wants the raw
+ * `base_config`, `config_values` and `theme_json` blobs without the
+ * DAL's schema-driven massaging (Shopware's theme DAL strips merchant
+ * custom fields that aren't declared in a plugin's theme config).
+ *
+ * All JSON text columns are decoded here so the HTTP response carries
+ * arrays, not strings — consumers never have to parse twice.
+ *
+ * Join chain for the locale annotation on translations:
+ *   theme_translation.language_id → language.locale_id → locale.code
+ */
+class ReqserThemeConfigService
+{
+    private Connection $connection;
+
+    public function __construct(Connection $connection)
+    {
+        $this->connection = $connection;
+    }
+
+    /**
+     * Dump every theme with per-theme translations, annotated with the
+     * human locale code (`de-DE`) so consumers don't need a second
+     * round-trip to language/locale to identify each translation row.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function dumpThemes(): array
+    {
+        $localeMap = $this->fetchLanguageLocaleMap();
+
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT
+                LOWER(HEX(id))               AS id,
+                technical_name               AS technicalName,
+                name                         AS name,
+                active                       AS active,
+                LOWER(HEX(parent_theme_id))  AS parentThemeId,
+                base_config                  AS baseConfig,
+                config_values                AS configValues,
+                theme_json                   AS themeJson,
+                created_at                   AS createdAt,
+                updated_at                   AS updatedAt
+             FROM theme
+             ORDER BY technical_name ASC, id ASC'
+        );
+
+        $result = [];
+
+        foreach ($rows as $row) {
+            $themeId = $row['id'];
+
+            $result[] = [
+                'id'            => $themeId,
+                'technicalName' => $row['technicalName'] !== null ? (string) $row['technicalName'] : null,
+                'name'          => $row['name'] !== null ? (string) $row['name'] : null,
+                'active'        => (bool) $row['active'],
+                'parentThemeId' => ($row['parentThemeId'] === null || $row['parentThemeId'] === '')
+                    ? null
+                    : $row['parentThemeId'],
+                'baseConfig'    => $this->decodeJsonColumn($row['baseConfig']),
+                'configValues'  => $this->decodeJsonColumn($row['configValues']),
+                'themeJson'     => $this->decodeJsonColumn($row['themeJson']),
+                'createdAt'     => $row['createdAt'],
+                'updatedAt'     => $row['updatedAt'],
+                'translations'  => $this->fetchTranslationsForTheme($themeId, $localeMap),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Fetch all theme_translation rows for a theme, annotated with the
+     * locale code pulled from the language → locale join.
+     *
+     * @param array<string, string> $localeMap language_id (hex) → locale code
+     * @return array<int, array<string, mixed>>
+     */
+    private function fetchTranslationsForTheme(string $themeIdHex, array $localeMap): array
+    {
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT
+                LOWER(HEX(tt.theme_id))    AS theme_id,
+                LOWER(HEX(tt.language_id)) AS language_id,
+                tt.labels                  AS labels,
+                tt.description             AS description,
+                tt.help_texts              AS help_texts,
+                tt.custom_fields           AS custom_fields,
+                tt.created_at              AS created_at,
+                tt.updated_at              AS updated_at
+             FROM theme_translation tt
+             WHERE tt.theme_id = UNHEX(:theme_id)
+             ORDER BY tt.language_id ASC',
+            ['theme_id' => $themeIdHex]
+        );
+
+        $translations = [];
+
+        foreach ($rows as $row) {
+            $languageId = $row['language_id'];
+            $translations[] = [
+                'theme_id'      => $row['theme_id'],
+                'language_id'   => $languageId,
+                'locale'        => $localeMap[$languageId] ?? null,
+                'labels'        => $this->decodeJsonColumn($row['labels']),
+                'description'   => $row['description'] !== null ? (string) $row['description'] : null,
+                'help_texts'    => $this->decodeJsonColumn($row['help_texts']),
+                'custom_fields' => $this->decodeJsonColumn($row['custom_fields']),
+                'created_at'    => $row['created_at'],
+                'updated_at'    => $row['updated_at'],
+            ];
+        }
+
+        return $translations;
+    }
+
+    /**
+     * Build a language_id → locale.code map once per request. The
+     * translation dump then looks each row up in O(1) instead of
+     * re-joining per row.
+     *
+     * @return array<string, string>
+     */
+    private function fetchLanguageLocaleMap(): array
+    {
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT
+                LOWER(HEX(l.id)) AS language_id,
+                loc.code         AS locale
+             FROM language l
+             LEFT JOIN locale loc ON loc.id = l.locale_id'
+        );
+
+        $map = [];
+        foreach ($rows as $row) {
+            if (!empty($row['language_id']) && !empty($row['locale'])) {
+                $map[$row['language_id']] = (string) $row['locale'];
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * Decode a DB JSON column. Returns null for empty input, the decoded
+     * structure when the payload is valid JSON, or the raw string when
+     * it is non-empty but not JSON (defensive — theme.base_config is
+     * always JSON in practice, but we never want a decode failure to
+     * swallow data).
+     *
+     * @return array<mixed>|string|null
+     */
+    private function decodeJsonColumn(mixed $value): array|string|null
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (!is_string($value)) {
+            return $value;
+        }
+
+        $trimmed = trim($value);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        $decoded = json_decode($trimmed, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            return $decoded;
+        }
+
+        return $value;
+    }
+}
