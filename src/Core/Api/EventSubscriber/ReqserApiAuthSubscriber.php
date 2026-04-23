@@ -32,6 +32,10 @@ class ReqserApiAuthSubscriber implements EventSubscriberInterface
     private ReqserApiAuthService $authService;
     private LoggerInterface $logger;
 
+    /**
+     * @param ReqserApiAuthService $authService
+     * @param LoggerInterface $logger
+     */
     public function __construct(
         ReqserApiAuthService $authService,
         LoggerInterface $logger
@@ -47,6 +51,10 @@ class ReqserApiAuthSubscriber implements EventSubscriberInterface
         ];
     }
 
+    /**
+     * @param ControllerEvent $event
+     * @return void
+     */
     public function onController(ControllerEvent $event): void
     {
         $controller = $event->getController();

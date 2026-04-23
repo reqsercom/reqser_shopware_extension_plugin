@@ -19,6 +19,11 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
     private string $debugFile;
     private bool $debugMode = false;
 
+    /**
+     * @param ReqserVersionService $versionService
+     * @param TranslatorInterface $translator
+     * @param ReqserNotificationService $notificationService
+     */
     public function __construct(ReqserVersionService $versionService, TranslatorInterface $translator, ReqserNotificationService $notificationService)
     {
         $this->cache = new FilesystemAdapter('reqser_extension_api');
@@ -38,6 +43,9 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
 
     /**
      * Handle extension listing loaded event
+     *
+     * @param InstalledExtensionsListingLoadedEvent $event
+     * @return void
      */
     public function onExtensionsListingLoaded(InstalledExtensionsListingLoadedEvent $event): void
     {
@@ -165,6 +173,11 @@ class ReqserPluginVersionCheckSubscriber implements EventSubscriberInterface
         return null;
     }
 
+    /**
+     * @param string $message
+     * @param mixed $line
+     * @return void
+     */
     private function writeLog(string $message, $line = null): void
     {
         if (!$this->debugMode) {

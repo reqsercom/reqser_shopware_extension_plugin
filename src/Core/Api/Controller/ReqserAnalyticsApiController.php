@@ -22,6 +22,10 @@ class ReqserAnalyticsApiController extends AbstractController
     private ReqserAnalyticsService $analyticsService;
     private LoggerInterface $logger;
 
+    /**
+     * @param ReqserAnalyticsService $analyticsService
+     * @param LoggerInterface $logger
+     */
     public function __construct(
         ReqserAnalyticsService $analyticsService,
         LoggerInterface $logger
@@ -32,7 +36,7 @@ class ReqserAnalyticsApiController extends AbstractController
 
     /**
      * API endpoint to get order and amount distribution percentage breakdown by language.
-     *
+     * 
      * Request body (all fields optional):
      * - from: Start date in Y-m-d format
      * - until: End date in Y-m-d format

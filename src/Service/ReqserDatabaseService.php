@@ -18,6 +18,12 @@ class ReqserDatabaseService
     private DefinitionInstanceRegistry $definitionRegistry;
     private ReqserJsonFieldDetectionService $jsonFieldDetectionService;
 
+    /**
+     * @param Connection $connection
+     * @param LoggerInterface $logger
+     * @param DefinitionInstanceRegistry $definitionRegistry
+     * @param ReqserJsonFieldDetectionService $jsonFieldDetectionService
+     */
     public function __construct(
         Connection $connection,
         LoggerInterface $logger,
@@ -165,8 +171,9 @@ class ReqserDatabaseService
     /**
      * Validate that a table name is a legitimate translation table.
      * Checks the suffix is '_translation' AND the table exists in the database.
-     * 
-     * @param string $tableName The table name to validate (e.g. 'product_translation')
+     *
+     * @param string $tableName
+     * @return void
      * @throws \InvalidArgumentException If table name doesn't end with '_translation' or doesn't exist
      */
     public function validateTranslationTable(string $tableName): void
@@ -185,9 +192,9 @@ class ReqserDatabaseService
     /**
      * Get complete schema information for a translation table
      * Returns ALL columns plus a list of which columns are translatable
-     * 
-     * @param string $tableName The translation table name
-     * @return array{schema: array<string, array<string, mixed>>, translatableRows: array<int, string>}
+     *
+     * @param string $tableName
+     * @return array
      * @throws \InvalidArgumentException If table name is invalid
      * @throws \RuntimeException If database query fails
      */
@@ -210,11 +217,11 @@ class ReqserDatabaseService
     /**
      * Get detailed information about a specific translatable column
      * Checks if the column type is JSON and returns extended details
-     * 
-     * @param string $tableName The translation table name
-     * @param string $columnName The column name to get details for
-     * @param array<string, mixed> $columnSchema The schema for this column
-     * @return array{columnName: string, schema: array, rowDetails: array}
+     *
+     * @param string $tableName
+     * @param string $columnName
+     * @param array $columnSchema
+     * @return array
      */
     public function getTranslationTableRowDetails(string $tableName, string $columnName, array $columnSchema): array
     {
@@ -246,9 +253,9 @@ class ReqserDatabaseService
     /**
      * Get translatable fields for a specific translation table
      * Uses direct entity lookup for maximum performance
-     * 
-     * @param string $tableName The translation table name (e.g., 'product_translation')
-     * @return array<string> Array of translatable field names
+     *
+     * @param string $tableName
+     * @return array
      */
     private function getTranslatableFieldsForTable(string $tableName): array
     {
@@ -285,9 +292,9 @@ class ReqserDatabaseService
     /**
      * Get full schema information for a table (including all columns, not just translatable ones)
      * Uses SHOW COLUMNS command for standard MySQL schema format
-     * 
-     * @param string $tableName The table name
-     * @return array<string, array<string, mixed>> Associative array [columnName => schema]
+     *
+     * @param string $tableName
+     * @return array
      * @throws \RuntimeException If schema query fails
      */
     private function getTableFullSchema(string $tableName): array
@@ -320,7 +327,7 @@ class ReqserDatabaseService
 
     /**
      * Convert camelCase to snake_case
-     * 
+     *
      * @param string $input
      * @return string
      */

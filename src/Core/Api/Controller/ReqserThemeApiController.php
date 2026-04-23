@@ -25,6 +25,9 @@ class ReqserThemeApiController extends AbstractController
 {
     private ReqserThemeConfigService $themeConfigService;
 
+    /**
+     * @param ReqserThemeConfigService $themeConfigService
+     */
     public function __construct(
         ReqserThemeConfigService $themeConfigService
     ) {
@@ -33,16 +36,20 @@ class ReqserThemeApiController extends AbstractController
 
     /**
      * GET /api/_action/reqser/theme/config
-     *
+     * 
      * Response envelope mirrors the other Reqser admin routes:
      *   {
      *     "success": true,
      *     "data": { "themes": [...], "count": N },
      *     "timestamp": "YYYY-mm-dd HH:ii:ss"
      *   }
-     *
+     * 
      * On failure returns success=false with the exception details so
      * a ticket operator can triage without needing SSH access.
+     *
+     * @param Request $request
+     * @param Context $context
+     * @return JsonResponse
      */
     #[Route(
         path: '/api/_action/reqser/theme/config',

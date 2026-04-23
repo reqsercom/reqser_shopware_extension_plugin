@@ -20,6 +20,9 @@ class ReqserWebhookApiController extends AbstractController
 {
     private ReqserWebhookManagementService $webhookManagementService;
 
+    /**
+     * @param ReqserWebhookManagementService $webhookManagementService
+     */
     public function __construct(
         ReqserWebhookManagementService $webhookManagementService
     ) {
@@ -28,7 +31,7 @@ class ReqserWebhookApiController extends AbstractController
 
     /**
      * API endpoint to read the current status of ReqserApp webhooks.
-     *
+     * 
      * Optional query parameter:
      * - eventName: Shopware event name (e.g. "product.written") to get a single webhook.
      *   Omit to return all ReqserApp webhooks.
@@ -83,7 +86,7 @@ class ReqserWebhookApiController extends AbstractController
 
     /**
      * API endpoint to activate or deactivate a ReqserApp webhook.
-     *
+     * 
      * Request body:
      * - eventName: Shopware event name (e.g. "product.written", "category.written")
      * - active: boolean — true to activate, false to deactivate

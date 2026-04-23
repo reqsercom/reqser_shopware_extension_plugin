@@ -7,20 +7,23 @@ use Shopware\Core\System\Snippet\SnippetService;
 
 class ReqserSnippetListService
 {
+    /**
+     * @param SnippetService $snippetService
+     */
     public function __construct(
         private readonly SnippetService $snippetService
     ) {
     }
 
     /**
-     * @param list<string> $snippetSetIds
-     * @param array<string, mixed> $filters
-     * @param array<string, mixed> $sort
-     * @param list<string>|null $translationKeys When non-null, passed as native Shopware
-     *                                           'translationKey' filter so filtering happens
-     *                                           before pagination inside SnippetService::getList()
-     *
-     * @return array{total:int, data: array<string, list<array<string, mixed>>>}
+     * @param array $snippetSetIds
+     * @param int $page
+     * @param int $limit
+     * @param Context $context
+     * @param array $filters
+     * @param array $sort
+     * @param array|null $translationKeys
+     * @return array
      */
     public function getListForSnippetSets(
         array $snippetSetIds,

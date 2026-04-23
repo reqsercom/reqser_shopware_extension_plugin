@@ -13,6 +13,9 @@ class ReqserFlagExtension extends AbstractExtension
 {
     private ReqserFlagService $flagService;
 
+    /**
+     * @param ReqserFlagService $flagService
+     */
     public function __construct(ReqserFlagService $flagService)
     {
         $this->flagService = $flagService;

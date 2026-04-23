@@ -12,6 +12,9 @@ class ReqserFlagService
     private KernelInterface $kernel;
     private ?bool $swagLanguagePackInstalled = null;
 
+    /**
+     * @param KernelInterface $kernel
+     */
     public function __construct(KernelInterface $kernel)
     {
         $this->kernel = $kernel;
@@ -34,9 +37,9 @@ class ReqserFlagService
 
     /**
      * Get flag path with fallback logic (no app check)
-     * 
-     * @param string $localeCode Locale code like 'de-DE', 'en-GB', etc.
-     * @return string Path to flag SVG
+     *
+     * @param string $localeCode
+     * @return string
      */
     public function getFlagPath(string $localeCode): string
     {
@@ -54,9 +57,9 @@ class ReqserFlagService
 
     /**
      * Get CSS class for flag with country code
-     * 
-     * @param string $localeCode Locale code like 'de-DE', 'en-GB', etc.
-     * @return string CSS class like 'language-flag country-de'
+     *
+     * @param string $localeCode
+     * @return string
      */
     public function getFlagClass(string $localeCode): string
     {
@@ -66,8 +69,8 @@ class ReqserFlagService
 
     /**
      * Check if a flag file exists in public bundles
-     * 
-     * @param string $relativePath Relative path from public directory
+     *
+     * @param string $relativePath
      * @return bool
      */
     private function flagExists(string $relativePath): bool

@@ -24,6 +24,11 @@ class ReqserCmsApiController extends AbstractController
     private ReqserCmsRenderService $cmsRenderService;
     private LoggerInterface $logger;
 
+    /**
+     * @param ReqserCmsTwigFileService $cmsTwigFileService
+     * @param ReqserCmsRenderService $cmsRenderService
+     * @param LoggerInterface $logger
+     */
     public function __construct(
         ReqserCmsTwigFileService $cmsTwigFileService,
         ReqserCmsRenderService $cmsRenderService,
@@ -36,6 +41,10 @@ class ReqserCmsApiController extends AbstractController
 
     /**
      * API endpoint to get active storefront Twig template files.
+     *
+     * @param Request $request
+     * @param Context $context
+     * @return JsonResponse
      */
     #[Route(
         path: '/api/_action/reqser/cms/twig-files',
@@ -91,7 +100,7 @@ class ReqserCmsApiController extends AbstractController
      *   "type": "text",
      *   "config": "{\"content\": {\"value\": \"<h2>Hello</h2>\", \"source\": \"static\"}}"
      * }
-     * 
+     *
      * @param Request $request
      * @param Context $context
      * @return JsonResponse

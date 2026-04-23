@@ -35,6 +35,11 @@ class ReqserCmsTwigFileService
     private TwigEnvironment $twig;
     private TemplateFinder $templateFinder;
 
+    /**
+     * @param ContainerInterface $container
+     * @param TwigEnvironment $twig
+     * @param TemplateFinder $templateFinder
+     */
     public function __construct(
         ContainerInterface $container,
         TwigEnvironment $twig,
@@ -157,7 +162,8 @@ class ReqserCmsTwigFileService
      * Resolve a namespaced template ref through Shopware's TemplateFinder and
      * return the single active version for this installation.
      *
-     * @return array{fileName: string, path: string, source: string, content: string}|null
+     * @param string $templateRef
+     * @return ?array
      */
     private function resolveTemplateRef(string $templateRef): ?array
     {
@@ -207,7 +213,8 @@ class ReqserCmsTwigFileService
     /**
      * Parse template path to determine source (core / plugin name) and directory.
      *
-     * @return array{source: string, directory: string}
+     * @param string $relativePath
+     * @return array
      */
     private function parseTemplatePath(string $relativePath): array
     {

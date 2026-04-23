@@ -12,6 +12,10 @@ class ReqserWebhookManagementService
     private Connection $connection;
     private EntityRepository $webhookRepository;
 
+    /**
+     * @param Connection $connection
+     * @param EntityRepository $webhookRepository
+     */
     public function __construct(
         Connection $connection,
         EntityRepository $webhookRepository
@@ -48,9 +52,8 @@ class ReqserWebhookManagementService
     /**
      * Get the current status of a single ReqserApp webhook by its Shopware event name.
      *
-     * @param string $eventName The Shopware event name (e.g. "product.written")
-     * @return array{webhookName: string, eventName: string, active: bool}
-     *
+     * @param string $eventName
+     * @return array
      * @throws \InvalidArgumentException When the ReqserApp or the webhook cannot be found
      */
     public function getWebhookStatus(string $eventName): array
@@ -66,17 +69,16 @@ class ReqserWebhookManagementService
 
     /**
      * Activate or deactivate a ReqserApp webhook by its Shopware event name.
-     *
+     * 
      * Persists the change and then re-reads the row from the database, so the
      * returned `active` value reflects the actual persisted state — not the
      * value that was requested. This surfaces any silent write failures
      * (wrong scope, missing permissions, zero-affected-rows) to the caller
      * instead of masking them behind an optimistic "success" response.
      *
-     * @param string  $eventName The Shopware event name (e.g. "product.written")
-     * @param bool    $active    True to activate, false to deactivate
-     * @return array{webhookName: string, eventName: string, active: bool}
-     *
+     * @param string $eventName
+     * @param bool $active
+     * @return array
      * @throws \InvalidArgumentException When the ReqserApp or the webhook cannot be found
      * @throws \RuntimeException         When the persisted state does not match the requested state
      */
@@ -152,7 +154,8 @@ class ReqserWebhookManagementService
     }
 
     /**
-     * @return array{id: string, name: string, event_name: string, active: int}
+     * @param string $eventName
+     * @return array
      * @throws \InvalidArgumentException
      */
     private function findWebhook(string $eventName): array

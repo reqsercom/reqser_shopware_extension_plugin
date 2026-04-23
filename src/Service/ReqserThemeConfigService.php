@@ -25,6 +25,9 @@ class ReqserThemeConfigService
 {
     private Connection $connection;
 
+    /**
+     * @param Connection $connection
+     */
     public function __construct(Connection $connection)
     {
         $this->connection = $connection;
@@ -86,8 +89,9 @@ class ReqserThemeConfigService
      * Fetch all theme_translation rows for a theme, annotated with the
      * locale code pulled from the language → locale join.
      *
-     * @param array<string, string> $localeMap language_id (hex) → locale code
-     * @return array<int, array<string, mixed>>
+     * @param string $themeIdHex
+     * @param array $localeMap
+     * @return array
      */
     private function fetchTranslationsForTheme(string $themeIdHex, array $localeMap): array
     {
@@ -161,7 +165,8 @@ class ReqserThemeConfigService
      * always JSON in practice, but we never want a decode failure to
      * swallow data).
      *
-     * @return array<mixed>|string|null
+     * @param mixed $value
+     * @return array|string|null
      */
     private function decodeJsonColumn(mixed $value): array|string|null
     {

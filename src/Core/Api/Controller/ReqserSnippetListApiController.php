@@ -15,6 +15,9 @@ use Symfony\Component\Routing\Annotation\Route;
 #[ReqserApiAuth]
 class ReqserSnippetListApiController extends AbstractController
 {
+    /**
+     * @param ReqserSnippetListService $snippetListService
+     */
     public function __construct(
         private readonly ReqserSnippetListService $snippetListService
     ) {
@@ -22,7 +25,7 @@ class ReqserSnippetListApiController extends AbstractController
 
     /**
      * Return snippet list like the Shopware admin snippet list.
-     *
+     * 
      * Request body:
      * - snippetSetIds (array|string, required)
      * - page (int, optional, default 1)
@@ -34,6 +37,10 @@ class ReqserSnippetListApiController extends AbstractController
      *   Shopware's native TranslationKeyFilter so filtering happens before
      *   pagination. The response total reflects the filtered count.
      *   unfilteredTotal contains the total snippet count without the filter.
+     *
+     * @param Request $request
+     * @param Context $context
+     * @return JsonResponse
      */
     #[Route(
         path: '/api/_action/reqser/snippets/list',

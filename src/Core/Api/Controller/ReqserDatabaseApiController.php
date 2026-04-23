@@ -39,6 +39,14 @@ class ReqserDatabaseApiController extends AbstractController
     private RequestCriteriaBuilder $criteriaBuilder;
     private SyncServiceInterface $syncService;
 
+    /**
+     * @param ReqserDatabaseService $databaseService
+     * @param LoggerInterface $logger
+     * @param ReqserCustomFieldUsageService $customFieldUsageService
+     * @param DefinitionInstanceRegistry $definitionRegistry
+     * @param RequestCriteriaBuilder $criteriaBuilder
+     * @param SyncServiceInterface $syncService
+     */
     public function __construct(
         ReqserDatabaseService $databaseService,
         LoggerInterface $logger,
@@ -62,7 +70,7 @@ class ReqserDatabaseApiController extends AbstractController
      * - Request MUST be authenticated via the Reqser App's integration credentials
      * - Reqser App must be active
      * - GET method only
-     * 
+     *
      * @param Request $request
      * @param Context $context
      * @return JsonResponse
@@ -110,7 +118,7 @@ class ReqserDatabaseApiController extends AbstractController
      * - Reqser App must be active
      * - GET method only
      * - tableName must end with '_translation' (security requirement)
-     * 
+     *
      * @param Request $request
      * @param Context $context
      * @return JsonResponse
@@ -200,6 +208,10 @@ class ReqserDatabaseApiController extends AbstractController
 
     /**
      * API endpoint to dump DAL entity definitions with translation linkage.
+     *
+     * @param Request $request
+     * @param Context $context
+     * @return JsonResponse
      */
     #[Route(
         path: '/api/_action/reqser/database/entity-definitions',
@@ -241,7 +253,7 @@ class ReqserDatabaseApiController extends AbstractController
      * - Request MUST be authenticated via the Reqser App's integration credentials
      * - Reqser App must be active
      * - GET method only
-     * 
+     *
      * @param Request $request
      * @param Context $context
      * @return JsonResponse
@@ -283,11 +295,11 @@ class ReqserDatabaseApiController extends AbstractController
      * Requires:
      * - Reqser App authentication
      * - Entity must have a corresponding _translation table
-     * 
+     *
      * @param Request $request
      * @param Context $context
-     * @param ResponseFactoryInterface $responseFactory Resolved per-request by Shopware's argument resolver
-     * @param string $entity Entity name from the URL (e.g. 'product', 'category', 'snippet')
+     * @param ResponseFactoryInterface $responseFactory
+     * @param string $entity
      * @return Response
      */
     #[Route(
@@ -364,11 +376,11 @@ class ReqserDatabaseApiController extends AbstractController
      * Requires:
      * - Reqser App authentication
      * - Entity must have a corresponding _translation table
-     * 
+     *
      * @param Request $request
      * @param Context $context
-     * @param ResponseFactoryInterface $responseFactory Resolved per-request by Shopware's argument resolver
-     * @param string $entity Entity name from the URL (e.g. 'sales-channel-type')
+     * @param ResponseFactoryInterface $responseFactory
+     * @param string $entity
      * @return Response
      */
     #[Route(
@@ -442,7 +454,7 @@ class ReqserDatabaseApiController extends AbstractController
      * Requires:
      * - Reqser App authentication
      * - Every entity in the sync payload must end with '_translation'
-     * 
+     *
      * @param Request $request
      * @param Context $context
      * @return JsonResponse
@@ -541,11 +553,11 @@ class ReqserDatabaseApiController extends AbstractController
      * Requires:
      * - Reqser App authentication
      * - Entity must have a corresponding _translation table
-     * 
+     *
      * @param Request $request
      * @param Context $context
-     * @param string $entity Entity name from the URL (e.g. 'product', 'salutation', 'snippet')
-     * @param string $id Entity UUID
+     * @param string $entity
+     * @param string $id
      * @return Response
      */
     #[Route(
@@ -601,15 +613,16 @@ class ReqserDatabaseApiController extends AbstractController
      * Rejects any root-level key that is not a TranslatedField on the entity definition.
      * This prevents non-translation fields (e.g. price, stock, active) from being
      * written through the proxy route, which bypasses ACL via SYSTEM_SCOPE.
-     *
+     * 
      * Allowed root-level keys:
      * - 'translations' — nested translation payload (standard Shopware format)
      * - 'versionId' — required by Shopware's DAL for versioned entities
      * - Any property name that is a TranslatedField on the entity definition
      *   (e.g. 'name', 'description', 'metaTitle' for product)
      *
-     * @param EntityDefinition $definition The entity definition to check against
-     * @param array $payload The request payload (without 'id', which is added after this check)
+     * @param EntityDefinition $definition
+     * @param array $payload
+     * @return void
      * @throws \InvalidArgumentException If payload contains non-translation fields
      */
     private function validatePayloadContainsOnlyTranslationFields(EntityDefinition $definition, array $payload): void
@@ -640,8 +653,9 @@ class ReqserDatabaseApiController extends AbstractController
      * The entity must have a corresponding _translation table in the database.
      * Entities like snippet and product_review use standard API routes with
      * app permissions and are not allowed through the proxy.
-     * 
-     * @param string $entityName Entity name in snake_case (e.g. 'product')
+     *
+     * @param string $entityName
+     * @return void
      * @throws \InvalidArgumentException If the entity is not translation-related
      */
     private function validateEntityIsTranslationRelated(string $entityName): void
@@ -654,6 +668,8 @@ class ReqserDatabaseApiController extends AbstractController
      * Convert URL kebab-case entity name to snake_case for DAL registry lookup.
      * This is the same approach used by Shopware core's ApiController::urlToSnakeCase().
      *
+     * @param string $name
+     * @return string
      * @see \Shopware\Core\Framework\Api\Controller\ApiController::urlToSnakeCase()
      */
     private function urlToSnakeCase(string $name): string

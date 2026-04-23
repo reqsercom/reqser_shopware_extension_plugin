@@ -18,12 +18,20 @@ class ReqserPlugin extends Plugin
 {
     public const APP_NAME = 'ReqserApp';
 
+    /**
+     * @param InstallContext $installContext
+     * @return void
+     */
     public function install(InstallContext $installContext): void
     {
         parent::install($installContext);
         $this->scheduleTask();
     }
 
+    /**
+     * @param UpdateContext $updateContext
+     * @return void
+     */
     public function update(UpdateContext $updateContext): void
     {
         parent::update($updateContext);
@@ -33,6 +41,10 @@ class ReqserPlugin extends Plugin
         }
     }
 
+    /**
+     * @param ActivateContext $activateContext
+     * @return void
+     */
     public function activate(ActivateContext $activateContext): void
     {
         parent::activate($activateContext);
@@ -42,12 +54,20 @@ class ReqserPlugin extends Plugin
         }
     }
 
+    /**
+     * @param DeactivateContext $deactivateContext
+     * @return void
+     */
     public function deactivate(DeactivateContext $deactivateContext): void
     {
         parent::deactivate($deactivateContext);
         $this->removeTask();
     }
 
+    /**
+     * @param UninstallContext $uninstallContext
+     * @return void
+     */
     public function uninstall(UninstallContext $uninstallContext): void
     {
         parent::uninstall($uninstallContext);
@@ -109,6 +129,10 @@ class ReqserPlugin extends Plugin
         $handler->run();
     }
 
+    /**
+     * @param string $type
+     * @return bool
+     */
     private function shouldRunTask(string $type = 'update'): bool
     {
         // Always return true to run notification removal task on update/activate

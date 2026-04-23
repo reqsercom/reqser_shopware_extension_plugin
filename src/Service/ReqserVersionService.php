@@ -13,6 +13,10 @@ class ReqserVersionService
     private bool $debugMode = false;
     private ?PluginEntity $plugin = null;
 
+    /**
+     * @param string $shopwareVersion
+     * @param string $projectDir
+     */
     public function __construct(string $shopwareVersion, string $projectDir)
     {
         $this->shopwareVersion = $shopwareVersion;
@@ -52,6 +56,10 @@ class ReqserVersionService
 
     /**
      * Check if an update is necessary by comparing versions
+     *
+     * @param string $latestVersion
+     * @param string $currentVersion
+     * @return bool
      */
     public function updateIsNecessary(string $latestVersion, string $currentVersion): bool
     {
@@ -118,6 +126,9 @@ class ReqserVersionService
 
     /**
      * Set the plugin instance (used during update process)
+     *
+     * @param PluginEntity $plugin
+     * @return void
      */
     public function setPlugin(PluginEntity $plugin): void
     {
@@ -166,6 +177,9 @@ class ReqserVersionService
 
     /**
      * Parse version string into major.minor.patch components
+     *
+     * @param string $version
+     * @return array
      */
     private function parseVersion(string $version): array
     {
@@ -184,6 +198,10 @@ class ReqserVersionService
 
     /**
      * Write log message with timestamp
+     *
+     * @param string $message
+     * @param mixed $line
+     * @return void
      */
     public function writeLog(string $message, $line = null): void
     {

@@ -21,6 +21,14 @@ class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
     private $notificationService;
     private CacheInterface $cache;
 
+    /**
+     * @param EntityRepository $scheduledTaskRepository
+     * @param LoggerInterface $exceptionLogger
+     * @param Connection $connection
+     * @param LoggerInterface $logger
+     * @param ReqserNotificationService $notificationService
+     * @param CacheInterface $cache
+     */
     public function __construct(
         EntityRepository $scheduledTaskRepository,
         LoggerInterface $exceptionLogger,

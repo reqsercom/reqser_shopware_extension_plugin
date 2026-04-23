@@ -12,6 +12,9 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
 {
     private $requestStack;
 
+    /**
+     * @param RequestStack $requestStack
+     */
     public function __construct(RequestStack $requestStack)
     {
         $this->requestStack = $requestStack;
@@ -24,6 +27,10 @@ class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
         ];
     }
 
+    /**
+     * @param ResponseEvent $event
+     * @return void
+     */
     public function onLanguageSwitchResponse(ResponseEvent $event): void
     {
         try {
