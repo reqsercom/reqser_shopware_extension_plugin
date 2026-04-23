@@ -4,23 +4,7 @@ namespace Reqser\Plugin\Service;
 
 use Doctrine\DBAL\Connection;
 
-/**
- * Service that dumps every Shopware theme with its configuration and
- * translations for the Reqser backend. Exposed via
- * /api/_action/reqser/theme/config (ReqserThemeApiController).
- *
- * Not a DAL read — the `theme` and `theme_translation` tables are queried
- * directly through Doctrine DBAL because the backend wants the raw
- * `base_config`, `config_values` and `theme_json` blobs without the
- * DAL's schema-driven massaging (Shopware's theme DAL strips merchant
- * custom fields that aren't declared in a plugin's theme config).
- *
- * All JSON text columns are decoded here so the HTTP response carries
- * arrays, not strings — consumers never have to parse twice.
- *
- * Join chain for the locale annotation on translations:
- *   theme_translation.language_id → language.locale_id → locale.code
- */
+/** Dumps every Shopware theme with its configuration and translations. */
 class ReqserThemeConfigService
 {
     private Connection $connection;
