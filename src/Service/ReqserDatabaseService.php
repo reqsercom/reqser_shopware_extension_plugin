@@ -37,16 +37,8 @@ class ReqserDatabaseService
     }
 
     /**
-     * Dump every DAL entity definition registered in the installation, with
-     * translation-entity linkage, translatable field list, and the source
-     * bundle/plugin that registered it. Lets the caller detect allowlist-miss
-     * situations (e.g. a custom plugin that ships its own *_translation table
-     * the caller was never told about).
-     *
-     * The `source` field is derived from the EntityDefinition's file location:
-     *   - `core` when the definition lives under `vendor/shopware/`
-     *   - plugin directory name when under `custom/plugins/<name>/`
-     *   - `unknown` otherwise (e.g. compiled cache, symlink-resolved path)
+     * Dump every DAL entity definition registered in the installation.
+     * Includes translation-entity linkage, translatable field list, and the source bundle/plugin name.
      *
      * @return array<int, array{
      *     entity: string,

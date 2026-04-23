@@ -9,25 +9,6 @@ use Twig\Error\LoaderError;
 
 /**
  * Discovers every active storefront Twig template in the installation.
- *
- * Works in two stages:
- *   1. Recursively collect every *.html.twig under
- *      `vendor/shopware/storefront/Resources/views/storefront/` and under each
- *      `custom/plugins/*​/src/Resources/views/storefront/`. This yields the set
- *      of *possible* template references, namespaced as
- *      `@Storefront/storefront/<relative>` so TemplateFinder can resolve them.
- *   2. Resolve each ref through Shopware's TemplateFinder. TemplateFinder walks
- *      the kernel bundle priority chain (theme > plugin > core), so it returns
- *      the single *active* version for each path. Templates belonging to
- *      deactivated plugins are never returned because deactivated plugins are
- *      not in the kernel bundle list.
- *
- * The returned `source` field tells the consumer whether the resolved template
- * is `core` (shipped by shopware/storefront) or the name of the plugin it came
- * from. Duplicate resolutions are collapsed by (source, path, fileName).
- *
- * Name kept for DI-wiring compatibility despite now covering more than just
- * CMS elements.
  */
 class ReqserCmsTwigFileService
 {
