@@ -10,7 +10,6 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Reqser\Plugin\ReqserPlugin;
 use Reqser\Plugin\Service\ReqserNotificationService;
-use Reqser\Plugin\Service\ReqserWebhookService;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 
@@ -20,23 +19,28 @@ class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
     private Connection $connection;
     private LoggerInterface $logger;
     private $notificationService;
-    private $webhookService;
     private CacheInterface $cache;
 
+    /**
+     * @param EntityRepository $scheduledTaskRepository
+     * @param LoggerInterface $exceptionLogger
+     * @param Connection $connection
+     * @param LoggerInterface $logger
+     * @param ReqserNotificationService $notificationService
+     * @param CacheInterface $cache
+     */
     public function __construct(
         EntityRepository $scheduledTaskRepository,
         LoggerInterface $exceptionLogger,
         Connection $connection,
         LoggerInterface $logger,
         ReqserNotificationService $notificationService,
-        ReqserWebhookService $webhookService,
         CacheInterface $cache
     ) {
         parent::__construct($scheduledTaskRepository, $exceptionLogger);
         $this->connection = $connection;
         $this->logger = $logger;
         $this->notificationService = $notificationService;
-        $this->webhookService = $webhookService;
         $this->cache = $cache;
     }
 
@@ -46,7 +50,6 @@ class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
         try {
             $this->removeReqserNotifications();
         } catch (\Throwable $e) {
-            // Log the error message and continue with the next directory
             if (method_exists($this->logger, 'error')) {
                 $this->logger->error('Reqser Plugin Error remove Notifictaions', [
                     'message' => $e->getMessage(),
@@ -54,15 +57,6 @@ class ReqserNotificiationRemovalHandler extends ScheduledTaskHandler
                     'line' => __LINE__,
                 ]);
             }
-            $this->webhookService->sendErrorToWebhook([
-                'type' => 'error',
-                'function' => 'removeReqserNotifications',
-                'message' => $e->getMessage() ?? 'unknown',
-                'trace' => $e->getTraceAsString() ?? 'unknown',
-                'timestamp' => date('Y-m-d H:i:s'),
-                'file' => __FILE__, 
-                'line' => __LINE__,
-            ]);
         }
         
     }

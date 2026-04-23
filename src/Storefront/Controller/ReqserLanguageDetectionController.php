@@ -7,7 +7,6 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
 use Reqser\Plugin\Service\ReqserLanguageRedirectService;
-use Reqser\Plugin\Service\ReqserWebhookService;
 use Reqser\Plugin\Service\ReqserCustomFieldService;
 use Reqser\Plugin\Service\ReqserAppService;
 use Reqser\Plugin\Service\ReqserSessionService;
@@ -21,16 +20,22 @@ class ReqserLanguageDetectionController extends StorefrontController
 {
     private $languageRedirectService;
     private $domainRepository;
-    private $webhookService;
     private $customFieldService;
     private $appService;
     private $cache;
     private LoggerInterface $logger;
 
+    /**
+     * @param ReqserLanguageRedirectService $languageRedirectService
+     * @param EntityRepository $domainRepository
+     * @param ReqserCustomFieldService $customFieldService
+     * @param ReqserAppService $appService
+     * @param CacheInterface $cache
+     * @param LoggerInterface $logger
+     */
     public function __construct(
         ReqserLanguageRedirectService $languageRedirectService,
         EntityRepository $domainRepository,
-        ReqserWebhookService $webhookService,
         ReqserCustomFieldService $customFieldService,
         ReqserAppService $appService,
         CacheInterface $cache,
@@ -38,13 +43,17 @@ class ReqserLanguageDetectionController extends StorefrontController
     ) {
         $this->languageRedirectService = $languageRedirectService;
         $this->domainRepository = $domainRepository;
-        $this->webhookService = $webhookService;
         $this->customFieldService = $customFieldService;
         $this->appService = $appService;
         $this->cache = $cache;
         $this->logger = $logger;
     }
 
+    /**
+     * @param Request $request
+     * @param SalesChannelContext $salesChannelContext
+     * @return JsonResponse
+     */
     #[Route(path: '/reqser/language-detection/check', name: 'frontend.reqser.language_detection.check', defaults: ['XmlHttpRequest' => true], methods: ['GET'])]
     public function checkLanguage(Request $request, SalesChannelContext $salesChannelContext): JsonResponse
     {
@@ -85,6 +94,12 @@ class ReqserLanguageDetectionController extends StorefrontController
 
     /**
      * Process the language detection request
+     *
+     * @param Request $request
+     * @param string $domainId
+     * @param string $salesChannelId
+     * @param SalesChannelContext $salesChannelContext
+     * @return JsonResponse
      */
     private function processRequest(Request $request, string $domainId, string $salesChannelId, SalesChannelContext $salesChannelContext): JsonResponse
     {
@@ -171,9 +186,9 @@ class ReqserLanguageDetectionController extends StorefrontController
     /**
      * Detect if the request is from a search engine bot
      * Following Google's best practices for multilingual sites
-     * 
+     *
      * @param Request $request
-     * @return bool True if bot detected, false otherwise
+     * @return bool
      */
     private function isSearchEngineBot(Request $request): bool
     {
@@ -195,6 +210,11 @@ class ReqserLanguageDetectionController extends StorefrontController
 
     /**
      * Create a standardized JSON response with anti-cache headers
+     *
+     * @param bool $success
+     * @param ?string $reason
+     * @param array $additionalData
+     * @return JsonResponse
      */
     private function createJsonResponse(bool $success, ?string $reason = null, array $additionalData = []): JsonResponse
     {

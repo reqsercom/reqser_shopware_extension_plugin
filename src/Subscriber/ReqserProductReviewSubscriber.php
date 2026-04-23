@@ -2,7 +2,6 @@
 
 namespace Reqser\Plugin\Subscriber;
 
-use Reqser\Plugin\Service\ReqserWebhookService;
 use Reqser\Plugin\Service\ReqserAppService;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -20,20 +19,23 @@ use Shopware\Core\Content\Product\SalesChannel\Review\Event\ProductReviewsLoaded
 class ReqserProductReviewSubscriber implements EventSubscriberInterface
 {
     private $requestStack;
-    private $webhookService;
     private $appService;
     private $domainRepository;
     private $logger;
     
+    /**
+     * @param RequestStack $requestStack
+     * @param ReqserAppService $appService
+     * @param EntityRepository $domainRepository
+     * @param LoggerInterface $logger
+     */
     public function __construct(
         RequestStack $requestStack,
-        ReqserWebhookService $webhookService,
         ReqserAppService $appService,
         EntityRepository $domainRepository,
         LoggerInterface $logger
     ) {
         $this->requestStack = $requestStack;
-        $this->webhookService = $webhookService;
         $this->appService = $appService;
         $this->domainRepository = $domainRepository;
         $this->logger = $logger;
@@ -47,6 +49,10 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
         ];
     }
 
+    /**
+     * @param StorefrontRenderEvent $event
+     * @return void
+     */
     public function onStorefrontRender(StorefrontRenderEvent $event): void
     {
         try {
@@ -73,6 +79,10 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
 
 
 
+    /**
+     * @param ProductReviewsLoadedEvent $event
+     * @return void
+     */
     public function onProductReviewsLoaded(ProductReviewsLoadedEvent $event): void
     {
         try {
@@ -98,6 +108,10 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
 
     /**
      * Validates if the request should be processed based on app status and domain settings
+     *
+     * @param SalesChannelContext $context
+     * @param mixed $request
+     * @return bool
      */
     private function shouldProcessRequest(SalesChannelContext $context, $request): bool
     {
@@ -132,6 +146,10 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
 
     /**
      * Processes reviews on a product page
+     *
+     * @param ProductPage $page
+     * @param string $currentLanguage
+     * @return void
      */
     private function processProductPageReviews(ProductPage $page, string $currentLanguage): void
     {
@@ -161,6 +179,10 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
 
     /**
      * Handles errors consistently across all methods
+     *
+     * @param string $function
+     * @param \Throwable $e
+     * @return void
      */
     private function handleError(string $function, \Throwable $e): void
     {
@@ -169,20 +191,14 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
             'file' => __FILE__, 
             'line' => __LINE__,
         ]);
-        
-        $this->webhookService->sendErrorToWebhook([
-            'type' => 'error',
-            'function' => $function,
-            'message' => $e->getMessage() ?? 'unknown',
-            'trace' => $e->getTraceAsString() ?? 'unknown',
-            'timestamp' => date('Y-m-d H:i:s'),
-            'file' => __FILE__, 
-            'line' => __LINE__,
-        ]);
     }
 
     /**
      * Modifies product review entities
+     *
+     * @param mixed $reviews
+     * @param string $currentLanguageId
+     * @return void
      */
     private function modifyProductReviews($reviews, string $currentLanguageId): void
     {
@@ -210,6 +226,10 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
 
     /**
      * Translates a single review entity
+     *
+     * @param mixed $review
+     * @param string $currentLanguageId
+     * @return void
      */
     private function translateReviewEntity($review, string $currentLanguageId): void
     {
@@ -229,6 +249,10 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
 
     /**
      * Gets translation data from custom fields
+     *
+     * @param mixed $customFields
+     * @param string $currentLanguageId
+     * @return ?array
      */
     private function getTranslationData($customFields, string $currentLanguageId): ?array
     {
@@ -241,6 +265,11 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
 
     /**
      * Applies translation to a review entity
+     *
+     * @param mixed $review
+     * @param array $translationData
+     * @param string $currentLanguageId
+     * @return void
      */
     private function applyTranslationToEntity($review, array $translationData, string $currentLanguageId): void
     {
@@ -260,6 +289,9 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
 
 
 
+    /**
+     * @param SalesChannelContext $context
+     */
     private function getSalesChannelDomains(SalesChannelContext $context)
     {
         // Retrieve the full collection without limiting to the current sales channel

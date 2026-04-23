@@ -36,6 +36,10 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
     private CacheItemPoolInterface $cache;
     private LoggerInterface $logger;
 
+    /**
+     * @param CacheItemPoolInterface $cache
+     * @param LoggerInterface $logger
+     */
     public function __construct(
         CacheItemPoolInterface $cache,
         LoggerInterface $logger
@@ -54,14 +58,17 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
 
     /**
      * Captures the context source of every entity write operation.
-     *
+     * 
      * Sets $isAdminUserAction to true only when a real admin user (with a userId)
      * triggered the write via the Admin API. Automated processes like PIM imports,
      * CLI commands, integrations, and scheduled tasks will set this to false.
-     *
+     * 
      * This method fires BEFORE onPreWebhooksDispatch because WebhookDispatcher
      * dispatches the entity event through the inner event dispatcher first,
      * then calls WebhookManager which triggers PreWebhooksDispatchEvent.
+     *
+     * @param EntityWrittenContainerEvent $event
+     * @return void
      */
     public function onEntityWritten(EntityWrittenContainerEvent $event): void
     {
@@ -73,14 +80,17 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
 
     /**
      * Filters Reqser product/category webhooks before Shopware dispatches them.
-     *
+     * 
      * For each webhook in the dispatch queue:
      * - If it does not match the Reqser URL pattern, it passes through untouched.
      * - If it matches but the source is not an admin user, it is blocked.
      * - If it matches and the source is an admin user but the rate limit is exceeded, it is blocked.
      * - Otherwise it is allowed through and the rate limit counters are updated.
-     *
+     * 
      * Shopware continues to handle signing, payload, and delivery for all allowed webhooks.
+     *
+     * @param PreWebhooksDispatchEvent $event
+     * @return void
      */
     public function onPreWebhooksDispatch(PreWebhooksDispatchEvent $event): void
     {
@@ -155,13 +165,16 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
 
     /**
      * Determines whether a webhook should be subject to our rate limiting filter.
-     *
+     * 
      * Matches webhooks where:
      * - The host contains "reqser" (works for reqser.com, reqser.local.com, etc.)
      * - The path is /app/shopware/webhook
      * - The event is product.written or category.written
-     *
+     * 
      * All other webhooks (other apps, other events, other URLs) pass through unfiltered.
+     *
+     * @param Webhook $webhook
+     * @return bool
      */
     private function shouldFilterWebhook(Webhook $webhook): bool
     {
@@ -179,11 +192,12 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
 
     /**
      * Checks whether the cooldown period is still active for a given entity type.
-     *
+     * 
      * After a webhook is allowed through, a cooldown marker is cached for COOLDOWN_SECONDS.
      * During this period, subsequent webhooks for the same entity type are blocked.
      *
-     * @return bool True if the cooldown is active and the webhook should be blocked.
+     * @param string $entityName
+     * @return bool
      */
     private function isCooldownActive(string $entityName): bool
     {
@@ -194,8 +208,11 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
 
     /**
      * Returns the number of webhooks allowed today for a given entity type.
-     *
+     * 
      * The counter resets at midnight (end of current day).
+     *
+     * @param string $entityName
+     * @return int
      */
     private function getDailyCount(string $entityName): int
     {
@@ -207,9 +224,12 @@ class ReqserEntityWebhookSubscriber implements EventSubscriberInterface
 
     /**
      * Updates the rate limit counters after allowing a webhook through.
-     *
+     * 
      * Sets a cooldown marker (blocks next webhook for COOLDOWN_SECONDS)
      * and increments the daily counter (blocks all webhooks after MAX_PER_DAY).
+     *
+     * @param string $entityName
+     * @return void
      */
     private function updateRateLimitCounters(string $entityName): void
     {

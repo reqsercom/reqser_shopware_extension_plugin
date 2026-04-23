@@ -3,7 +3,7 @@
 namespace Reqser\Plugin\Core\Api\Controller;
 
 use Psr\Log\LoggerInterface;
-use Reqser\Plugin\Service\ReqserApiAuthService;
+use Reqser\Plugin\Core\Api\Attribute\ReqserApiAuth;
 use Reqser\Plugin\Service\ReqserCustomFieldUsageService;
 use Reqser\Plugin\Service\ReqserDatabaseService;
 use Shopware\Core\Framework\Api\Response\ResponseFactoryInterface;
@@ -25,22 +25,30 @@ use Symfony\Component\Routing\Annotation\Route;
 
 /**
  * Admin API Controller for Reqser Database Operations
- * Accessible only via authenticated API requests
+ * Accessible only via authenticated API requests (enforced by
+ * #[ReqserApiAuth] + ReqserApiAuthSubscriber).
  */
 #[Route(defaults: ['_routeScope' => ['api']])]
+#[ReqserApiAuth]
 class ReqserDatabaseApiController extends AbstractController
 {
     private ReqserDatabaseService $databaseService;
-    private ReqserApiAuthService $authService;
     private LoggerInterface $logger;
     private ReqserCustomFieldUsageService $customFieldUsageService;
     private DefinitionInstanceRegistry $definitionRegistry;
     private RequestCriteriaBuilder $criteriaBuilder;
     private SyncServiceInterface $syncService;
 
+    /**
+     * @param ReqserDatabaseService $databaseService
+     * @param LoggerInterface $logger
+     * @param ReqserCustomFieldUsageService $customFieldUsageService
+     * @param DefinitionInstanceRegistry $definitionRegistry
+     * @param RequestCriteriaBuilder $criteriaBuilder
+     * @param SyncServiceInterface $syncService
+     */
     public function __construct(
         ReqserDatabaseService $databaseService,
-        ReqserApiAuthService $authService,
         LoggerInterface $logger,
         ReqserCustomFieldUsageService $customFieldUsageService,
         DefinitionInstanceRegistry $definitionRegistry,
@@ -48,7 +56,6 @@ class ReqserDatabaseApiController extends AbstractController
         SyncServiceInterface $syncService
     ) {
         $this->databaseService = $databaseService;
-        $this->authService = $authService;
         $this->logger = $logger;
         $this->customFieldUsageService = $customFieldUsageService;
         $this->definitionRegistry = $definitionRegistry;
@@ -58,12 +65,7 @@ class ReqserDatabaseApiController extends AbstractController
 
     /**
      * API endpoint to get all database tables ending with _translation
-     * 
-     * Requires:
-     * - Request MUST be authenticated via the Reqser App's integration credentials
-     * - Reqser App must be active
-     * - GET method only
-     * 
+     *
      * @param Request $request
      * @param Context $context
      * @return JsonResponse
@@ -76,13 +78,6 @@ class ReqserDatabaseApiController extends AbstractController
     public function getTranslationTables(Request $request, Context $context): JsonResponse
     {
         try {
-            // Validate authentication
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse; // Return error response if validation failed
-            }
-
-            // Get translation tables from database
             $tables = $this->databaseService->getTranslationTables();
 
             return new JsonResponse([
@@ -112,13 +107,7 @@ class ReqserDatabaseApiController extends AbstractController
     /**
      * API endpoint to get schema information for a specific translation table
      * Returns ALL columns plus a list of which columns are translatable
-     * 
-     * Requires:
-     * - Request MUST be authenticated via the Reqser App's integration credentials
-     * - Reqser App must be active
-     * - GET method only
-     * - tableName must end with '_translation' (security requirement)
-     * 
+     *
      * @param Request $request
      * @param Context $context
      * @return JsonResponse
@@ -132,13 +121,6 @@ class ReqserDatabaseApiController extends AbstractController
     public function getTranslationTableSchema(Request $request, Context $context): JsonResponse
     {
         try {
-            // Validate authentication
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse; // Return error response if validation failed
-            }
-
-            // Get table name from route parameter
             $tableName = $request->attributes->get('tableName');
 
             if (empty($tableName)) {
@@ -214,14 +196,48 @@ class ReqserDatabaseApiController extends AbstractController
     }
 
     /**
+     * API endpoint to dump DAL entity definitions with translation linkage.
+     *
+     * @param Request $request
+     * @param Context $context
+     * @return JsonResponse
+     */
+    #[Route(
+        path: '/api/_action/reqser/database/entity-definitions',
+        name: 'api.action.reqser.database.entity_definitions',
+        methods: ['GET']
+    )]
+    public function getEntityDefinitions(Request $request, Context $context): JsonResponse
+    {
+        try {
+            $entities = $this->databaseService->getEntityDefinitionsDump();
+
+            return new JsonResponse([
+                'success' => true,
+                'data' => [
+                    'entities' => $entities,
+                    'count' => count($entities),
+                ],
+                'timestamp' => date('Y-m-d H:i:s'),
+            ]);
+
+        } catch (\Throwable $e) {
+            return new JsonResponse([
+                'success' => false,
+                'error' => 'Error retrieving entity definitions',
+                'message' => $e->getMessage(),
+                'exceptionType' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ], 500);
+        }
+    }
+
+    /**
      * API endpoint to analyze which custom fields are referenced in Twig templates.
      * Returns each custom field name, its type, and the Twig files it appears in.
-     * 
-     * Requires:
-     * - Request MUST be authenticated via the Reqser App's integration credentials
-     * - Reqser App must be active
-     * - GET method only
-     * 
+     *
      * @param Request $request
      * @param Context $context
      * @return JsonResponse
@@ -234,12 +250,6 @@ class ReqserDatabaseApiController extends AbstractController
     public function getCustomFieldUsage(Request $request, Context $context): JsonResponse
     {
         try {
-            // Validate authentication
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse;
-            }
-
             $result = $this->customFieldUsageService->getCustomFieldTwigUsage();
 
             return new JsonResponse([
@@ -265,15 +275,11 @@ class ReqserDatabaseApiController extends AbstractController
      * Proxy for Shopware's POST /api/search/{entity} that bypasses ACL.
      * Accepts the exact same request body, headers (sw-language-id), and returns
      * the exact same response format. Only translation-related entities are allowed.
-     * 
-     * Requires:
-     * - Reqser App authentication
-     * - Entity must have a corresponding _translation table
-     * 
+     *
      * @param Request $request
      * @param Context $context
-     * @param ResponseFactoryInterface $responseFactory Resolved per-request by Shopware's argument resolver
-     * @param string $entity Entity name from the URL (e.g. 'product', 'category', 'snippet')
+     * @param ResponseFactoryInterface $responseFactory
+     * @param string $entity
      * @return Response
      */
     #[Route(
@@ -288,11 +294,6 @@ class ReqserDatabaseApiController extends AbstractController
         string $entity
     ): Response {
         try {
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse;
-            }
-
             $entityUnderscored = $this->urlToSnakeCase($entity);
             $this->validateEntityIsTranslationRelated($entityUnderscored);
 
@@ -351,15 +352,11 @@ class ReqserDatabaseApiController extends AbstractController
      * 
      * Used for force_get_request_tables where POST search doesn't work
      * (e.g. system entities with null IDs like sales-channel-type).
-     * 
-     * Requires:
-     * - Reqser App authentication
-     * - Entity must have a corresponding _translation table
-     * 
+     *
      * @param Request $request
      * @param Context $context
-     * @param ResponseFactoryInterface $responseFactory Resolved per-request by Shopware's argument resolver
-     * @param string $entity Entity name from the URL (e.g. 'sales-channel-type')
+     * @param ResponseFactoryInterface $responseFactory
+     * @param string $entity
      * @return Response
      */
     #[Route(
@@ -374,11 +371,6 @@ class ReqserDatabaseApiController extends AbstractController
         string $entity
     ): Response {
         try {
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse;
-            }
-
             $entityUnderscored = $this->urlToSnakeCase($entity);
             $this->validateEntityIsTranslationRelated($entityUnderscored);
 
@@ -434,11 +426,7 @@ class ReqserDatabaseApiController extends AbstractController
      * Proxy for Shopware's POST /api/_action/sync that bypasses ACL.
      * Accepts the exact same request body and returns the exact same response format.
      * Only entities ending with '_translation' are allowed in the sync payload.
-     * 
-     * Requires:
-     * - Reqser App authentication
-     * - Every entity in the sync payload must end with '_translation'
-     * 
+     *
      * @param Request $request
      * @param Context $context
      * @return JsonResponse
@@ -451,11 +439,6 @@ class ReqserDatabaseApiController extends AbstractController
     public function syncTranslationData(Request $request, Context $context): JsonResponse
     {
         try {
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse;
-            }
-
             $payload = $request->request->all();
 
             if (empty($payload)) {
@@ -535,18 +518,11 @@ class ReqserDatabaseApiController extends AbstractController
      * Proxy for Shopware's PATCH /api/{entity}/{id} that bypasses ACL.
      * Accepts the exact same request body and returns the exact same response (204 No Content).
      * Only translation-related entities are allowed.
-     * 
-     * Typical body for translation tables: {"translations": {"{langId}": {"field": "value"}}}
-     * Typical body for snippets: {"translationKey": "...", "setId": "...", "value": "..."}
-     * 
-     * Requires:
-     * - Reqser App authentication
-     * - Entity must have a corresponding _translation table
-     * 
+     *
      * @param Request $request
      * @param Context $context
-     * @param string $entity Entity name from the URL (e.g. 'product', 'salutation', 'snippet')
-     * @param string $id Entity UUID
+     * @param string $entity
+     * @param string $id
      * @return Response
      */
     #[Route(
@@ -561,11 +537,6 @@ class ReqserDatabaseApiController extends AbstractController
         string $id
     ): Response {
         try {
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse;
-            }
-
             $entityUnderscored = $this->urlToSnakeCase($entity);
             $this->validateEntityIsTranslationRelated($entityUnderscored);
 
@@ -607,15 +578,16 @@ class ReqserDatabaseApiController extends AbstractController
      * Rejects any root-level key that is not a TranslatedField on the entity definition.
      * This prevents non-translation fields (e.g. price, stock, active) from being
      * written through the proxy route, which bypasses ACL via SYSTEM_SCOPE.
-     *
+     * 
      * Allowed root-level keys:
      * - 'translations' — nested translation payload (standard Shopware format)
      * - 'versionId' — required by Shopware's DAL for versioned entities
      * - Any property name that is a TranslatedField on the entity definition
      *   (e.g. 'name', 'description', 'metaTitle' for product)
      *
-     * @param EntityDefinition $definition The entity definition to check against
-     * @param array $payload The request payload (without 'id', which is added after this check)
+     * @param EntityDefinition $definition
+     * @param array $payload
+     * @return void
      * @throws \InvalidArgumentException If payload contains non-translation fields
      */
     private function validatePayloadContainsOnlyTranslationFields(EntityDefinition $definition, array $payload): void
@@ -646,8 +618,9 @@ class ReqserDatabaseApiController extends AbstractController
      * The entity must have a corresponding _translation table in the database.
      * Entities like snippet and product_review use standard API routes with
      * app permissions and are not allowed through the proxy.
-     * 
-     * @param string $entityName Entity name in snake_case (e.g. 'product')
+     *
+     * @param string $entityName
+     * @return void
      * @throws \InvalidArgumentException If the entity is not translation-related
      */
     private function validateEntityIsTranslationRelated(string $entityName): void
@@ -660,6 +633,8 @@ class ReqserDatabaseApiController extends AbstractController
      * Convert URL kebab-case entity name to snake_case for DAL registry lookup.
      * This is the same approach used by Shopware core's ApiController::urlToSnakeCase().
      *
+     * @param string $name
+     * @return string
      * @see \Shopware\Core\Framework\Api\Controller\ApiController::urlToSnakeCase()
      */
     private function urlToSnakeCase(string $name): string

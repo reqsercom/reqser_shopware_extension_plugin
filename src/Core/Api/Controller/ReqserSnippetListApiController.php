@@ -2,7 +2,7 @@
 
 namespace Reqser\Plugin\Core\Api\Controller;
 
-use Reqser\Plugin\Service\ReqserApiAuthService;
+use Reqser\Plugin\Core\Api\Attribute\ReqserApiAuth;
 use Reqser\Plugin\Service\ReqserSnippetListService;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\System\Snippet\SnippetException;
@@ -12,17 +12,20 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 
 #[Route(defaults: ['_routeScope' => ['api']])]
+#[ReqserApiAuth]
 class ReqserSnippetListApiController extends AbstractController
 {
+    /**
+     * @param ReqserSnippetListService $snippetListService
+     */
     public function __construct(
-        private readonly ReqserSnippetListService $snippetListService,
-        private readonly ReqserApiAuthService $authService
+        private readonly ReqserSnippetListService $snippetListService
     ) {
     }
 
     /**
      * Return snippet list like the Shopware admin snippet list.
-     *
+     * 
      * Request body:
      * - snippetSetIds (array|string, required)
      * - page (int, optional, default 1)
@@ -34,6 +37,10 @@ class ReqserSnippetListApiController extends AbstractController
      *   Shopware's native TranslationKeyFilter so filtering happens before
      *   pagination. The response total reflects the filtered count.
      *   unfilteredTotal contains the total snippet count without the filter.
+     *
+     * @param Request $request
+     * @param Context $context
+     * @return JsonResponse
      */
     #[Route(
         path: '/api/_action/reqser/snippets/list',
@@ -42,11 +49,6 @@ class ReqserSnippetListApiController extends AbstractController
     )]
     public function getSnippetList(Request $request, Context $context): JsonResponse
     {
-        $authResponse = $this->authService->validateAuthentication($request, $context);
-        if ($authResponse !== true) {
-            return $authResponse;
-        }
-
         $payload = json_decode($request->getContent(), true) ?? [];
 
         $snippetSetIds = $payload['snippetSetIds'] ?? $payload['snippetSetId'] ?? null;
