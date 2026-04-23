@@ -214,21 +214,7 @@ class ReqserDatabaseApiController extends AbstractController
     }
 
     /**
-     * API endpoint to dump every DAL entity definition in the installation
-     * with its translation-entity linkage, translatable fields, and the source
-     * bundle/plugin that registered it.
-     *
-     * Lets the caller detect custom plugin entities that ship their own
-     * `*_translation` table but aren't yet on the caller's allowlist.
-     *
-     * Requires:
-     * - Request MUST be authenticated via the Reqser App's integration credentials
-     * - Reqser App must be active
-     * - GET method only
-     *
-     * @param Request $request
-     * @param Context $context
-     * @return JsonResponse
+     * API endpoint to dump DAL entity definitions with translation linkage.
      */
     #[Route(
         path: '/api/_action/reqser/database/entity-definitions',

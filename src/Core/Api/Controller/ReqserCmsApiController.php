@@ -37,35 +37,7 @@ class ReqserCmsApiController extends AbstractController
     }
 
     /**
-     * API endpoint to get every active storefront Twig template file.
-     *
-     * Recursively collects every `*.html.twig` under
-     * `vendor/shopware/storefront/Resources/views/storefront/` and every
-     * `custom/plugins/*​/src/Resources/views/storefront/`, then resolves each
-     * through Shopware's TemplateFinder so only the single *active* template
-     * per path is returned (theme > plugin > core). Templates from deactivated
-     * plugins are never returned.
-     *
-     * Response shape:
-     *   {
-     *     "success": true,
-     *     "data": { "twigFiles": [ { fileName, path, source, content }, ... ] },
-     *     "timestamp": "..."
-     *   }
-     *
-     * `content` is base64-encoded. `source` is `core` for templates shipped by
-     * `shopware/storefront` or the plugin directory name otherwise, so the
-     * consumer (e.g. the synced `_manifest.json`) can tell core from plugin
-     * files without re-parsing `path`.
-     *
-     * Requires:
-     * - Request MUST be authenticated via the Reqser App's integration credentials
-     * - Reqser App must be active
-     * - GET method only
-     *
-     * @param Request $request
-     * @param Context $context
-     * @return JsonResponse
+     * API endpoint to get active storefront Twig template files.
      */
     #[Route(
         path: '/api/_action/reqser/cms/twig-files',
