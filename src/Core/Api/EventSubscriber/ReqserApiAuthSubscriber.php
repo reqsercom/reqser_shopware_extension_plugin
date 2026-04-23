@@ -12,11 +12,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 
-/**
- * Runs Reqser App auth for every controller tagged with #[ReqserApiAuth].
- *
- * @see docs/integrations/shopware_plugin/ReqserApiAuth.md
- */
+/** Runs Reqser App auth for every controller tagged with #[ReqserApiAuth]. */
 class ReqserApiAuthSubscriber implements EventSubscriberInterface
 {
     private ReqserApiAuthService $authService;

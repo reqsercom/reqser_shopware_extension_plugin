@@ -65,11 +65,6 @@ class ReqserDatabaseApiController extends AbstractController
 
     /**
      * API endpoint to get all database tables ending with _translation
-     * 
-     * Requires:
-     * - Request MUST be authenticated via the Reqser App's integration credentials
-     * - Reqser App must be active
-     * - GET method only
      *
      * @param Request $request
      * @param Context $context
@@ -112,12 +107,6 @@ class ReqserDatabaseApiController extends AbstractController
     /**
      * API endpoint to get schema information for a specific translation table
      * Returns ALL columns plus a list of which columns are translatable
-     * 
-     * Requires:
-     * - Request MUST be authenticated via the Reqser App's integration credentials
-     * - Reqser App must be active
-     * - GET method only
-     * - tableName must end with '_translation' (security requirement)
      *
      * @param Request $request
      * @param Context $context
@@ -248,11 +237,6 @@ class ReqserDatabaseApiController extends AbstractController
     /**
      * API endpoint to analyze which custom fields are referenced in Twig templates.
      * Returns each custom field name, its type, and the Twig files it appears in.
-     * 
-     * Requires:
-     * - Request MUST be authenticated via the Reqser App's integration credentials
-     * - Reqser App must be active
-     * - GET method only
      *
      * @param Request $request
      * @param Context $context
@@ -291,10 +275,6 @@ class ReqserDatabaseApiController extends AbstractController
      * Proxy for Shopware's POST /api/search/{entity} that bypasses ACL.
      * Accepts the exact same request body, headers (sw-language-id), and returns
      * the exact same response format. Only translation-related entities are allowed.
-     * 
-     * Requires:
-     * - Reqser App authentication
-     * - Entity must have a corresponding _translation table
      *
      * @param Request $request
      * @param Context $context
@@ -372,10 +352,6 @@ class ReqserDatabaseApiController extends AbstractController
      * 
      * Used for force_get_request_tables where POST search doesn't work
      * (e.g. system entities with null IDs like sales-channel-type).
-     * 
-     * Requires:
-     * - Reqser App authentication
-     * - Entity must have a corresponding _translation table
      *
      * @param Request $request
      * @param Context $context
@@ -450,10 +426,6 @@ class ReqserDatabaseApiController extends AbstractController
      * Proxy for Shopware's POST /api/_action/sync that bypasses ACL.
      * Accepts the exact same request body and returns the exact same response format.
      * Only entities ending with '_translation' are allowed in the sync payload.
-     * 
-     * Requires:
-     * - Reqser App authentication
-     * - Every entity in the sync payload must end with '_translation'
      *
      * @param Request $request
      * @param Context $context
@@ -546,13 +518,6 @@ class ReqserDatabaseApiController extends AbstractController
      * Proxy for Shopware's PATCH /api/{entity}/{id} that bypasses ACL.
      * Accepts the exact same request body and returns the exact same response (204 No Content).
      * Only translation-related entities are allowed.
-     * 
-     * Typical body for translation tables: {"translations": {"{langId}": {"field": "value"}}}
-     * Typical body for snippets: {"translationKey": "...", "setId": "...", "value": "..."}
-     * 
-     * Requires:
-     * - Reqser App authentication
-     * - Entity must have a corresponding _translation table
      *
      * @param Request $request
      * @param Context $context

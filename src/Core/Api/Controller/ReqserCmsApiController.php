@@ -79,27 +79,6 @@ class ReqserCmsApiController extends AbstractController
 
     /**
      * API endpoint to render a CMS element
-     * 
-     * Requires:
-     * - Request MUST be authenticated via the Reqser App's integration credentials
-     * - Reqser App must be active
-     * - POST method only
-     * - JSON body with: type (string), config (object or JSON string)
-     * 
-     * Example 1 (config as object):
-     * {
-     *   "type": "text",
-     *   "config": {
-     *     "content": {"value": "<h2>Hello</h2>", "source": "static"},
-     *     "verticalAlign": {"value": null, "source": "static"}
-     *   }
-     * }
-     * 
-     * Example 2 (config as JSON string from database):
-     * {
-     *   "type": "text",
-     *   "config": "{\"content\": {\"value\": \"<h2>Hello</h2>\", \"source\": \"static\"}}"
-     * }
      *
      * @param Request $request
      * @param Context $context
