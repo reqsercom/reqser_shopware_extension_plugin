@@ -13,29 +13,15 @@ use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 
 /**
- * Runs ReqserApiAuthService::validateAuthentication() automatically for any
- * controller (or controller method) tagged with #[ReqserApiAuth].
+ * Runs Reqser App auth for every controller tagged with #[ReqserApiAuth].
  *
- * Controllers not carrying the attribute are ignored entirely — this
- * subscriber is a no-op for every request outside the Reqser plugin.
- *
- * Why kernel.controller (not kernel.request):
- *   - Shopware's ApiRequestContextResolver populates the "sw-context"
- *     request attribute during kernel.request. By the time
- *     kernel.controller fires, Context is guaranteed to be available.
- *   - Calling $event->setController(fn() => $jsonResponse) cleanly
- *     short-circuits the original action while keeping the rest of the
- *     response pipeline (CORS, logging, etc.) intact.
+ * @see docs/integrations/shopware_plugin/ReqserApiAuth.md
  */
 class ReqserApiAuthSubscriber implements EventSubscriberInterface
 {
     private ReqserApiAuthService $authService;
     private LoggerInterface $logger;
 
-    /**
-     * @param ReqserApiAuthService $authService
-     * @param LoggerInterface $logger
-     */
     public function __construct(
         ReqserApiAuthService $authService,
         LoggerInterface $logger
@@ -46,15 +32,14 @@ class ReqserApiAuthSubscriber implements EventSubscriberInterface
 
     public static function getSubscribedEvents(): array
     {
+        // Priority -12 runs right after Shopware's ContextResolverListener
+        // (priority -10) and before the scope-validation listeners (-19+),
+        // so $request->attributes[ATTRIBUTE_CONTEXT_OBJECT] is populated.
         return [
-            KernelEvents::CONTROLLER => ['onController', 10],
+            KernelEvents::CONTROLLER => ['onController', -12],
         ];
     }
 
-    /**
-     * @param ControllerEvent $event
-     * @return void
-     */
     public function onController(ControllerEvent $event): void
     {
         $controller = $event->getController();
