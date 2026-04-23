@@ -3,7 +3,6 @@
 namespace Reqser\Plugin\Subscriber;
 
 use Reqser\Plugin\Service\ReqserSessionService;
-use Reqser\Plugin\Service\ReqserWebhookService;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
@@ -12,14 +11,10 @@ use Symfony\Component\HttpKernel\EventListener\AbstractSessionListener;
 class ReqserLanguageSwitchSubscriber implements EventSubscriberInterface
 {
     private $requestStack;
-    private $webhookService;
-    public function __construct(
-        RequestStack $requestStack,
-        ReqserWebhookService $webhookService
-        )
+
+    public function __construct(RequestStack $requestStack)
     {
         $this->requestStack = $requestStack;
-        $this->webhookService = $webhookService;
     }
 
     public static function getSubscribedEvents(): array

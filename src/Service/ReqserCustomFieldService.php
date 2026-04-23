@@ -2,18 +2,9 @@
 
 namespace Reqser\Plugin\Service;
 
-use Reqser\Plugin\Service\ReqserWebhookService;
-
 class ReqserCustomFieldService
 {
     private const CUSTOM_FIELD_PREFIX = 'ReqserRedirect';
-    
-    private $webhookService;
-
-    public function __construct(ReqserWebhookService $webhookService)
-    {
-        $this->webhookService = $webhookService;
-    }
 
     /**
      * Universal function to retrieve data from ReqserRedirect custom fields

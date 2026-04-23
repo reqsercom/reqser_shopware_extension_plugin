@@ -2,7 +2,6 @@
 
 namespace Reqser\Plugin\Subscriber;
 
-use Reqser\Plugin\Service\ReqserWebhookService;
 use Reqser\Plugin\Service\ReqserAppService;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -20,20 +19,17 @@ use Shopware\Core\Content\Product\SalesChannel\Review\Event\ProductReviewsLoaded
 class ReqserProductReviewSubscriber implements EventSubscriberInterface
 {
     private $requestStack;
-    private $webhookService;
     private $appService;
     private $domainRepository;
     private $logger;
     
     public function __construct(
         RequestStack $requestStack,
-        ReqserWebhookService $webhookService,
         ReqserAppService $appService,
         EntityRepository $domainRepository,
         LoggerInterface $logger
     ) {
         $this->requestStack = $requestStack;
-        $this->webhookService = $webhookService;
         $this->appService = $appService;
         $this->domainRepository = $domainRepository;
         $this->logger = $logger;
@@ -166,16 +162,6 @@ class ReqserProductReviewSubscriber implements EventSubscriberInterface
     {
         $this->logger->error("Reqser Plugin Error in {$function}", [
             'message' => $e->getMessage(),
-            'file' => __FILE__, 
-            'line' => __LINE__,
-        ]);
-        
-        $this->webhookService->sendErrorToWebhook([
-            'type' => 'error',
-            'function' => $function,
-            'message' => $e->getMessage() ?? 'unknown',
-            'trace' => $e->getTraceAsString() ?? 'unknown',
-            'timestamp' => date('Y-m-d H:i:s'),
             'file' => __FILE__, 
             'line' => __LINE__,
         ]);

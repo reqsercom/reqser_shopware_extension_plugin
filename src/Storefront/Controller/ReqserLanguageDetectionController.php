@@ -7,7 +7,6 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
 use Reqser\Plugin\Service\ReqserLanguageRedirectService;
-use Reqser\Plugin\Service\ReqserWebhookService;
 use Reqser\Plugin\Service\ReqserCustomFieldService;
 use Reqser\Plugin\Service\ReqserAppService;
 use Reqser\Plugin\Service\ReqserSessionService;
@@ -21,7 +20,6 @@ class ReqserLanguageDetectionController extends StorefrontController
 {
     private $languageRedirectService;
     private $domainRepository;
-    private $webhookService;
     private $customFieldService;
     private $appService;
     private $cache;
@@ -30,7 +28,6 @@ class ReqserLanguageDetectionController extends StorefrontController
     public function __construct(
         ReqserLanguageRedirectService $languageRedirectService,
         EntityRepository $domainRepository,
-        ReqserWebhookService $webhookService,
         ReqserCustomFieldService $customFieldService,
         ReqserAppService $appService,
         CacheInterface $cache,
@@ -38,7 +35,6 @@ class ReqserLanguageDetectionController extends StorefrontController
     ) {
         $this->languageRedirectService = $languageRedirectService;
         $this->domainRepository = $domainRepository;
-        $this->webhookService = $webhookService;
         $this->customFieldService = $customFieldService;
         $this->appService = $appService;
         $this->cache = $cache;
