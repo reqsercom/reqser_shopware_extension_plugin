@@ -18,6 +18,12 @@ class ReqserDatabaseService
     private DefinitionInstanceRegistry $definitionRegistry;
     private ReqserJsonFieldDetectionService $jsonFieldDetectionService;
 
+    /**
+     * @param Connection $connection
+     * @param LoggerInterface $logger
+     * @param DefinitionInstanceRegistry $definitionRegistry
+     * @param ReqserJsonFieldDetectionService $jsonFieldDetectionService
+     */
     public function __construct(
         Connection $connection,
         LoggerInterface $logger,
@@ -28,6 +34,103 @@ class ReqserDatabaseService
         $this->logger = $logger;
         $this->definitionRegistry = $definitionRegistry;
         $this->jsonFieldDetectionService = $jsonFieldDetectionService;
+    }
+
+    /**
+     * Dump every DAL entity definition registered in the installation.
+     * Includes translation-entity linkage, translatable field list, and the source bundle/plugin name.
+     *
+     * @return array<int, array{
+     *     entity: string,
+     *     class: string,
+     *     source: string,
+     *     sourcePath: string,
+     *     hasTranslation: bool,
+     *     translationEntity: string|null,
+     *     translatableFields: array<int, string>
+     * }>
+     */
+    public function getEntityDefinitionsDump(): array
+    {
+        $projectDir = '';
+        // Best-effort project dir resolution — EntityDefinition source paths
+        // are prefixed with the real project dir.
+        if (\defined('PHPUNIT_COMPOSER_INSTALL') === false
+            && isset($_SERVER['DOCUMENT_ROOT'])
+            && is_string($_SERVER['DOCUMENT_ROOT'])) {
+            $projectDir = str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT']);
+        }
+        // Fallback: walk up from this file to locate composer.json of the
+        // project (three levels above src/Service/ReqserDatabaseService.php).
+        if ($projectDir === '' || !is_dir($projectDir . '/vendor')) {
+            $candidate = \dirname(__DIR__, 5);
+            if (is_dir($candidate . '/vendor')) {
+                $projectDir = str_replace('\\', '/', $candidate);
+            }
+        }
+
+        $out = [];
+
+        foreach ($this->definitionRegistry->getDefinitions() as $definition) {
+            try {
+                $reflection = new \ReflectionClass($definition);
+                $file = $reflection->getFileName();
+                $fileNorm = is_string($file) ? str_replace('\\', '/', $file) : '';
+
+                $relative = $fileNorm;
+                if ($projectDir !== '' && str_starts_with($fileNorm, $projectDir)) {
+                    $relative = ltrim(substr($fileNorm, strlen($projectDir)), '/');
+                }
+
+                if (str_contains($relative, 'vendor/shopware/')) {
+                    $source = 'core';
+                } elseif (str_contains($relative, 'custom/plugins/')) {
+                    $after = substr($relative, strpos($relative, 'custom/plugins/') + strlen('custom/plugins/'));
+                    $parts = explode('/', $after);
+                    $source = $parts[0] ?? 'unknown';
+                } else {
+                    $source = 'unknown';
+                }
+
+                $translationEntity = null;
+                try {
+                    $translationDefinition = $definition->getTranslationDefinition();
+                    if ($translationDefinition instanceof EntityDefinition) {
+                        $translationEntity = $translationDefinition->getEntityName();
+                    }
+                } catch (\Throwable) {
+                    // Definitions missing translation wiring — treat as no translation.
+                }
+
+                $translatableFields = [];
+                try {
+                    foreach ($definition->getFields() as $field) {
+                        if ($field instanceof TranslatedField) {
+                            $translatableFields[] = $field->getPropertyName();
+                        }
+                    }
+                } catch (\Throwable) {
+                    // Skip fields we cannot introspect; still emit the entity.
+                }
+
+                $out[] = [
+                    'entity' => $definition->getEntityName(),
+                    'class' => $reflection->getName(),
+                    'source' => $source,
+                    'sourcePath' => $relative,
+                    'hasTranslation' => $translationEntity !== null,
+                    'translationEntity' => $translationEntity,
+                    'translatableFields' => $translatableFields,
+                ];
+            } catch (\Throwable) {
+                // Never let a single broken definition break the dump.
+                continue;
+            }
+        }
+
+        usort($out, static fn(array $a, array $b): int => strcmp($a['entity'], $b['entity']));
+
+        return $out;
     }
 
     /**
@@ -60,8 +163,9 @@ class ReqserDatabaseService
     /**
      * Validate that a table name is a legitimate translation table.
      * Checks the suffix is '_translation' AND the table exists in the database.
-     * 
-     * @param string $tableName The table name to validate (e.g. 'product_translation')
+     *
+     * @param string $tableName
+     * @return void
      * @throws \InvalidArgumentException If table name doesn't end with '_translation' or doesn't exist
      */
     public function validateTranslationTable(string $tableName): void
@@ -80,9 +184,9 @@ class ReqserDatabaseService
     /**
      * Get complete schema information for a translation table
      * Returns ALL columns plus a list of which columns are translatable
-     * 
-     * @param string $tableName The translation table name
-     * @return array{schema: array<string, array<string, mixed>>, translatableRows: array<int, string>}
+     *
+     * @param string $tableName
+     * @return array
      * @throws \InvalidArgumentException If table name is invalid
      * @throws \RuntimeException If database query fails
      */
@@ -105,11 +209,11 @@ class ReqserDatabaseService
     /**
      * Get detailed information about a specific translatable column
      * Checks if the column type is JSON and returns extended details
-     * 
-     * @param string $tableName The translation table name
-     * @param string $columnName The column name to get details for
-     * @param array<string, mixed> $columnSchema The schema for this column
-     * @return array{columnName: string, schema: array, rowDetails: array}
+     *
+     * @param string $tableName
+     * @param string $columnName
+     * @param array $columnSchema
+     * @return array
      */
     public function getTranslationTableRowDetails(string $tableName, string $columnName, array $columnSchema): array
     {
@@ -141,9 +245,9 @@ class ReqserDatabaseService
     /**
      * Get translatable fields for a specific translation table
      * Uses direct entity lookup for maximum performance
-     * 
-     * @param string $tableName The translation table name (e.g., 'product_translation')
-     * @return array<string> Array of translatable field names
+     *
+     * @param string $tableName
+     * @return array
      */
     private function getTranslatableFieldsForTable(string $tableName): array
     {
@@ -180,9 +284,9 @@ class ReqserDatabaseService
     /**
      * Get full schema information for a table (including all columns, not just translatable ones)
      * Uses SHOW COLUMNS command for standard MySQL schema format
-     * 
-     * @param string $tableName The table name
-     * @return array<string, array<string, mixed>> Associative array [columnName => schema]
+     *
+     * @param string $tableName
+     * @return array
      * @throws \RuntimeException If schema query fails
      */
     private function getTableFullSchema(string $tableName): array
@@ -215,7 +319,7 @@ class ReqserDatabaseService
 
     /**
      * Convert camelCase to snake_case
-     * 
+     *
      * @param string $input
      * @return string
      */

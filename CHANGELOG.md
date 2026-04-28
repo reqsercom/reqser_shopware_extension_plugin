@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.24/1.7.24/1.6.24/1.5.24 04.2026
+- Theme config debug route includes raw theme.json source files
+
+## 2.0.23/1.7.23/1.6.23/1.5.23 04.2026
+- Entitiy debug route
+- Storefront Twig files debug route
+- Removed deprecated ReqserWebhookService
+
+## 2.0.22/1.7.22/1.6.22/1.5.22 04.2026
+- Remove language switcher flag override logic
+
 ## 2.0.21/1.7.21/1.6.21/1.5.21 04.2026
 - Fix DI compatibility with third-party SyncService decorators
 

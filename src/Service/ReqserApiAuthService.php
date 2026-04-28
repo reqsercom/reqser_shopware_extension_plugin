@@ -15,6 +15,10 @@ class ReqserApiAuthService
     private ReqserAppService $appService;
     private LoggerInterface $logger;
 
+    /**
+     * @param ReqserAppService $appService
+     * @param LoggerInterface $logger
+     */
     public function __construct(
         ReqserAppService $appService,
         LoggerInterface $logger
@@ -25,10 +29,10 @@ class ReqserApiAuthService
 
     /**
      * Validate authentication for API requests via Reqser App integration.
-     * 
+     *
      * @param Request $request
      * @param Context $context
-     * @return JsonResponse|bool Returns error response (JsonResponse) if validation fails, true if validation passes
+     * @return JsonResponse|bool
      */
     public function validateAuthentication(Request $request, Context $context): JsonResponse|bool
     {

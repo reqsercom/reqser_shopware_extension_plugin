@@ -21,6 +21,10 @@ class ReqserCmsRenderService
     private TwigEnvironment $twig;
     private TemplateFinder $templateFinder;
 
+    /**
+     * @param TwigEnvironment $twig
+     * @param TemplateFinder $templateFinder
+     */
     public function __construct(TwigEnvironment $twig, TemplateFinder $templateFinder)
     {
         $this->twig = $twig;
@@ -29,7 +33,7 @@ class ReqserCmsRenderService
 
     /**
      * Render CMS element data to HTML
-     * 
+     *
      * @param string $type The CMS element type (e.g., 'text', 'image', 'html', 'ck-accordion')
      * @param array $config The element configuration data
      * @return string Base64 encoded rendered HTML
@@ -47,6 +51,10 @@ class ReqserCmsRenderService
      * 
      * Uses TemplateFinder::find() to resolve the template through Shopware's
      * bundle namespace hierarchy (same approach as DocumentTemplateRenderer).
+     *
+     * @param string $type
+     * @param array $config
+     * @return string
      */
     private function renderElementTemplate(string $type, array $config): string
     {
@@ -82,6 +90,9 @@ class ReqserCmsRenderService
     /**
      * Prepare element data from configuration
      * Extracts 'value' from {value: ..., source: "static"} structures
+     *
+     * @param array $config
+     * @return object
      */
     private function prepareElementData(array $config): object
     {

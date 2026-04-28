@@ -3,8 +3,8 @@
 namespace Reqser\Plugin\Core\Api\Controller;
 
 use Psr\Log\LoggerInterface;
+use Reqser\Plugin\Core\Api\Attribute\ReqserApiAuth;
 use Reqser\Plugin\Service\ReqserAnalyticsService;
-use Reqser\Plugin\Service\ReqserApiAuthService;
 use Shopware\Core\Framework\Context;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -16,25 +16,27 @@ use Symfony\Component\Routing\Annotation\Route;
  * Provides order and amount distribution statistics grouped by language
  */
 #[Route(defaults: ['_routeScope' => ['api']])]
+#[ReqserApiAuth]
 class ReqserAnalyticsApiController extends AbstractController
 {
     private ReqserAnalyticsService $analyticsService;
-    private ReqserApiAuthService $authService;
     private LoggerInterface $logger;
 
+    /**
+     * @param ReqserAnalyticsService $analyticsService
+     * @param LoggerInterface $logger
+     */
     public function __construct(
         ReqserAnalyticsService $analyticsService,
-        ReqserApiAuthService $authService,
         LoggerInterface $logger
     ) {
         $this->analyticsService = $analyticsService;
-        $this->authService = $authService;
         $this->logger = $logger;
     }
 
     /**
      * API endpoint to get order and amount distribution percentage breakdown by language.
-     *
+     * 
      * Request body (all fields optional):
      * - from: Start date in Y-m-d format
      * - until: End date in Y-m-d format
@@ -52,12 +54,6 @@ class ReqserAnalyticsApiController extends AbstractController
     public function getLanguageDistribution(Request $request, Context $context): JsonResponse
     {
         try {
-            // Validate authentication
-            $authResponse = $this->authService->validateAuthentication($request, $context);
-            if ($authResponse !== true) {
-                return $authResponse;
-            }
-
             $body = json_decode($request->getContent(), true) ?? [];
 
             $filters = [];
