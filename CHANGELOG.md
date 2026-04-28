@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.24/1.7.24/1.6.24/1.5.24 04.2026
+- Theme config debug route includes raw theme.json source files
+
 ## 2.0.23/1.7.23/1.6.23/1.5.23 04.2026
 - Entitiy debug route
 - Storefront Twig files debug route

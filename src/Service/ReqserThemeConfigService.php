@@ -3,18 +3,22 @@
 namespace Reqser\Plugin\Service;
 
 use Doctrine\DBAL\Connection;
+use Symfony\Component\HttpKernel\KernelInterface;
 
 /** Dumps every Shopware theme with its configuration and translations. */
 class ReqserThemeConfigService
 {
     private Connection $connection;
+    private KernelInterface $kernel;
 
     /**
      * @param Connection $connection
+     * @param KernelInterface $kernel
      */
-    public function __construct(Connection $connection)
+    public function __construct(Connection $connection, KernelInterface $kernel)
     {
         $this->connection = $connection;
+        $this->kernel = $kernel;
     }
 
     /**
@@ -48,25 +52,75 @@ class ReqserThemeConfigService
 
         foreach ($rows as $row) {
             $themeId = $row['id'];
+            $technicalName = $row['technicalName'] !== null ? (string) $row['technicalName'] : null;
+            $sourceTheme = $this->readSourceThemeJson($technicalName);
 
             $result[] = [
-                'id'            => $themeId,
-                'technicalName' => $row['technicalName'] !== null ? (string) $row['technicalName'] : null,
-                'name'          => $row['name'] !== null ? (string) $row['name'] : null,
-                'active'        => (bool) $row['active'],
-                'parentThemeId' => ($row['parentThemeId'] === null || $row['parentThemeId'] === '')
+                'id'                  => $themeId,
+                'technicalName'       => $technicalName,
+                'name'                => $row['name'] !== null ? (string) $row['name'] : null,
+                'active'              => (bool) $row['active'],
+                'parentThemeId'       => ($row['parentThemeId'] === null || $row['parentThemeId'] === '')
                     ? null
                     : $row['parentThemeId'],
-                'baseConfig'    => $this->decodeJsonColumn($row['baseConfig']),
-                'configValues'  => $this->decodeJsonColumn($row['configValues']),
-                'themeJson'     => $this->decodeJsonColumn($row['themeJson']),
-                'createdAt'     => $row['createdAt'],
-                'updatedAt'     => $row['updatedAt'],
-                'translations'  => $this->fetchTranslationsForTheme($themeId, $localeMap),
+                'baseConfig'          => $this->decodeJsonColumn($row['baseConfig']),
+                'configValues'        => $this->decodeJsonColumn($row['configValues']),
+                'themeJson'           => $this->decodeJsonColumn($row['themeJson']),
+                'sourceThemeJson'     => $sourceTheme['sourceThemeJson'],
+                'sourceThemeJsonPath' => $sourceTheme['sourceThemeJsonPath'],
+                'createdAt'           => $row['createdAt'],
+                'updatedAt'           => $row['updatedAt'],
+                'translations'        => $this->fetchTranslationsForTheme($themeId, $localeMap),
             ];
         }
 
         return $result;
+    }
+
+    /**
+     * Resolve a theme's source `Resources/theme.json` file via the kernel
+     * bundle registry and return its base64-encoded content + relative
+     * path. Returns null/null when the bundle isn't registered, the file
+     * doesn't exist, or the file isn't readable. Backward-compatible:
+     * keys are always present, values are nullable.
+     *
+     * @param string|null $technicalName
+     * @return array{sourceThemeJson: string|null, sourceThemeJsonPath: string|null}
+     */
+    private function readSourceThemeJson(string|null $technicalName): array
+    {
+        $empty = ['sourceThemeJson' => null, 'sourceThemeJsonPath' => null];
+
+        if ($technicalName === null || $technicalName === '') {
+            return $empty;
+        }
+
+        try {
+            $bundle = $this->kernel->getBundle($technicalName);
+        } catch (\Throwable) {
+            return $empty;
+        }
+
+        $sourcePath = $bundle->getPath() . '/Resources/theme.json';
+        if (!is_file($sourcePath) || !is_readable($sourcePath)) {
+            return $empty;
+        }
+
+        $content = @file_get_contents($sourcePath);
+        if ($content === false) {
+            return $empty;
+        }
+
+        $projectDir = rtrim(str_replace('\\', '/', (string) $this->kernel->getProjectDir()), '/');
+        $absoluteNorm = str_replace('\\', '/', $sourcePath);
+        $relativePath = $projectDir !== '' && str_starts_with($absoluteNorm, $projectDir . '/')
+            ? substr($absoluteNorm, strlen($projectDir) + 1)
+            : $absoluteNorm;
+
+        return [
+            'sourceThemeJson'     => base64_encode($content),
+            'sourceThemeJsonPath' => $relativePath,
+        ];
     }
 
     /**
