@@ -73,21 +73,6 @@
             <argument>%kernel.environment%</argument>
         </service>
 
-        <service id="Reqser\Plugin\Subscriber\ReqserPluginVersionCheckSubscriber"
-                class="Reqser\Plugin\Subscriber\ReqserPluginVersionCheckSubscriber">
-            <argument type="service" id="Reqser\Plugin\Service\ReqserVersionService" />
-            <argument type="service" id="translator" />
-            <argument type="service" id="Reqser\Plugin\Service\ReqserNotificationService" />
-            <tag name="kernel.event_subscriber" />
-        </service>
-
-        <service id="Reqser\Plugin\Service\ReqserVersionService"
-                class="Reqser\Plugin\Service\ReqserVersionService">
-            <argument>%kernel.shopware_version%</argument>
-            <argument>%kernel.project_dir%</argument>
-        </service>
-
-
         <service id="Reqser\Plugin\Storefront\Controller\ReqserLanguageDetectionController" public="true">
             <argument type="service" id="Reqser\Plugin\Service\ReqserLanguageRedirectService" />
             <argument type="service" id="sales_channel_domain.repository" />
