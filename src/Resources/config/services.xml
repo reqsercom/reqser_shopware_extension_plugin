@@ -160,6 +160,7 @@
 
         <service id="Reqser\Plugin\Service\ReqserThemeConfigService">
             <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="kernel"/>
         </service>
 
         <!-- Analytics Services -->
