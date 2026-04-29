@@ -16,6 +16,9 @@ class ReqserSessionService
     /**
      * Initialize the service with a session
      * Returns false if session is null to indicate initialization failed
+     *
+     * @param mixed $session
+     * @return bool
      */
     public function initialize($session): bool
     {
@@ -31,6 +34,9 @@ class ReqserSessionService
     /**
      * Get session with fallback strategy
      * First tries to get session from request, then falls back to requestStack
+     *
+     * @param mixed $request
+     * @param RequestStack $requestStack
      */
     public static function getSessionWithFallback($request, RequestStack $requestStack)
     {
@@ -69,6 +75,9 @@ class ReqserSessionService
 
     /**
      * Set last redirect timestamp
+     *
+     * @param ?float $timestamp
+     * @return void
      */
     public function setLastRedirectTime(?float $timestamp = null): void
     {
@@ -118,6 +127,9 @@ class ReqserSessionService
 
     /**
      * Increment script call count
+     *
+     * @param ?int $currentCount
+     * @return int
      */
     public function incrementScriptCallCount(?int $currentCount = null): int
     {

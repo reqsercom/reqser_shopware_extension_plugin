@@ -20,6 +20,10 @@ class ReqserCustomFieldUsageService
     private Connection $connection;
     private FilesystemLoader $loader;
 
+    /**
+     * @param Connection $connection
+     * @param FilesystemLoader $loader
+     */
     public function __construct(Connection $connection, FilesystemLoader $loader)
     {
         $this->connection = $connection;
@@ -134,9 +138,9 @@ class ReqserCustomFieldUsageService
      *   - .translated.customFields['KEY']           (translated bracket access)
      *   - .customFields.KEY                         (direct dot access)
      *   - .customFields['KEY'] / customFields["KEY"] (direct bracket access)
-     * 
-     * @param array<string> $dirs
-     * @return array<string, array<string, array{accessPatterns: array<string, true>, references: array<string, true>}>> Map of fieldKey => [twigFileName => [data]]
+     *
+     * @param array $dirs
+     * @return array
      */
     private function scanTwigFiles(array $dirs): array
     {
@@ -178,9 +182,9 @@ class ReqserCustomFieldUsageService
      * Extract custom field key names, their access patterns, and the full Twig expressions.
      * 
      * Returns a map of fieldKey => ['accessPatterns' => [...], 'references' => [...]].
-     * 
+     *
      * @param string $content
-     * @return array<string, array{accessPatterns: array<string>, references: array<string>}>
+     * @return array
      */
     private function extractCustomFieldKeys(string $content): array
     {

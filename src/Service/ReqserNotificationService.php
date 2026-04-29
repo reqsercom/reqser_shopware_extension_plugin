@@ -13,11 +13,21 @@ class ReqserNotificationService
 {
     private $notificationRepository;
 
+    /**
+     * @param EntityRepository $notificationRepository
+     */
     public function __construct(EntityRepository $notificationRepository)
     {
         $this->notificationRepository = $notificationRepository;
     }
 
+    /**
+     * @param string $message
+     * @param string $status
+     * @param array $requiredPrivileges
+     * @param bool $checkExisting
+     * @return void
+     */
     public function sendAdminNotification(string $message, string $status = 'info', array $requiredPrivileges = [], bool $checkExisting = true): void
     {
         $context = Context::createDefaultContext();

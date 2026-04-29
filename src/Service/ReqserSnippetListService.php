@@ -7,6 +7,9 @@ use Shopware\Core\System\Snippet\SnippetService;
 
 class ReqserSnippetListService
 {
+    /**
+     * @param SnippetService $snippetService
+     */
     public function __construct(
         private readonly SnippetService $snippetService
     ) {
@@ -14,6 +17,9 @@ class ReqserSnippetListService
 
     /**
      * @param list<string> $snippetSetIds
+     * @param int $page
+     * @param int $limit
+     * @param Context $context
      * @param array<string, mixed> $filters
      * @param array<string, mixed> $sort
      * @param list<string>|null $translationKeys When non-null, passed as native Shopware

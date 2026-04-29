@@ -19,6 +19,10 @@ class ReqserJsonFieldDetectionService
     private DefinitionInstanceRegistry $definitionRegistry;
     private ?array $cmsFieldCache = null;
 
+    /**
+     * @param Connection $connection
+     * @param DefinitionInstanceRegistry $definitionRegistry
+     */
     public function __construct(Connection $connection, DefinitionInstanceRegistry $definitionRegistry)
     {
         $this->connection = $connection;
@@ -30,10 +34,10 @@ class ReqserJsonFieldDetectionService
      * 
      * Uses Shopware's entity definitions to dynamically identify CMS slot config fields.
      * This checks if the field is defined as a SlotConfigField in any entity definition.
-     * 
-     * @param string $tableName The table name
-     * @param string $columnName The column name
-     * @return bool True if this is a CMS element configuration column
+     *
+     * @param string $tableName
+     * @param string $columnName
+     * @return bool
      */
     public function isCmsElementColumn(string $tableName, string $columnName): bool
     {
@@ -108,11 +112,11 @@ class ReqserJsonFieldDetectionService
     /**
      * Check if a column contains JSON data
      * Checks entity definitions first, then falls back to data sampling
-     * 
-     * @param string $tableName The table name
-     * @param string $columnName The column name
-     * @param string $type The MySQL column type
-     * @return bool True if the column contains JSON data
+     *
+     * @param string $tableName
+     * @param string $columnName
+     * @param string $type
+     * @return bool
      */
     public function isJsonColumn(string $tableName, string $columnName, string $type): bool
     {
@@ -140,10 +144,10 @@ class ReqserJsonFieldDetectionService
     /**
      * Check if a field is defined as a JSON field in Shopware's entity definition
      * Works even when the table has no data yet
-     * 
-     * @param string $tableName The table name
-     * @param string $columnName The column name
-     * @return bool True if defined as JsonField in entity
+     *
+     * @param string $tableName
+     * @param string $columnName
+     * @return bool
      */
     private function isJsonFieldInEntityDefinition(string $tableName, string $columnName): bool
     {
@@ -183,9 +187,9 @@ class ReqserJsonFieldDetectionService
     /**
      * Verify if a text column actually contains JSON data
      * Samples actual data to determine if it's JSON (no assumptions)
-     * 
-     * @param string $tableName The table name
-     * @param string $columnName The column name
+     *
+     * @param string $tableName
+     * @param string $columnName
      * @return bool
      */
     private function verifyJsonContent(string $tableName, string $columnName): bool

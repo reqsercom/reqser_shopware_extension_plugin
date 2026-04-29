@@ -18,6 +18,12 @@ class ReqserAppService
     private CacheInterface $cache;
     private LoggerInterface $logger;
 
+    /**
+     * @param Connection $connection
+     * @param RequestStack $requestStack
+     * @param CacheInterface $cache
+     * @param LoggerInterface $logger
+     */
     public function __construct(
         Connection $connection,
         RequestStack $requestStack,
@@ -30,6 +36,10 @@ class ReqserAppService
         $this->logger = $logger;
     }
 
+    /**
+     * @param bool $skipCache
+     * @return bool
+     */
     public function isAppActive(bool $skipCache = false): bool
     {
         try {
@@ -68,9 +78,9 @@ class ReqserAppService
 
     /**
      * Verify that the request is authenticated via the Reqser App's integration
-     * 
+     *
      * @param Context $context
-     * @return bool True if request is from Reqser App integration, false otherwise
+     * @return bool
      */
     public function isRequestFromReqserApp(Context $context): bool
     {

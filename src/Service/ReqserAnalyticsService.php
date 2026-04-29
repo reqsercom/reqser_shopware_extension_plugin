@@ -12,6 +12,10 @@ class ReqserAnalyticsService
     private Connection $connection;
     private LoggerInterface $logger;
 
+    /**
+     * @param Connection $connection
+     * @param LoggerInterface $logger
+     */
     public function __construct(
         Connection $connection,
         LoggerInterface $logger
@@ -26,8 +30,8 @@ class ReqserAnalyticsService
      * Amounts are normalized to system currency via currency_factor.
      * Returns percentages rounded to 1 decimal place.
      *
-     * @param array{from?: string, until?: string, salesChannelId?: string} $filters
-     * @return array<int, array{language_id: string, percentage_amount_orders: float, percentage_amount_total: float}>
+     * @param array $filters
+     * @return array
      */
     public function getLanguageDistribution(array $filters = []): array
     {
