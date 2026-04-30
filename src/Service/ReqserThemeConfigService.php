@@ -26,27 +26,59 @@ class ReqserThemeConfigService
      * human locale code (`de-DE`) so consumers don't need a second
      * round-trip to language/locale to identify each translation row.
      *
-     * @return array<int, array<string, mixed>>
+     * Fail-safe contract (plugin 2.0.25+):
+     *   - Each sub-query (locale map, theme list, per-theme translations)
+     *     runs in its own try/catch. A failure in one bucket records a
+     *     warning and falls back to a sensible empty default; other
+     *     buckets still produce data.
+     *   - The main `theme` query and `theme_translation` query no longer
+     *     carry SQL `ORDER BY` clauses (those tripped MySQL's
+     *     `sort_buffer_size` on merchants with default-sized buffers and
+     *     large `theme_json` blobs — see laravel.log incident on
+     *     radixweb.ch / website 245, 2026-04-27). Sort happens in PHP
+     *     after the result set has been streamed out of MySQL.
+     *
+     * @return array{themes: list<array<string, mixed>>, warnings: list<string>}
      */
     public function dumpThemes(): array
     {
-        $localeMap = $this->fetchLanguageLocaleMap();
+        $warnings = [];
 
-        $rows = $this->connection->fetchAllAssociative(
-            'SELECT
-                LOWER(HEX(id))               AS id,
-                technical_name               AS technicalName,
-                name                         AS name,
-                active                       AS active,
-                LOWER(HEX(parent_theme_id))  AS parentThemeId,
-                base_config                  AS baseConfig,
-                config_values                AS configValues,
-                theme_json                   AS themeJson,
-                created_at                   AS createdAt,
-                updated_at                   AS updatedAt
-             FROM theme
-             ORDER BY technical_name ASC, id ASC'
-        );
+        try {
+            $localeMap = $this->fetchLanguageLocaleMap();
+        } catch (\Throwable $e) {
+            $warnings[] = 'language_locale_map_failed: ' . $e->getMessage();
+            $localeMap = [];
+        }
+
+        try {
+            $rows = $this->connection->fetchAllAssociative(
+                'SELECT
+                    LOWER(HEX(id))               AS id,
+                    technical_name               AS technicalName,
+                    name                         AS name,
+                    active                       AS active,
+                    LOWER(HEX(parent_theme_id))  AS parentThemeId,
+                    base_config                  AS baseConfig,
+                    config_values                AS configValues,
+                    theme_json                   AS themeJson,
+                    created_at                   AS createdAt,
+                    updated_at                   AS updatedAt
+                 FROM theme'
+            );
+
+            // Sort in PHP rather than via SQL `ORDER BY technical_name, id`.
+            // MySQL's `sort_buffer_size` is per-session and can be tiny on
+            // shared hosting; a sort over the `theme` table fails with
+            // `Out of sort memory` because `theme_json` rows are large.
+            usort($rows, static function (array $a, array $b): int {
+                $cmp = strcmp((string) ($a['technicalName'] ?? ''), (string) ($b['technicalName'] ?? ''));
+                return $cmp !== 0 ? $cmp : strcmp((string) ($a['id'] ?? ''), (string) ($b['id'] ?? ''));
+            });
+        } catch (\Throwable $e) {
+            $warnings[] = 'theme_query_failed: ' . $e->getMessage();
+            return ['themes' => [], 'warnings' => $warnings];
+        }
 
         $result = [];
 
@@ -54,6 +86,13 @@ class ReqserThemeConfigService
             $themeId = $row['id'];
             $technicalName = $row['technicalName'] !== null ? (string) $row['technicalName'] : null;
             $sourceTheme = $this->readSourceThemeJson($technicalName);
+
+            try {
+                $translations = $this->fetchTranslationsForTheme($themeId, $localeMap);
+            } catch (\Throwable $e) {
+                $warnings[] = "theme_translations_failed[{$themeId}]: " . $e->getMessage();
+                $translations = [];
+            }
 
             $result[] = [
                 'id'                  => $themeId,
@@ -70,11 +109,11 @@ class ReqserThemeConfigService
                 'sourceThemeJsonPath' => $sourceTheme['sourceThemeJsonPath'],
                 'createdAt'           => $row['createdAt'],
                 'updatedAt'           => $row['updatedAt'],
-                'translations'        => $this->fetchTranslationsForTheme($themeId, $localeMap),
+                'translations'        => $translations,
             ];
         }
 
-        return $result;
+        return ['themes' => $result, 'warnings' => $warnings];
     }
 
     /**
@@ -127,6 +166,10 @@ class ReqserThemeConfigService
      * Fetch all theme_translation rows for a theme, annotated with the
      * locale code pulled from the language → locale join.
      *
+     * SQL `ORDER BY` was removed for the same `sort_buffer_size` reason
+     * as `dumpThemes()`; the per-theme translation set is small enough
+     * that PHP-side `usort` is effectively free.
+     *
      * @param string $themeIdHex
      * @param array $localeMap
      * @return array
@@ -144,9 +187,12 @@ class ReqserThemeConfigService
                 tt.created_at              AS created_at,
                 tt.updated_at              AS updated_at
              FROM theme_translation tt
-             WHERE tt.theme_id = UNHEX(:theme_id)
-             ORDER BY tt.language_id ASC',
+             WHERE tt.theme_id = UNHEX(:theme_id)',
             ['theme_id' => $themeIdHex]
+        );
+
+        usort($rows, static fn(array $a, array $b): int =>
+            strcmp((string) ($a['language_id'] ?? ''), (string) ($b['language_id'] ?? ''))
         );
 
         $translations = [];

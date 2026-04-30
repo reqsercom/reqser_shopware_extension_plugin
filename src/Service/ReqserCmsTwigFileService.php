@@ -34,40 +34,57 @@ class ReqserCmsTwigFileService
     /**
      * Return every active storefront .html.twig template in the installation.
      *
-     * @return array<array{fileName: string, path: string, source: string, content: string}>
+     * Fail-safe contract (plugin 2.0.25+):
+     *   - The outer template-discovery walk + final sort are wrapped in
+     *     a try/catch so a fatal failure (e.g. broken Twig loader) yields
+     *     a partial list with a `warnings` entry rather than a HTTP 500.
+     *   - Per-template `try/catch` was already in place inside
+     *     `resolveTemplateRef()` — failed individual templates skip
+     *     silently (typical case is a kernel-cache race during deploy).
+     *
+     * @return array{
+     *     twigFiles: array<int, array{fileName: string, path: string, source: string, content: string}>,
+     *     warnings: list<string>
+     * }
      */
     public function getAllActiveTwigFiles(): array
     {
-        $this->templateFinder->reset();
-
-        $refs = $this->discoverAllStorefrontTemplateRefs();
-
+        $warnings = [];
         $result = [];
-        $seen = [];
 
-        foreach ($refs as $ref) {
-            $resolved = $this->resolveTemplateRef($ref);
-            if ($resolved === null) {
-                continue;
+        try {
+            $this->templateFinder->reset();
+
+            $refs = $this->discoverAllStorefrontTemplateRefs();
+
+            $seen = [];
+
+            foreach ($refs as $ref) {
+                $resolved = $this->resolveTemplateRef($ref);
+                if ($resolved === null) {
+                    continue;
+                }
+
+                $key = ($resolved['source'] ?? '') . '|'
+                    . ($resolved['path'] ?? '') . '|'
+                    . ($resolved['fileName'] ?? '');
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $result[] = $resolved;
             }
 
-            $key = ($resolved['source'] ?? '') . '|'
-                . ($resolved['path'] ?? '') . '|'
-                . ($resolved['fileName'] ?? '');
-            if (isset($seen[$key])) {
-                continue;
-            }
-            $seen[$key] = true;
-            $result[] = $resolved;
+            usort($result, static function (array $a, array $b): int {
+                $ka = ($a['path'] ?? '') . '/' . ($a['fileName'] ?? '');
+                $kb = ($b['path'] ?? '') . '/' . ($b['fileName'] ?? '');
+                return strcmp($ka, $kb);
+            });
+        } catch (\Throwable $e) {
+            $warnings[] = 'twig_files_discovery_failed: ' . $e->getMessage();
         }
 
-        usort($result, static function (array $a, array $b): int {
-            $ka = ($a['path'] ?? '') . '/' . ($a['fileName'] ?? '');
-            $kb = ($b['path'] ?? '') . '/' . ($b['fileName'] ?? '');
-            return strcmp($ka, $kb);
-        });
-
-        return $result;
+        return ['twigFiles' => $result, 'warnings' => $warnings];
     }
 
     /**

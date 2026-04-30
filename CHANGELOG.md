@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.25/1.7.25/1.6.25/1.5.25 04.2026
+- Fail-safe debug routes with partial results via `data._warnings`
+- Theme config: PHP-side sort to avoid MySQL sort_buffer_size errors
+
 ## 2.0.24/1.7.24/1.6.24/1.5.24 04.2026
 - Theme config debug route includes raw theme.json source files
 

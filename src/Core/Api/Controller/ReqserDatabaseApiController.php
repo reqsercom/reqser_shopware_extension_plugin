@@ -210,16 +210,23 @@ class ReqserDatabaseApiController extends AbstractController
     public function getEntityDefinitions(Request $request, Context $context): JsonResponse
     {
         try {
-            $entities = $this->databaseService->getEntityDefinitionsDump();
+            $dump = $this->databaseService->getEntityDefinitionsDump();
+            $entities = $dump['entities'] ?? [];
+            $warnings = $dump['warnings'] ?? [];
 
-            return new JsonResponse([
+            $payload = [
                 'success' => true,
                 'data' => [
                     'entities' => $entities,
                     'count' => count($entities),
                 ],
                 'timestamp' => date('Y-m-d H:i:s'),
-            ]);
+            ];
+            if (!empty($warnings)) {
+                $payload['data']['_warnings'] = $warnings;
+            }
+
+            return new JsonResponse($payload);
 
         } catch (\Throwable $e) {
             return new JsonResponse([
