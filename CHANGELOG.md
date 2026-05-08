@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.26/1.7.26/1.6.26/1.5.26 05.2026
+- Fix `cms/render-element` 500 errors by providing a `SalesChannelContext` to Twig
+- `cms/twig-files`: discover templates from every active bundle (custom/static-plugins/, vendor/, apps), `source` now returns the bundle name
+
 ## 2.0.25/1.7.25/1.6.25/1.5.25 04.2026
 - Fail-safe debug routes with partial results via `data._warnings`
 - Theme config: PHP-side sort to avoid MySQL sort_buffer_size errors
