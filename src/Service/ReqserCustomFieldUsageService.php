@@ -3,6 +3,10 @@
 namespace Reqser\Plugin\Service;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Content\Cms\DataAbstractionLayer\Field\SlotConfigField;
+use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityTranslationDefinition;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\JsonField;
 use Symfony\Component\Finder\Finder;
 use Twig\Loader\FilesystemLoader;
 
@@ -12,35 +16,29 @@ use Twig\Loader\FilesystemLoader;
  * Cross-references registered custom_field rows against:
  *   1. Twig templates discovered via Shopware's FilesystemLoader (core, plugins, apps, themes).
  *   2. CMS slot configs that contain `source: "mapped"` references to customFields paths.
- *      Scanned columns: cms_slot.config, cms_slot_translation.config,
- *      category_translation.slot_config, landing_page_translation.slot_config,
- *      product_translation.slot_config (each conditional on the column existing).
+ *      The list of scanned tables/columns is derived dynamically from the DAL: every
+ *      EntityTranslationDefinition that owns a SlotConfigField, or a JsonField with the
+ *      storage name `slot_config`, is included. This automatically covers Shopware core
+ *      (cms_slot_translation.config, category_translation.slot_config,
+ *      product_translation.slot_config, landing_page_translation.slot_config) and any
+ *      third-party plugin that follows the same Shopware convention.
  *
  * Only fields referenced somewhere (Twig OR CMS) are returned.
  */
 class ReqserCustomFieldUsageService
 {
-    /**
-     * CMS-related JSON columns scanned for source=mapped customField references.
-     * Tables/columns missing on the current Shopware version are silently skipped.
-     *
-     * @var array<int, array{table: string, column: string, idColumn: string, languageColumn: string|null}>
-     */
-    private const CMS_CONFIG_TABLES = [
-        ['table' => 'cms_slot',                 'column' => 'config',      'idColumn' => 'id',              'languageColumn' => null],
-        ['table' => 'cms_slot_translation',     'column' => 'config',      'idColumn' => 'cms_slot_id',     'languageColumn' => 'language_id'],
-        ['table' => 'category_translation',     'column' => 'slot_config', 'idColumn' => 'category_id',     'languageColumn' => 'language_id'],
-        ['table' => 'landing_page_translation', 'column' => 'slot_config', 'idColumn' => 'landing_page_id', 'languageColumn' => 'language_id'],
-        ['table' => 'product_translation',      'column' => 'slot_config', 'idColumn' => 'product_id',     'languageColumn' => 'language_id'],
-    ];
-
     private Connection $connection;
     private FilesystemLoader $loader;
+    private DefinitionInstanceRegistry $definitionRegistry;
 
-    public function __construct(Connection $connection, FilesystemLoader $loader)
-    {
+    public function __construct(
+        Connection $connection,
+        FilesystemLoader $loader,
+        DefinitionInstanceRegistry $definitionRegistry
+    ) {
         $this->connection = $connection;
         $this->loader = $loader;
+        $this->definitionRegistry = $definitionRegistry;
     }
 
     /**
@@ -52,7 +50,7 @@ class ReqserCustomFieldUsageService
      *         type: string,
      *         entities: array<string>,
      *         twigFiles: array<int, array{file: string, accessPatterns: array<string>, references: array<string>}>,
-     *         cmsSlots: array<int, array{table: string, column: string, entityId: string, languageId: string|null, paths: array<string>}>
+     *         cmsSlots: array<int, array{table: string, column: string, entityId: string, languageId: string, paths: array<string>}>
      *     }>,
      *     totalCustomFields: int,
      *     displayedCustomFields: int
@@ -112,15 +110,6 @@ class ReqserCustomFieldUsageService
             'totalCustomFields' => count($registeredFields),
             'displayedCustomFields' => count($fields),
         ];
-    }
-
-    /**
-     * @deprecated since plugin 2.0.26 — use getCustomFieldUsage(). Kept temporarily so any
-     * existing in-process call sites continue to work; remove after one release cycle.
-     */
-    public function getCustomFieldTwigUsage(): array
-    {
-        return $this->getCustomFieldUsage();
     }
 
     /**
@@ -275,43 +264,81 @@ class ReqserCustomFieldUsageService
     }
 
     /**
-     * Scan all CMS_CONFIG_TABLES for rows whose JSON contains a source=mapped customFields
-     * reference. Tables/columns missing on this Shopware version are silently skipped.
+     * Discover slot-config-bearing translation tables dynamically from the DAL.
+     * A column is included when its translation definition declares it as a SlotConfigField,
+     * or as a JsonField whose storage name is `slot_config`. Restricting to
+     * EntityTranslationDefinition guarantees a `language_id` column and a single
+     * parent-FK column named `<parent_entity>_id`.
      *
-     * @return array<string, array<int, array{table: string, column: string, entityId: string, languageId: string|null, paths: array<string>}>>
+     * @return array<int, array{table: string, column: string, idColumn: string}>
+     */
+    private function discoverSlotConfigTables(): array
+    {
+        $tables = [];
+
+        foreach ($this->definitionRegistry->getDefinitions() as $definition) {
+            if (!$definition instanceof EntityTranslationDefinition) {
+                continue;
+            }
+
+            $parent = $definition->getParentDefinition();
+            $idColumn = $parent->getEntityName() . '_id';
+
+            foreach ($definition->getFields() as $field) {
+                $isSlotConfigField = $field instanceof SlotConfigField;
+                $isJsonSlotConfig = $field instanceof JsonField
+                    && $field->getStorageName() === 'slot_config';
+
+                if (!$isSlotConfigField && !$isJsonSlotConfig) {
+                    continue;
+                }
+
+                $tables[] = [
+                    'table' => $definition->getEntityName(),
+                    'column' => $field->getStorageName(),
+                    'idColumn' => $idColumn,
+                ];
+            }
+        }
+
+        return $tables;
+    }
+
+    /**
+     * Scan every dynamically discovered slot-config column for rows whose JSON contains a
+     * source=mapped customFields reference.
+     *
+     * @return array<string, array<int, array{table: string, column: string, entityId: string, languageId: string, paths: array<string>}>>
      */
     private function scanCmsTablesForMappedCustomFields(): array
     {
         $byField = [];
 
-        foreach (self::CMS_CONFIG_TABLES as $tableSpec) {
+        foreach ($this->discoverSlotConfigTables() as $tableSpec) {
             $table = $tableSpec['table'];
             $column = $tableSpec['column'];
-
-            if (!$this->columnExists($table, $column)) {
-                continue;
-            }
-
             $idColumn = $tableSpec['idColumn'];
-            $languageColumn = $tableSpec['languageColumn'];
 
             // Pre-filter at SQL level: rows must contain both 'customFields' and 'mapped' to be candidates.
-            $select = "LOWER(HEX(`{$idColumn}`)) AS entity_id";
-            $select .= $languageColumn !== null
-                ? ", LOWER(HEX(`{$languageColumn}`)) AS language_id"
-                : ", NULL AS language_id";
-            $select .= ", `{$column}` AS config_json";
-
-            $sql = "SELECT {$select} FROM `{$table}` "
+            $sql = "SELECT LOWER(HEX(`{$idColumn}`)) AS entity_id, "
+                . "LOWER(HEX(`language_id`)) AS language_id, "
+                . "`{$column}` AS config_json "
+                . "FROM `{$table}` "
                 . "WHERE `{$column}` IS NOT NULL "
                 . "AND `{$column}` LIKE '%customFields%' "
                 . "AND `{$column}` LIKE '%mapped%'";
 
-            $rows = $this->connection->fetchAllAssociative($sql);
+            try {
+                $rows = $this->connection->fetchAllAssociative($sql);
+            } catch (\Throwable $e) {
+                // Definition exists but DB schema lags (e.g. plugin migration not yet run).
+                // Skip silently; the route should not 500 on transient install state.
+                continue;
+            }
 
             foreach ($rows as $row) {
                 $entityId = (string) ($row['entity_id'] ?? '');
-                $languageId = $row['language_id'] !== null ? (string) $row['language_id'] : null;
+                $languageId = (string) ($row['language_id'] ?? '');
                 $configJson = (string) $row['config_json'];
 
                 $hits = $this->extractMappedCustomFieldKeysFromJson($configJson);
@@ -319,7 +346,7 @@ class ReqserCustomFieldUsageService
                     continue;
                 }
 
-                $rowKey = $table . '|' . $column . '|' . $entityId . '|' . ($languageId ?? '');
+                $rowKey = $table . '|' . $column . '|' . $entityId . '|' . $languageId;
 
                 foreach ($hits as $fieldKey => $values) {
                     if (!isset($byField[$fieldKey][$rowKey])) {
@@ -426,28 +453,5 @@ class ReqserCustomFieldUsageService
                 $this->walkConfigForMappedCustomFields($child, $found);
             }
         }
-    }
-
-    /**
-     * Cached existence check against INFORMATION_SCHEMA so we can skip tables/columns missing
-     * on older Shopware versions without throwing.
-     */
-    private function columnExists(string $table, string $column): bool
-    {
-        static $cache = [];
-        $key = $table . '.' . $column;
-
-        if (!array_key_exists($key, $cache)) {
-            $cache[$key] = (bool) $this->connection->fetchOne(
-                'SELECT 1 FROM information_schema.columns
-                 WHERE table_schema = DATABASE()
-                   AND table_name = :table
-                   AND column_name = :column
-                 LIMIT 1',
-                ['table' => $table, 'column' => $column]
-            );
-        }
-
-        return $cache[$key];
     }
 }
