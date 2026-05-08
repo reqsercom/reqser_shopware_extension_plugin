@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.26 05.2026
+- Custom fields usage route also scans CMS slot configs (mapped elements and dynamic Twig)
+
 ## 2.0.25/1.7.25/1.6.25/1.5.25 04.2026
 - Fail-safe debug routes with partial results via `data._warnings`
 - Theme config: PHP-side sort to avoid MySQL sort_buffer_size errors
