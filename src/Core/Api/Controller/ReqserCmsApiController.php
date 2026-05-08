@@ -147,7 +147,7 @@ class ReqserCmsApiController extends AbstractController
             }
 
             // Render the CMS element
-            $renderedHtml = $this->cmsRenderService->renderCmsElement($type, $config);
+            $renderedHtml = $this->cmsRenderService->renderCmsElement($type, $config, $context);
 
             return new JsonResponse([
                 'success' => true,

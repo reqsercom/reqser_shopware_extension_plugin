@@ -156,6 +156,9 @@
         <service id="Reqser\Plugin\Service\ReqserCmsRenderService">
             <argument type="service" id="twig"/>
             <argument type="service" id="Shopware\Core\Framework\Adapter\Twig\TemplateFinder"/>
+            <argument type="service" id="sales_channel.repository"/>
+            <argument type="service" id="Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory"/>
+            <argument type="service" id="logger"/>
         </service>
 
         <service id="Reqser\Plugin\Service\ReqserThemeConfigService">
