@@ -4,6 +4,7 @@ namespace Reqser\Plugin\Service;
 
 use Shopware\Core\Framework\Adapter\Twig\TemplateFinder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\HttpKernel\KernelInterface;
 use Twig\Environment as TwigEnvironment;
 use Twig\Error\LoaderError;
 
@@ -34,13 +35,14 @@ class ReqserCmsTwigFileService
     /**
      * Return every active storefront .html.twig template in the installation.
      *
-     * Fail-safe contract (plugin 2.0.25+):
-     *   - The outer template-discovery walk + final sort are wrapped in
-     *     a try/catch so a fatal failure (e.g. broken Twig loader) yields
-     *     a partial list with a `warnings` entry rather than a HTTP 500.
-     *   - Per-template `try/catch` was already in place inside
-     *     `resolveTemplateRef()` — failed individual templates skip
-     *     silently (typical case is a kernel-cache race during deploy).
+     * Walks every bundle returned by `kernel->getBundles()` and scans
+     * `<bundle>/Resources/views/storefront/` recursively. The outer walk
+     * is wrapped in try/catch so fatal failures yield a partial list with
+     * `_warnings` rather than HTTP 500.
+     *
+     * See `docs/integrations/shopware_plugin/ReqserCmsTwigFileService.md`
+     * in the Reqser repo for response shape, source-attribution semantics,
+     * and the composer-symlink edge case.
      *
      * @return array{
      *     twigFiles: array<int, array{fileName: string, path: string, source: string, content: string}>,
@@ -55,12 +57,13 @@ class ReqserCmsTwigFileService
         try {
             $this->templateFinder->reset();
 
-            $refs = $this->discoverAllStorefrontTemplateRefs();
+            $bundlesByPath = $this->buildBundlePathMap();
+            $refs = $this->discoverAllStorefrontTemplateRefs($bundlesByPath);
 
             $seen = [];
 
             foreach ($refs as $ref) {
-                $resolved = $this->resolveTemplateRef($ref);
+                $resolved = $this->resolveTemplateRef($ref, $bundlesByPath);
                 if ($resolved === null) {
                     continue;
                 }
@@ -88,36 +91,80 @@ class ReqserCmsTwigFileService
     }
 
     /**
-     * Discover every distinct storefront template reference across core and
-     * every custom plugin. Recursive over the full storefront/ tree (so
-     * layout/, component/, block/, section/, element/, page/, utilities/, and
-     * root-level files like base.html.twig are all covered). Returns namespaced
-     * Twig refs like `@Storefront/storefront/layout/footer/footer.html.twig`.
+     * Build the `[absoluteBundlePath => bundleName]` map for source
+     * attribution. Each bundle contributes both its raw `Bundle::getPath()`
+     * and its `realpath()` to handle composer-symlinked bundles
+     * (`custom/static-plugins/*`).
      *
-     * @return array<string>
+     * See `docs/integrations/shopware_plugin/ReqserCmsTwigFileService.md`
+     * → "Bundle path resolution" for the symlink rationale.
+     *
+     * @return array<string, string> sorted by path length DESC
      */
-    private function discoverAllStorefrontTemplateRefs(): array
+    private function buildBundlePathMap(): array
     {
-        $refs = [];
-        $projectDir = (string) $this->container->getParameter('kernel.project_dir');
+        $kernel = $this->container->get('kernel');
+        if (!$kernel instanceof KernelInterface) {
+            return [];
+        }
 
-        $roots = [];
-        $roots[] = $projectDir . '/vendor/shopware/storefront/Resources/views/storefront';
+        $map = [];
+        foreach ($kernel->getBundles() as $bundle) {
+            $rawPath = $bundle->getPath();
+            $name = $bundle->getName();
 
-        $pluginsPath = $projectDir . '/custom/plugins';
-        if (is_dir($pluginsPath)) {
-            $pluginDirs = scandir($pluginsPath);
-            if ($pluginDirs !== false) {
-                foreach ($pluginDirs as $pluginDir) {
-                    if ($pluginDir === '.' || $pluginDir === '..') {
-                        continue;
-                    }
-                    $roots[] = $pluginsPath . '/' . $pluginDir . '/src/Resources/views/storefront';
+            $candidates = [$this->normalizePath($rawPath)];
+
+            $real = realpath($rawPath);
+            if ($real !== false) {
+                $candidates[] = $this->normalizePath($real);
+            }
+
+            foreach (array_unique($candidates) as $p) {
+                if ($p === '') {
+                    continue;
+                }
+                // First bundle to claim a path wins (with longer paths
+                // sorted first below). In practice each path is unique
+                // per bundle; this guards against future overlaps.
+                if (!isset($map[$p])) {
+                    $map[$p] = $name;
                 }
             }
         }
 
-        foreach ($roots as $root) {
+        uksort($map, static fn (string $a, string $b): int => strlen($b) - strlen($a));
+
+        return $map;
+    }
+
+    /**
+     * Normalize a filesystem path for prefix comparison: backslash → slash,
+     * collapse repeated separators, drop trailing slash. (Composer path
+     * repositories sometimes inject `//` into bundle paths.)
+     */
+    private function normalizePath(string $path): string
+    {
+        $normalized = str_replace('\\', '/', $path);
+        $normalized = preg_replace('#/+#', '/', $normalized) ?? $normalized;
+        return rtrim($normalized, '/');
+    }
+
+    /**
+     * Discover every distinct storefront template ref across every active
+     * bundle. Returns namespaced Twig refs like
+     * `@Storefront/storefront/layout/footer/footer.html.twig` ready for
+     * `TemplateFinder` resolution.
+     *
+     * @param array<string, string> $bundlesByPath produced by buildBundlePathMap()
+     * @return array<string>
+     */
+    private function discoverAllStorefrontTemplateRefs(array $bundlesByPath): array
+    {
+        $refs = [];
+
+        foreach (array_keys($bundlesByPath) as $bundlePath) {
+            $root = $bundlePath . '/Resources/views/storefront';
             if (!is_dir($root)) {
                 continue;
             }
@@ -161,9 +208,10 @@ class ReqserCmsTwigFileService
      * return the single active version for this installation.
      *
      * @param string $templateRef
+     * @param array<string, string> $bundlesByPath
      * @return ?array
      */
-    private function resolveTemplateRef(string $templateRef): ?array
+    private function resolveTemplateRef(string $templateRef, array $bundlesByPath): ?array
     {
         try {
             try {
@@ -195,7 +243,7 @@ class ReqserCmsTwigFileService
             $relativePath = str_replace($projectDir . '/', '', $actualPath);
             $relativePath = str_replace('\\', '/', $relativePath);
 
-            $pathInfo = $this->parseTemplatePath($relativePath);
+            $pathInfo = $this->parseTemplatePath($actualPath, $relativePath, $bundlesByPath);
 
             return [
                 'fileName' => basename($actualPath),
@@ -209,27 +257,61 @@ class ReqserCmsTwigFileService
     }
 
     /**
-     * Parse template path to determine source (core / plugin name) and directory.
+     * Map a resolved template path back to its owning bundle name + directory.
      *
-     * @param string $relativePath
-     * @return array
+     * See `docs/integrations/shopware_plugin/ReqserCmsTwigFileService.md`
+     * → "Source attribution".
+     *
+     * @param array<string, string> $bundlesByPath
+     * @return array{source: string, directory: string}
      */
-    private function parseTemplatePath(string $relativePath): array
+    private function parseTemplatePath(string $absolutePath, string $relativePath, array $bundlesByPath): array
     {
         $directory = dirname($relativePath);
 
-        if (str_starts_with($relativePath, 'vendor/shopware/')) {
-            $source = 'core';
-        } elseif (str_starts_with($relativePath, 'custom/plugins/')) {
-            $parts = explode('/', $relativePath);
-            $source = $parts[2] ?? 'unknown';
-        } else {
-            $source = 'unknown';
+        $candidatePaths = [$this->normalizePath($absolutePath)];
+        $real = realpath($absolutePath);
+        if ($real !== false) {
+            $candidatePaths[] = $this->normalizePath($real);
+        }
+        $candidatePaths = array_values(array_unique($candidatePaths));
+
+        $projectDir = $this->normalizePath(
+            (string) $this->container->getParameter('kernel.project_dir')
+        );
+        $shopwareCorePrefix = $projectDir . '/vendor/shopware/';
+
+        foreach ($bundlesByPath as $bundlePath => $bundleName) {
+            $matched = false;
+            foreach ($candidatePaths as $candidate) {
+                if (str_starts_with($candidate, $bundlePath . '/')) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+
+            if (str_starts_with($bundlePath, $shopwareCorePrefix)) {
+                return ['source' => 'core', 'directory' => $directory];
+            }
+
+            return ['source' => $bundleName, 'directory' => $directory];
         }
 
-        return [
-            'source' => $source,
-            'directory' => $directory,
-        ];
+        // Fallback for paths outside the bundle map.
+        if (str_starts_with($relativePath, 'vendor/shopware/')) {
+            return ['source' => 'core', 'directory' => $directory];
+        }
+        if (str_starts_with($relativePath, 'custom/plugins/')) {
+            $parts = explode('/', $relativePath);
+            return [
+                'source'    => $parts[2] ?? 'unknown',
+                'directory' => $directory,
+            ];
+        }
+
+        return ['source' => 'unknown', 'directory' => $directory];
     }
 }
