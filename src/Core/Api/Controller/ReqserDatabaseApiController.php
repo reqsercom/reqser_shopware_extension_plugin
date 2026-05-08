@@ -257,7 +257,7 @@ class ReqserDatabaseApiController extends AbstractController
     public function getCustomFieldUsage(Request $request, Context $context): JsonResponse
     {
         try {
-            $result = $this->customFieldUsageService->getCustomFieldTwigUsage();
+            $result = $this->customFieldUsageService->getCustomFieldUsage();
 
             return new JsonResponse([
                 'success' => true,
