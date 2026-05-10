@@ -151,6 +151,7 @@
         <service id="Reqser\Plugin\Service\ReqserCustomFieldUsageService">
             <argument type="service" id="Doctrine\DBAL\Connection"/>
             <argument type="service" id="twig.loader.native_filesystem"/>
+            <argument type="service" id="Reqser\Plugin\Service\ReqserJsonFieldDetectionService"/>
         </service>
 
         <service id="Reqser\Plugin\Service\ReqserCmsRenderService">

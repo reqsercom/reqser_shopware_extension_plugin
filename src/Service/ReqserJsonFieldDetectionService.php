@@ -5,11 +5,12 @@ namespace Reqser\Plugin\Service;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Cms\DataAbstractionLayer\Field\SlotConfigField;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityTranslationDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\JsonField;
 
 /**
  * Service for detecting special JSON field types in Shopware
- * 
+ *
  * This service dynamically identifies CMS element columns by checking Shopware's entity definitions
  * for SlotConfigField types and verifies if columns contain JSON data.
  */
@@ -18,6 +19,11 @@ class ReqserJsonFieldDetectionService
     private Connection $connection;
     private DefinitionInstanceRegistry $definitionRegistry;
     private ?array $cmsFieldCache = null;
+
+    /**
+     * @var array<int, array{table: string, column: string, idColumn: string}>|null
+     */
+    private ?array $slotConfigTableCache = null;
 
     /**
      * @param Connection $connection
@@ -140,7 +146,52 @@ class ReqserJsonFieldDetectionService
         // 3. Not a text type and not JSON type - definitely not JSON
         return false;
     }
-    
+
+    /**
+     * Enumerate translation tables carrying slot-config-shaped JSON columns.
+     *
+     * Includes both SlotConfigField columns and JsonField columns whose storage name is
+     * `slot_config`. Restricted to EntityTranslationDefinition so the parent FK column
+     * (`<parent_entity>_id`) and `language_id` are guaranteed. Result is cached per request.
+     *
+     * @return array<int, array{table: string, column: string, idColumn: string}>
+     */
+    public function listSlotConfigBearingTranslationColumns(): array
+    {
+        if ($this->slotConfigTableCache !== null) {
+            return $this->slotConfigTableCache;
+        }
+
+        $tables = [];
+
+        foreach ($this->definitionRegistry->getDefinitions() as $definition) {
+            if (!$definition instanceof EntityTranslationDefinition) {
+                continue;
+            }
+
+            $parent = $definition->getParentDefinition();
+            $idColumn = $parent->getEntityName() . '_id';
+
+            foreach ($definition->getFields() as $field) {
+                $isSlotConfigField = $field instanceof SlotConfigField;
+                $isJsonSlotConfig = $field instanceof JsonField
+                    && $field->getStorageName() === 'slot_config';
+
+                if (!$isSlotConfigField && !$isJsonSlotConfig) {
+                    continue;
+                }
+
+                $tables[] = [
+                    'table' => $definition->getEntityName(),
+                    'column' => $field->getStorageName(),
+                    'idColumn' => $idColumn,
+                ];
+            }
+        }
+
+        return $this->slotConfigTableCache = $tables;
+    }
+
     /**
      * Check if a field is defined as a JSON field in Shopware's entity definition
      * Works even when the table has no data yet
