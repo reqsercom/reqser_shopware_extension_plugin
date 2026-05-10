@@ -11,19 +11,8 @@ use Symfony\Component\Finder\Finder;
 use Twig\Loader\FilesystemLoader;
 
 /**
- * Service for analyzing which custom fields are referenced in Twig templates and CMS slot configs.
- *
- * Cross-references registered custom_field rows against:
- *   1. Twig templates discovered via Shopware's FilesystemLoader (core, plugins, apps, themes).
- *   2. CMS slot configs that contain `source: "mapped"` references to customFields paths.
- *      The list of scanned tables/columns is derived dynamically from the DAL: every
- *      EntityTranslationDefinition that owns a SlotConfigField, or a JsonField with the
- *      storage name `slot_config`, is included. This automatically covers Shopware core
- *      (cms_slot_translation.config, category_translation.slot_config,
- *      product_translation.slot_config, landing_page_translation.slot_config) and any
- *      third-party plugin that follows the same Shopware convention.
- *
- * Only fields referenced somewhere (Twig OR CMS) are returned.
+ * Reports the active custom fields that are referenced from at least one Twig template
+ * or one CMS slot config.
  */
 class ReqserCustomFieldUsageService
 {

@@ -40,10 +40,6 @@ class ReqserCmsTwigFileService
      * is wrapped in try/catch so fatal failures yield a partial list with
      * `_warnings` rather than HTTP 500.
      *
-     * See `docs/integrations/shopware_plugin/ReqserCmsTwigFileService.md`
-     * in the Reqser repo for response shape, source-attribution semantics,
-     * and the composer-symlink edge case.
-     *
      * @return array{
      *     twigFiles: array<int, array{fileName: string, path: string, source: string, content: string}>,
      *     warnings: list<string>
@@ -95,9 +91,6 @@ class ReqserCmsTwigFileService
      * attribution. Each bundle contributes both its raw `Bundle::getPath()`
      * and its `realpath()` to handle composer-symlinked bundles
      * (`custom/static-plugins/*`).
-     *
-     * See `docs/integrations/shopware_plugin/ReqserCmsTwigFileService.md`
-     * → "Bundle path resolution" for the symlink rationale.
      *
      * @return array<string, string> sorted by path length DESC
      */
@@ -258,9 +251,6 @@ class ReqserCmsTwigFileService
 
     /**
      * Map a resolved template path back to its owning bundle name + directory.
-     *
-     * See `docs/integrations/shopware_plugin/ReqserCmsTwigFileService.md`
-     * → "Source attribution".
      *
      * @param array<string, string> $bundlesByPath
      * @return array{source: string, directory: string}
