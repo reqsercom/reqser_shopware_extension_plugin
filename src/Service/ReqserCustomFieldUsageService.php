@@ -3,10 +3,6 @@
 namespace Reqser\Plugin\Service;
 
 use Doctrine\DBAL\Connection;
-use Shopware\Core\Content\Cms\DataAbstractionLayer\Field\SlotConfigField;
-use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityTranslationDefinition;
-use Shopware\Core\Framework\DataAbstractionLayer\Field\JsonField;
 use Symfony\Component\Finder\Finder;
 use Twig\Loader\FilesystemLoader;
 
@@ -18,16 +14,16 @@ class ReqserCustomFieldUsageService
 {
     private Connection $connection;
     private FilesystemLoader $loader;
-    private DefinitionInstanceRegistry $definitionRegistry;
+    private ReqserJsonFieldDetectionService $jsonFieldDetectionService;
 
     public function __construct(
         Connection $connection,
         FilesystemLoader $loader,
-        DefinitionInstanceRegistry $definitionRegistry
+        ReqserJsonFieldDetectionService $jsonFieldDetectionService
     ) {
         $this->connection = $connection;
         $this->loader = $loader;
-        $this->definitionRegistry = $definitionRegistry;
+        $this->jsonFieldDetectionService = $jsonFieldDetectionService;
     }
 
     /**
@@ -253,49 +249,7 @@ class ReqserCustomFieldUsageService
     }
 
     /**
-     * Discover slot-config-bearing translation tables dynamically from the DAL.
-     * A column is included when its translation definition declares it as a SlotConfigField,
-     * or as a JsonField whose storage name is `slot_config`. Restricting to
-     * EntityTranslationDefinition guarantees a `language_id` column and a single
-     * parent-FK column named `<parent_entity>_id`.
-     *
-     * @return array<int, array{table: string, column: string, idColumn: string}>
-     */
-    private function discoverSlotConfigTables(): array
-    {
-        $tables = [];
-
-        foreach ($this->definitionRegistry->getDefinitions() as $definition) {
-            if (!$definition instanceof EntityTranslationDefinition) {
-                continue;
-            }
-
-            $parent = $definition->getParentDefinition();
-            $idColumn = $parent->getEntityName() . '_id';
-
-            foreach ($definition->getFields() as $field) {
-                $isSlotConfigField = $field instanceof SlotConfigField;
-                $isJsonSlotConfig = $field instanceof JsonField
-                    && $field->getStorageName() === 'slot_config';
-
-                if (!$isSlotConfigField && !$isJsonSlotConfig) {
-                    continue;
-                }
-
-                $tables[] = [
-                    'table' => $definition->getEntityName(),
-                    'column' => $field->getStorageName(),
-                    'idColumn' => $idColumn,
-                ];
-            }
-        }
-
-        return $tables;
-    }
-
-    /**
-     * Scan every dynamically discovered slot-config column for rows whose JSON contains a
-     * source=mapped customFields reference.
+     * Scan slot-config-bearing translation columns for source=mapped customFields references.
      *
      * @return array<string, array<int, array{table: string, column: string, entityId: string, languageId: string, paths: array<string>}>>
      */
@@ -303,7 +257,7 @@ class ReqserCustomFieldUsageService
     {
         $byField = [];
 
-        foreach ($this->discoverSlotConfigTables() as $tableSpec) {
+        foreach ($this->jsonFieldDetectionService->listSlotConfigBearingTranslationColumns() as $tableSpec) {
             $table = $tableSpec['table'];
             $column = $tableSpec['column'];
             $idColumn = $tableSpec['idColumn'];
