@@ -54,15 +54,22 @@ class ReqserCmsApiController extends AbstractController
     public function getTwigFiles(Request $request, Context $context): JsonResponse
     {
         try {
-            $twigFiles = $this->cmsTwigFileService->getAllActiveTwigFiles();
+            $dump = $this->cmsTwigFileService->getAllActiveTwigFiles();
+            $twigFiles = $dump['twigFiles'] ?? [];
+            $warnings = $dump['warnings'] ?? [];
 
-            return new JsonResponse([
+            $payload = [
                 'success' => true,
                 'data' => [
-                    'twigFiles' => $twigFiles
+                    'twigFiles' => $twigFiles,
                 ],
-                'timestamp' => date('Y-m-d H:i:s')
-            ]);
+                'timestamp' => date('Y-m-d H:i:s'),
+            ];
+            if (!empty($warnings)) {
+                $payload['data']['_warnings'] = $warnings;
+            }
+
+            return new JsonResponse($payload);
 
         } catch (\Throwable $e) {
             return new JsonResponse([
@@ -140,7 +147,7 @@ class ReqserCmsApiController extends AbstractController
             }
 
             // Render the CMS element
-            $renderedHtml = $this->cmsRenderService->renderCmsElement($type, $config);
+            $renderedHtml = $this->cmsRenderService->renderCmsElement($type, $config, $context);
 
             return new JsonResponse([
                 'success' => true,

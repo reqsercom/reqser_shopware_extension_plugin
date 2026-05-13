@@ -59,16 +59,23 @@ class ReqserThemeApiController extends AbstractController
     public function getThemeConfig(Request $request, Context $context): JsonResponse
     {
         try {
-            $themes = $this->themeConfigService->dumpThemes();
+            $dump = $this->themeConfigService->dumpThemes();
+            $themes = $dump['themes'] ?? [];
+            $warnings = $dump['warnings'] ?? [];
 
-            return new JsonResponse([
+            $payload = [
                 'success' => true,
                 'data' => [
                     'themes' => $themes,
                     'count'  => count($themes),
                 ],
                 'timestamp' => date('Y-m-d H:i:s'),
-            ]);
+            ];
+            if (!empty($warnings)) {
+                $payload['data']['_warnings'] = $warnings;
+            }
+
+            return new JsonResponse($payload);
 
         } catch (\Throwable $e) {
             return new JsonResponse([

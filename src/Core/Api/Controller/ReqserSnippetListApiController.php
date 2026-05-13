@@ -25,7 +25,7 @@ class ReqserSnippetListApiController extends AbstractController
 
     /**
      * Return snippet list like the Shopware admin snippet list.
-     *
+     * 
      * Request body:
      * - snippetSetIds (array|string, required)
      * - page (int, optional, default 1)
