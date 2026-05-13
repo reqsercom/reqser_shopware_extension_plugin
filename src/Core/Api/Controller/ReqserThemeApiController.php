@@ -17,7 +17,7 @@ use Symfony\Component\Routing\Annotation\Route;
  * tickets where per-theme custom fields or per-language UI text might
  * carry untranslated content that the DAL sync misses.
  *
- * Shipped in plugin 2.0.23.
+ * Shipped in plugin 1.7.23.
  */
 #[Route(defaults: ['_routeScope' => ['api']])]
 #[ReqserApiAuth]

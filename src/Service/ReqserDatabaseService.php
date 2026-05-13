@@ -66,7 +66,6 @@ class ReqserDatabaseService
     {
         $warnings = [];
 
-
         $projectDir = '';
         // Best-effort project dir resolution — EntityDefinition source paths
         // are prefixed with the real project dir.
