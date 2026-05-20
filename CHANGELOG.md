@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.28/1.7.28/1.6.28/1.5.28 05.2026
+- `cms/twig-files`: walks `sw_extends` parent chain — each entry carries `templateKey`, `role` (`effective`/`ancestor`), `extendsTemplate`, `extendsTemplateRef`; ancestors that were silently invisible (parents that an active template overrides) now surface alongside their child
+
 ## 2.0.27/1.7.27/1.6.27/1.5.27 05.2026
 - Custom fields usage route also detects CMS references
 
