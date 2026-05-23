@@ -4,9 +4,10 @@ namespace Reqser\Plugin\Service;
 
 use Shopware\Core\Framework\Adapter\Twig\TemplateFinder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\Finder\Finder;
 use Symfony\Component\HttpKernel\KernelInterface;
-use Twig\Environment as TwigEnvironment;
 use Twig\Error\LoaderError;
+use Twig\Loader\FilesystemLoader;
 
 /**
  * Discovers every active storefront Twig template plus the sw_extends parent chain for each.
@@ -15,24 +16,26 @@ class ReqserCmsTwigFileService
 {
     private const MAX_INHERITANCE_DEPTH = 10;
 
+    private const MAX_UNRESOLVED_REF_WARNINGS = 50;
+
     private const EXTENDS_TAG_REGEX = '/\{%-?\s*(sw_extends|extends)\s+[\'"]([^\'"]+)[\'"]/';
 
     private ContainerInterface $container;
-    private TwigEnvironment $twig;
+    private FilesystemLoader $loader;
     private TemplateFinder $templateFinder;
 
     /**
      * @param ContainerInterface $container
-     * @param TwigEnvironment $twig
+     * @param FilesystemLoader $loader twig.loader.native_filesystem — runtime mirror of TwigLoaderConfigCompilerPass paths
      * @param TemplateFinder $templateFinder
      */
     public function __construct(
         ContainerInterface $container,
-        TwigEnvironment $twig,
+        FilesystemLoader $loader,
         TemplateFinder $templateFinder
     ) {
         $this->container = $container;
-        $this->twig = $twig;
+        $this->loader = $loader;
         $this->templateFinder = $templateFinder;
     }
 
@@ -62,14 +65,19 @@ class ReqserCmsTwigFileService
             $this->templateFinder->reset();
 
             $bundlesByPath = $this->buildBundlePathMap();
-            $refs = $this->discoverAllStorefrontTemplateRefs($bundlesByPath);
+            $refs = $this->discoverAllStorefrontTemplateRefs();
 
             $entries = [];
             $effective_keys = [];
+            $unresolved_warning_count = 0;
 
             foreach ($refs as $ref) {
                 $resolved = $this->resolveTemplateRef($ref, $bundlesByPath);
                 if ($resolved === null) {
+                    if ($unresolved_warning_count < self::MAX_UNRESOLVED_REF_WARNINGS) {
+                        $warnings[] = 'twig_ref_unresolved: ' . $ref;
+                        $unresolved_warning_count++;
+                    }
                     continue;
                 }
 
@@ -83,6 +91,10 @@ class ReqserCmsTwigFileService
                 $resolved['extendsTemplateRef'] = null;
                 $entries[$key] = $resolved;
                 $effective_keys[$key] = true;
+            }
+
+            if ($unresolved_warning_count >= self::MAX_UNRESOLVED_REF_WARNINGS) {
+                $warnings[] = 'twig_ref_unresolved_truncated: additional unresolved refs omitted';
             }
 
             foreach (array_keys($effective_keys) as $effective_key) {
@@ -140,9 +152,6 @@ class ReqserCmsTwigFileService
                 if ($p === '') {
                     continue;
                 }
-                // First bundle to claim a path wins (with longer paths
-                // sorted first below). In practice each path is unique
-                // per bundle; this guards against future overlaps.
                 if (!isset($map[$p])) {
                     $map[$p] = $name;
                 }
@@ -156,8 +165,7 @@ class ReqserCmsTwigFileService
 
     /**
      * Normalize a filesystem path for prefix comparison: backslash → slash,
-     * collapse repeated separators, drop trailing slash. (Composer path
-     * repositories sometimes inject `//` into bundle paths.)
+     * collapse repeated separators, drop trailing slash.
      */
     private function normalizePath(string $path): string
     {
@@ -167,52 +175,41 @@ class ReqserCmsTwigFileService
     }
 
     /**
-     * Discover every distinct storefront template ref across every active
-     * bundle. Returns namespaced Twig refs like
-     * `@Storefront/storefront/layout/footer/footer.html.twig` ready for
-     * `TemplateFinder` resolution.
+     * Discover storefront template refs from paths registered on
+     * twig.loader.native_filesystem (TwigLoaderConfigCompilerPass).
      *
-     * @param array<string, string> $bundlesByPath produced by buildBundlePathMap()
-     * @return array<string>
+     * Emits both @Storefront/storefront/... candidates (for overrides) and
+     * @BundleName/... loader-native refs (for compiled dist-only templates).
+     *
+     * @return list<string>
      */
-    private function discoverAllStorefrontTemplateRefs(array $bundlesByPath): array
+    private function discoverAllStorefrontTemplateRefs(): array
     {
         $refs = [];
+        $file_ref_map = [];
 
-        foreach (array_keys($bundlesByPath) as $bundlePath) {
-            $root = $bundlePath . '/Resources/views/storefront';
-            if (!is_dir($root)) {
-                continue;
+        foreach ($this->loader->getNamespaces() as $namespace) {
+            foreach ($this->loader->getPaths($namespace) as $loader_path) {
+                foreach ($this->collectTemplateRefsFromLoaderPath($namespace, $this->normalizePath($loader_path)) as $absolute_path => $candidate_refs) {
+                    $file_key = realpath($absolute_path);
+                    if ($file_key === false) {
+                        $file_key = $absolute_path;
+                    } else {
+                        $file_key = $this->normalizePath($file_key);
+                    }
+
+                    foreach ($candidate_refs as $ref) {
+                        if ($ref !== '') {
+                            $file_ref_map[$file_key][$ref] = true;
+                        }
+                    }
+                }
             }
+        }
 
-            try {
-                $iterator = new \RecursiveIteratorIterator(
-                    new \RecursiveDirectoryIterator(
-                        $root,
-                        \FilesystemIterator::SKIP_DOTS | \FilesystemIterator::UNIX_PATHS
-                    )
-                );
-            } catch (\Throwable) {
-                continue;
-            }
-
-            $rootNorm = str_replace('\\', '/', rtrim($root, '/\\'));
-
-            foreach ($iterator as $file) {
-                if (!$file instanceof \SplFileInfo || !$file->isFile()) {
-                    continue;
-                }
-                if (!str_ends_with($file->getFilename(), '.html.twig')) {
-                    continue;
-                }
-
-                $fullPath = str_replace('\\', '/', $file->getPathname());
-                $relative = ltrim(substr($fullPath, strlen($rootNorm)), '/');
-                if ($relative === '') {
-                    continue;
-                }
-
-                $refs['@Storefront/storefront/' . $relative] = true;
+        foreach ($file_ref_map as $ref_set) {
+            foreach (array_keys($ref_set) as $ref) {
+                $refs[$ref] = true;
             }
         }
 
@@ -220,10 +217,94 @@ class ReqserCmsTwigFileService
     }
 
     /**
+     * @return array<string, list<string>> absolutePath => template refs
+     */
+    private function collectTemplateRefsFromLoaderPath(string $namespace, string $loader_root): array
+    {
+        $templates = [];
+        $loader_root_norm = $this->normalizePath($loader_root);
+
+        foreach ($this->resolveStorefrontScanRoots($loader_root) as $scan_root) {
+            try {
+                $finder = new Finder();
+                $finder->files()->name('*.html.twig')->in($scan_root);
+            } catch (\Throwable) {
+                continue;
+            }
+
+            $scan_root_norm = $this->normalizePath($scan_root);
+            $is_dist_root = str_ends_with($loader_root_norm, '/app/storefront/dist');
+
+            foreach ($finder as $file) {
+                $full_path = $this->normalizePath($file->getPathname());
+                $relative_from_scan = ltrim(substr($full_path, strlen($scan_root_norm)), '/');
+                if ($relative_from_scan === '' || str_contains($relative_from_scan, '..')) {
+                    continue;
+                }
+
+                $relative_from_loader = ltrim(substr($full_path, strlen($loader_root_norm)), '/');
+                if ($relative_from_loader === '' || str_contains($relative_from_loader, '..')) {
+                    continue;
+                }
+
+                $refs = [];
+
+                if ($is_dist_root && $namespace !== FilesystemLoader::MAIN_NAMESPACE) {
+                    $refs[] = '@' . $namespace . '/' . $relative_from_loader;
+                    if (str_starts_with($relative_from_loader, 'storefront/')) {
+                        $refs[] = '@Storefront/storefront/' . substr($relative_from_loader, strlen('storefront/'));
+                    }
+                } else {
+                    $refs[] = '@Storefront/storefront/' . $relative_from_scan;
+                }
+
+                $templates[$full_path] = array_values(array_unique(array_merge($templates[$full_path] ?? [], $refs)));
+            }
+        }
+
+        return $templates;
+    }
+
+    /**
+     * Map a TwigLoaderConfigCompilerPass loader root to the storefront scan root(s).
+     *
+     * @return list<string>
+     */
+    private function resolveStorefrontScanRoots(string $loader_root): array
+    {
+        if ($loader_root === '' || !is_dir($loader_root)) {
+            return [];
+        }
+
+        if (preg_match('#/Resources/app/storefront/dist$#', $loader_root) === 1) {
+            return [$loader_root];
+        }
+
+        if (preg_match('#/Resources/views$#', $loader_root) === 1) {
+            $storefront = $loader_root . '/storefront';
+            return is_dir($storefront) ? [$storefront] : [];
+        }
+
+        if (preg_match('#/Resources$#', $loader_root) === 1) {
+            $views_storefront = $loader_root . '/views/storefront';
+            return is_dir($views_storefront) ? [$views_storefront] : [];
+        }
+
+        $roots = [];
+        foreach (['/storefront', '/views/storefront'] as $suffix) {
+            $candidate = $loader_root . $suffix;
+            if (is_dir($candidate)) {
+                $roots[] = $candidate;
+            }
+        }
+
+        return $roots;
+    }
+
+    /**
      * Resolve a namespaced template ref through Shopware's TemplateFinder and
      * return the single active version for this installation.
      *
-     * @param string $templateRef
      * @param array<string, string> $bundlesByPath
      * @return ?array
      */
@@ -248,19 +329,16 @@ class ReqserCmsTwigFileService
      */
     private function loadResolvedTemplate(string $resolvedName, array $bundlesByPath): ?array
     {
-        // TemplateFinder returns the bare path (no '@Namespace') when
-        // ignoreMissing=true and the template cannot be resolved.
         if (!str_contains($resolvedName, '@')) {
             return null;
         }
 
-        $loader = $this->twig->getLoader();
-        if (!$loader->exists($resolvedName)) {
+        if (!$this->loader->exists($resolvedName)) {
             return null;
         }
 
         try {
-            $source = $loader->getSourceContext($resolvedName);
+            $source = $this->loader->getSourceContext($resolvedName);
         } catch (LoaderError) {
             return null;
         }
@@ -423,7 +501,6 @@ class ReqserCmsTwigFileService
             return ['source' => $bundleName, 'directory' => $directory];
         }
 
-        // Fallback for paths outside the bundle map.
         if (str_starts_with($relativePath, 'vendor/shopware/')) {
             return ['source' => 'core', 'directory' => $directory];
         }

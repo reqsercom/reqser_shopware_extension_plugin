@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.30/1.7.30/1.6.30/1.5.30 05.2026
+- `cms/twig-files`: improved storefront template discovery; unresolved refs in `data._warnings`
+
 ## 2.0.29/1.7.29/1.6.29/1.5.29 05.2026
 - `plugin:update` completes smoothly on first upgrade by registering `ReqserNotificiationRemovalHandler` when the container needs it
 
