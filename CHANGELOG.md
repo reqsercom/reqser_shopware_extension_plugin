@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.31/1.7.31/1.6.31/1.5.31 05.2026
+- Custom fields usage: CMS scan also detects `source: "static"` Twig references (e.g. `{{ category.customFields.category_text }}`)
+- `cms/twig-files`: scan `Resources/app/storefront/dist` templates when Shopware registers the loader path as `Resources/views/../app/storefront/dist`
+
 ## 2.0.30/1.7.30/1.6.30/1.5.30 05.2026
 - `cms/twig-files`: improved storefront template discovery; unresolved refs in `data._warnings`
 

@@ -190,7 +190,7 @@ class ReqserCmsTwigFileService
 
         foreach ($this->loader->getNamespaces() as $namespace) {
             foreach ($this->loader->getPaths($namespace) as $loader_path) {
-                foreach ($this->collectTemplateRefsFromLoaderPath($namespace, $this->normalizePath($loader_path)) as $absolute_path => $candidate_refs) {
+                foreach ($this->collectTemplateRefsFromLoaderPath($namespace, $this->canonicalizeLoaderRoot($loader_path)) as $absolute_path => $candidate_refs) {
                     $file_key = realpath($absolute_path);
                     if ($file_key === false) {
                         $file_key = $absolute_path;
@@ -222,9 +222,9 @@ class ReqserCmsTwigFileService
     private function collectTemplateRefsFromLoaderPath(string $namespace, string $loader_root): array
     {
         $templates = [];
-        $loader_root_norm = $this->normalizePath($loader_root);
+        $loader_root_norm = $this->canonicalizeLoaderRoot($loader_root);
 
-        foreach ($this->resolveStorefrontScanRoots($loader_root) as $scan_root) {
+        foreach ($this->resolveStorefrontScanRoots($loader_root_norm) as $scan_root) {
             try {
                 $finder = new Finder();
                 $finder->files()->name('*.html.twig')->in($scan_root);
@@ -263,6 +263,25 @@ class ReqserCmsTwigFileService
         }
 
         return $templates;
+    }
+
+    /**
+     * Normalize a loader root and resolve symlinks / `..` segments so paths
+     * registered as `Resources/views/../app/storefront/dist` match dist scans.
+     */
+    private function canonicalizeLoaderRoot(string $loader_root): string
+    {
+        $normalized = $this->normalizePath($loader_root);
+        if ($normalized === '' || !is_dir($normalized)) {
+            return $normalized;
+        }
+
+        $real = realpath($normalized);
+        if ($real === false) {
+            return $normalized;
+        }
+
+        return $this->normalizePath($real);
     }
 
     /**
