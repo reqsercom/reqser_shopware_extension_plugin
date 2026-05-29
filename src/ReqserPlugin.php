@@ -36,9 +36,16 @@ class ReqserPlugin extends Plugin
     {
         parent::update($updateContext);
         $this->scheduleTask();
-        if ($this->shouldRunTask('update')) {
-            $this->runTask();
-        }
+    }
+
+    /**
+     * @param UpdateContext $updateContext
+     * @return void
+     */
+    public function postUpdate(UpdateContext $updateContext): void
+    {
+        parent::postUpdate($updateContext);
+        $this->runTaskIfAvailable();
     }
 
     /**
@@ -49,9 +56,7 @@ class ReqserPlugin extends Plugin
     {
         parent::activate($activateContext);
         $this->scheduleTask();
-        if ($this->shouldRunTask('activate')) {
-            $this->runTask();
-        }
+        $this->runTaskIfAvailable();
     }
 
     /**
@@ -122,21 +127,15 @@ class ReqserPlugin extends Plugin
         );
     }
 
-    private function runTask(): void
+    /** Run notification cleanup when the handler is registered. */
+    private function runTaskIfAvailable(): void
     {
+        if (!$this->container->has(ReqserNotificiationRemovalHandler::class)) {
+            return;
+        }
+
         /** @var ReqserNotificiationRemovalHandler $handler */
         $handler = $this->container->get(ReqserNotificiationRemovalHandler::class);
         $handler->run();
     }
-
-    /**
-     * @param string $type
-     * @return bool
-     */
-    private function shouldRunTask(string $type = 'update'): bool
-    {
-        // Always return true to run notification removal task on update/activate
-        return true;
-    }
-
 }
