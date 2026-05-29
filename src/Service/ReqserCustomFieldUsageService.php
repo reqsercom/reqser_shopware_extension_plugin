@@ -46,7 +46,7 @@ class ReqserCustomFieldUsageService
         $registeredFields = $this->getRegisteredCustomFields();
         $templateDirs = $this->getTemplateDirs();
         $twigUsageMap = $this->scanTwigFiles($templateDirs);
-        $cmsUsageMap = $this->scanCmsTablesForMappedCustomFields();
+        $cmsUsageMap = $this->scanCmsTablesForCustomFieldReferences();
 
         $fields = [];
         foreach ($registeredFields as $fieldName => $fieldInfo) {
@@ -249,11 +249,14 @@ class ReqserCustomFieldUsageService
     }
 
     /**
-     * Scan slot-config-bearing translation columns for source=mapped customFields references.
+     * Scan slot-config-bearing translation columns for customFields references in CMS config.
+     *
+     * Matches both source=mapped paths and source=static Twig expressions such as
+     * {{ category.customFields.category_text }}.
      *
      * @return array<string, array<int, array{table: string, column: string, entityId: string, languageId: string, paths: array<string>}>>
      */
-    private function scanCmsTablesForMappedCustomFields(): array
+    private function scanCmsTablesForCustomFieldReferences(): array
     {
         $byField = [];
 
@@ -262,14 +265,14 @@ class ReqserCustomFieldUsageService
             $column = $tableSpec['column'];
             $idColumn = $tableSpec['idColumn'];
 
-            // Pre-filter at SQL level: rows must contain both 'customFields' and 'mapped' to be candidates.
+            // Pre-filter at SQL level: rows must reference customFields via mapped or static CMS config.
             $sql = "SELECT LOWER(HEX(`{$idColumn}`)) AS entity_id, "
                 . "LOWER(HEX(`language_id`)) AS language_id, "
                 . "`{$column}` AS config_json "
                 . "FROM `{$table}` "
                 . "WHERE `{$column}` IS NOT NULL "
                 . "AND `{$column}` LIKE '%customFields%' "
-                . "AND `{$column}` LIKE '%mapped%'";
+                . "AND (`{$column}` LIKE '%\"mapped\"%' OR `{$column}` LIKE '%\"static\"%')";
 
             try {
                 $rows = $this->connection->fetchAllAssociative($sql);
@@ -284,7 +287,7 @@ class ReqserCustomFieldUsageService
                 $languageId = (string) ($row['language_id'] ?? '');
                 $configJson = (string) $row['config_json'];
 
-                $hits = $this->extractMappedCustomFieldKeysFromJson($configJson);
+                $hits = $this->extractCustomFieldKeysFromConfigJson($configJson);
                 if (empty($hits)) {
                     continue;
                 }
@@ -320,12 +323,11 @@ class ReqserCustomFieldUsageService
     }
 
     /**
-     * Extract customFields.<key> / customFields['<key>'] paths from any source=mapped node
-     * inside a CMS slot config JSON string.
+     * Extract customFields.<key> / customFields['<key>'] paths from CMS slot config JSON.
      *
      * @return array<string, list<string>>  fieldKey => list of full path strings
      */
-    private function extractMappedCustomFieldKeysFromJson(string $jsonContent): array
+    private function extractCustomFieldKeysFromConfigJson(string $jsonContent): array
     {
         if ($jsonContent === '') {
             return [];
@@ -337,20 +339,20 @@ class ReqserCustomFieldUsageService
         }
 
         $found = [];
-        $this->walkConfigForMappedCustomFields($decoded, $found);
+        $this->walkConfigForCustomFieldReferences($decoded, $found);
 
         return $found;
     }
 
     /**
      * Recursive walker — populates $found with fieldKey => list<path>.
-     * A "mapped" leaf is any associative array with source=mapped + string value;
-     * its value is matched against the customFields regex and the leaf is not descended further.
+     * A CMS config leaf is any associative array with source=mapped or source=static
+     * plus a string value; customFields paths are extracted and the leaf is not descended further.
      *
      * @param mixed $node
      * @param array<string, list<string>> $found
      */
-    private function walkConfigForMappedCustomFields($node, array &$found): void
+    private function walkConfigForCustomFieldReferences($node, array &$found): void
     {
         if (!is_array($node)) {
             return;
@@ -359,41 +361,59 @@ class ReqserCustomFieldUsageService
         if (
             isset($node['source'], $node['value'])
             && is_string($node['source'])
-            && $node['source'] === 'mapped'
             && is_string($node['value'])
+            && ($node['source'] === 'mapped' || $node['source'] === 'static')
         ) {
-            $value = $node['value'];
-
-            // Dot access: ...customFields.<key>
-            if (preg_match_all('/customFields\.(\w+)/', $value, $matches)) {
-                foreach ($matches[1] as $key) {
-                    if (!isset($found[$key])) {
-                        $found[$key] = [];
-                    }
-                    if (!in_array($value, $found[$key], true)) {
-                        $found[$key][] = $value;
-                    }
-                }
-            }
-
-            // Bracket access: ...customFields['<key>'] or customFields["<key>"]
-            if (preg_match_all('/customFields\[[\'"](\w+)[\'"]\]/', $value, $matches)) {
-                foreach ($matches[1] as $key) {
-                    if (!isset($found[$key])) {
-                        $found[$key] = [];
-                    }
-                    if (!in_array($value, $found[$key], true)) {
-                        $found[$key][] = $value;
-                    }
-                }
-            }
+            $this->appendCustomFieldPathsFromString($node['value'], $found);
 
             return;
         }
 
         foreach ($node as $child) {
             if (is_array($child)) {
-                $this->walkConfigForMappedCustomFields($child, $found);
+                $this->walkConfigForCustomFieldReferences($child, $found);
+            }
+        }
+    }
+
+    /**
+     * Extract custom field keys and their dotted/bracket paths from a mapped path or static Twig value.
+     *
+     * @param array<string, list<string>> $found
+     */
+    private function appendCustomFieldPathsFromString(string $value, array &$found): void
+    {
+        if (!str_contains($value, 'customFields')) {
+            return;
+        }
+
+        // Dot access: entity.customFields.KEY or entity.translated.customFields.KEY
+        if (preg_match_all('/(\w+(?:\.\w+)*)\.customFields\.(\w+)/', $value, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $key = $match[2];
+                $path = $match[0];
+
+                if (!isset($found[$key])) {
+                    $found[$key] = [];
+                }
+                if (!in_array($path, $found[$key], true)) {
+                    $found[$key][] = $path;
+                }
+            }
+        }
+
+        // Bracket access: entity.customFields['KEY'] or entity.translated.customFields['KEY']
+        if (preg_match_all('/(\w+(?:\.\w+)*)\.customFields\[[\'"](\w+)[\'"]\]/', $value, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $key = $match[2];
+                $path = $match[0];
+
+                if (!isset($found[$key])) {
+                    $found[$key] = [];
+                }
+                if (!in_array($path, $found[$key], true)) {
+                    $found[$key][] = $path;
+                }
             }
         }
     }

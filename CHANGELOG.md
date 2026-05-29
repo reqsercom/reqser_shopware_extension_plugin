@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.0.31/1.7.31/1.6.31/1.5.31 05.2026
+- Custom fields usage: CMS scan also detects `source: "static"` Twig references (e.g. `{{ category.customFields.category_text }}`)
+- `cms/twig-files`: scan `Resources/app/storefront/dist` templates when Shopware registers the loader path as `Resources/views/../app/storefront/dist`
+
+## 2.0.30/1.7.30/1.6.30/1.5.30 05.2026
+- `cms/twig-files`: improved storefront template discovery; unresolved refs in `data._warnings`
+
+## 2.0.29/1.7.29/1.6.29/1.5.29 05.2026
+- `plugin:update` completes smoothly on first upgrade by registering `ReqserNotificiationRemovalHandler` when the container needs it
+
+## 2.0.28/1.7.28/1.6.28/1.5.28 05.2026
+- `cms/twig-files`: walks `sw_extends` parent chain — each entry carries `templateKey`, `role` (`effective`/`ancestor`), `extendsTemplate`, `extendsTemplateRef`; ancestors that were silently invisible (parents that an active template overrides) now surface alongside their child
+
 ## 2.0.27/1.7.27/1.6.27/1.5.27 05.2026
 - Custom fields usage route also detects CMS references
 
