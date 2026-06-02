@@ -65,18 +65,51 @@ class ReqserCmsTwigFileService
             $this->templateFinder->reset();
 
             $bundlesByPath = $this->buildBundlePathMap();
-            $refs = $this->discoverAllStorefrontTemplateRefs();
+            $refMap = $this->discoverAllStorefrontTemplateRefs();
+            $refs = array_keys($refMap);
 
             $entries = [];
             $effective_keys = [];
             $unresolved_warning_count = 0;
+            $recovered_note_count = 0;
 
             foreach ($refs as $ref) {
                 $resolved = $this->resolveTemplateRef($ref, $bundlesByPath);
+
                 if ($resolved === null) {
-                    if ($unresolved_warning_count < self::MAX_UNRESOLVED_REF_WARNINGS) {
-                        $warnings[] = 'twig_ref_unresolved: ' . $ref;
-                        $unresolved_warning_count++;
+                    // TemplateFinder could not resolve the ref (typically a
+                    // structural core template a theme/plugin references via a
+                    // path the current Shopware version no longer exposes, e.g.
+                    // component/buy-widget/buy-widget.html.twig). Fall back to
+                    // the physical file that produced the ref so the template
+                    // is still captured for diagnostics.
+                    $fallback = $this->loadTemplateFromDiscoveredFile($refMap[$ref] ?? [], $bundlesByPath);
+
+                    if ($fallback === null) {
+                        if ($unresolved_warning_count < self::MAX_UNRESOLVED_REF_WARNINGS) {
+                            $warnings[] = 'twig_ref_unresolved: ' . $ref;
+                            $unresolved_warning_count++;
+                        }
+                        continue;
+                    }
+
+                    $key = $fallback['templateKey'];
+                    if (isset($entries[$key])) {
+                        continue;
+                    }
+
+                    $fallback['role'] = 'effective';
+                    $fallback['extendsTemplate'] = null;
+                    $fallback['extendsTemplateRef'] = $this->rawExtendsRef((string) $fallback['content']);
+                    $entries[$key] = $fallback;
+                    // Deliberately NOT added to $effective_keys: the inheritance
+                    // walk relies on a TemplateFinder-resolved name, which a file
+                    // fallback lacks. The raw extendsTemplateRef above is the
+                    // best-effort parent reference we can record.
+
+                    if ($recovered_note_count < self::MAX_UNRESOLVED_REF_WARNINGS) {
+                        $warnings[] = 'twig_ref_recovered_from_file: ' . $ref;
+                        $recovered_note_count++;
                     }
                     continue;
                 }
@@ -95,6 +128,9 @@ class ReqserCmsTwigFileService
 
             if ($unresolved_warning_count >= self::MAX_UNRESOLVED_REF_WARNINGS) {
                 $warnings[] = 'twig_ref_unresolved_truncated: additional unresolved refs omitted';
+            }
+            if ($recovered_note_count >= self::MAX_UNRESOLVED_REF_WARNINGS) {
+                $warnings[] = 'twig_ref_recovered_truncated: additional recovered refs omitted';
             }
 
             foreach (array_keys($effective_keys) as $effective_key) {
@@ -181,12 +217,15 @@ class ReqserCmsTwigFileService
      * Emits both @Storefront/storefront/... candidates (for overrides) and
      * @BundleName/... loader-native refs (for compiled dist-only templates).
      *
-     * @return list<string>
+     * Each ref is mapped to the absolute physical file path(s) that produced
+     * it, so {@see loadTemplateFromDiscoveredFile()} can read the source
+     * directly when TemplateFinder fails to resolve the ref.
+     *
+     * @return array<string, list<string>> ref => absolute file paths
      */
     private function discoverAllStorefrontTemplateRefs(): array
     {
-        $refs = [];
-        $file_ref_map = [];
+        $ref_to_paths = [];
 
         foreach ($this->loader->getNamespaces() as $namespace) {
             foreach ($this->loader->getPaths($namespace) as $loader_path) {
@@ -200,20 +239,19 @@ class ReqserCmsTwigFileService
 
                     foreach ($candidate_refs as $ref) {
                         if ($ref !== '') {
-                            $file_ref_map[$file_key][$ref] = true;
+                            $ref_to_paths[$ref][$file_key] = true;
                         }
                     }
                 }
             }
         }
 
-        foreach ($file_ref_map as $ref_set) {
-            foreach (array_keys($ref_set) as $ref) {
-                $refs[$ref] = true;
-            }
+        $result = [];
+        foreach ($ref_to_paths as $ref => $path_set) {
+            $result[$ref] = array_keys($path_set);
         }
 
-        return array_keys($refs);
+        return $result;
     }
 
     /**
@@ -387,6 +425,107 @@ class ReqserCmsTwigFileService
             'templateKey' => $this->buildTemplateKey($bundleSource, $directory, $fileName),
             '_resolvedName' => $resolvedName,
         ];
+    }
+
+    /**
+     * Build a template entry by reading a physical file directly, bypassing
+     * TemplateFinder. Used as a fallback when a discovered ref cannot be
+     * resolved through the finder but its source file still exists on disk.
+     *
+     * @param list<string> $paths absolute file paths that produced the ref
+     * @param array<string, string> $bundlesByPath
+     * @return ?array
+     */
+    private function loadTemplateFromDiscoveredFile(array $paths, array $bundlesByPath): ?array
+    {
+        $path = $this->selectFallbackPath($paths);
+        if ($path === null) {
+            return null;
+        }
+
+        $content = @file_get_contents($path);
+        if ($content === false) {
+            return null;
+        }
+
+        $projectDir = (string) $this->container->getParameter('kernel.project_dir');
+        $relativePath = str_replace($projectDir . '/', '', $path);
+        $relativePath = str_replace('\\', '/', $relativePath);
+
+        $pathInfo = $this->parseTemplatePath($path, $relativePath, $bundlesByPath);
+
+        $fileName = basename($path);
+        $directory = $pathInfo['directory'];
+        $bundleSource = $pathInfo['source'];
+
+        return [
+            'fileName' => $fileName,
+            'path'     => $directory,
+            'source'   => $bundleSource,
+            'content'  => base64_encode($content),
+            'templateKey' => $this->buildTemplateKey($bundleSource, $directory, $fileName),
+            '_resolvedName' => '',
+        ];
+    }
+
+    /**
+     * Pick the best readable file for a fallback read: prefer uncompiled
+     * `Resources/views/storefront` sources over compiled `dist` copies.
+     *
+     * @param list<string> $paths
+     */
+    private function selectFallbackPath(array $paths): ?string
+    {
+        $candidates = [];
+        foreach ($paths as $p) {
+            $norm = $this->normalizePath((string) $p);
+            if ($norm === '' || !is_file($norm) || !is_readable($norm)) {
+                continue;
+            }
+            $candidates[] = $norm;
+        }
+
+        if ($candidates === []) {
+            return null;
+        }
+
+        usort($candidates, function (string $a, string $b): int {
+            $pa = $this->fallbackPathPriority($a);
+            $pb = $this->fallbackPathPriority($b);
+            if ($pa !== $pb) {
+                return $pa <=> $pb;
+            }
+            return strlen($a) <=> strlen($b);
+        });
+
+        return $candidates[0];
+    }
+
+    private function fallbackPathPriority(string $path): int
+    {
+        if (str_contains($path, '/Resources/views/storefront/')) {
+            return 0;
+        }
+        if (str_contains($path, '/Resources/views/')) {
+            return 1;
+        }
+        return 2;
+    }
+
+    /**
+     * Extract the raw parent reference of a base64-encoded template's first
+     * sw_extends / extends directive, or null when it is a root template.
+     */
+    private function rawExtendsRef(string $base64Content): ?string
+    {
+        $decoded = base64_decode($base64Content, true);
+        if ($decoded === false || $decoded === '') {
+            return null;
+        }
+
+        $info = $this->extractExtendsRef($decoded);
+
+        return $info === null ? null : $info[1];
     }
 
     /**
