@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.33/1.7.33/1.6.33/1.5.33 06.2026
+- New `snippets/storefront` route: returns the storefront-effective snippet values, so file-only snippets resolved via a fallback locale are no longer reported as empty
+
 ## 2.0.32/1.7.32/1.6.32/1.5.32 06.2026
 - `cms/twig-files`: fall back to reading the physical source file when a Twig ref cannot be resolved, so structural core templates are still captured
 
