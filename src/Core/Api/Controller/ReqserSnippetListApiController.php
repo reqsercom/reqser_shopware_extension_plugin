@@ -4,6 +4,7 @@ namespace Reqser\Plugin\Core\Api\Controller;
 
 use Reqser\Plugin\Core\Api\Attribute\ReqserApiAuth;
 use Reqser\Plugin\Service\ReqserSnippetListService;
+use Reqser\Plugin\Service\ReqserSnippetStorefrontService;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\System\Snippet\SnippetException;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -17,9 +18,11 @@ class ReqserSnippetListApiController extends AbstractController
 {
     /**
      * @param ReqserSnippetListService $snippetListService
+     * @param ReqserSnippetStorefrontService $snippetStorefrontService
      */
     public function __construct(
-        private readonly ReqserSnippetListService $snippetListService
+        private readonly ReqserSnippetListService $snippetListService,
+        private readonly ReqserSnippetStorefrontService $snippetStorefrontService
     ) {
     }
 
@@ -96,5 +99,50 @@ class ReqserSnippetListApiController extends AbstractController
         );
 
         return new JsonResponse($result);
+    }
+
+    /**
+     * Return storefront-effective snippet values for the given snippet sets.
+     *
+     * Request body:
+     * - snippetSetIds (array|string, required)
+     * - translationKeys (array, optional)
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    #[Route(
+        path: '/api/_action/reqser/snippets/storefront',
+        name: 'api.action.reqser.snippets.storefront',
+        methods: ['POST']
+    )]
+    public function getStorefrontSnippets(Request $request): JsonResponse
+    {
+        $payload = json_decode($request->getContent(), true) ?? [];
+
+        $snippetSetIds = $payload['snippetSetIds'] ?? $payload['snippetSetId'] ?? null;
+        if (\is_string($snippetSetIds)) {
+            $snippetSetIds = [$snippetSetIds];
+        }
+
+        if (!\is_array($snippetSetIds) || $snippetSetIds === []) {
+            return new JsonResponse([
+                'success' => false,
+                'error' => 'Missing required parameter',
+                'message' => 'The parameter "snippetSetIds" is required'
+            ], 400);
+        }
+
+        $translationKeys = $payload['translationKeys'] ?? null;
+        if ($translationKeys !== null && !\is_array($translationKeys)) {
+            $translationKeys = null;
+        }
+
+        $data = $this->snippetStorefrontService->getStorefrontSnippetsForSets(
+            array_values($snippetSetIds),
+            $translationKeys
+        );
+
+        return new JsonResponse(['data' => $data]);
     }
 }
