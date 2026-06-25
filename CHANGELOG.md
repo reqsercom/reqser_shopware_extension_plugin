@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.34/1.7.34/1.6.34/1.5.34 06.2026
+- `snippets/storefront`: optional `salesChannelId` request parameter for theme-scoped resolution
+
 ## 2.0.33/1.7.33/1.6.33/1.5.33 06.2026
 - New `snippets/storefront` route: returns the storefront-effective snippet values, so file-only snippets resolved via a fallback locale are no longer reported as empty
 

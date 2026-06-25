@@ -6,6 +6,7 @@ use Reqser\Plugin\Core\Api\Attribute\ReqserApiAuth;
 use Reqser\Plugin\Service\ReqserSnippetListService;
 use Reqser\Plugin\Service\ReqserSnippetStorefrontService;
 use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Snippet\SnippetException;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -107,6 +108,7 @@ class ReqserSnippetListApiController extends AbstractController
      * Request body:
      * - snippetSetIds (array|string, required)
      * - translationKeys (array, optional)
+     * - salesChannelId (string, optional) — since 2.0.34: storefront sales channel for theme scoping
      *
      * @param Request $request
      * @return JsonResponse
@@ -138,10 +140,30 @@ class ReqserSnippetListApiController extends AbstractController
             $translationKeys = null;
         }
 
-        $data = $this->snippetStorefrontService->getStorefrontSnippetsForSets(
-            array_values($snippetSetIds),
-            $translationKeys
-        );
+        $sales_channel_id = $payload['salesChannelId'] ?? null;
+        if ($sales_channel_id !== null) {
+            if (!\is_string($sales_channel_id) || !Uuid::isValid($sales_channel_id)) {
+                return new JsonResponse([
+                    'success' => false,
+                    'error' => 'Invalid parameter',
+                    'message' => 'The parameter "salesChannelId" must be a valid UUID',
+                ], 400);
+            }
+        }
+
+        try {
+            $data = $this->snippetStorefrontService->getStorefrontSnippetsForSets(
+                array_values($snippetSetIds),
+                $translationKeys,
+                $sales_channel_id
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return new JsonResponse([
+                'success' => false,
+                'error' => 'Invalid parameter',
+                'message' => $exception->getMessage(),
+            ], 400);
+        }
 
         return new JsonResponse(['data' => $data]);
     }
