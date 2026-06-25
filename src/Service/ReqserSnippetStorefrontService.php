@@ -22,18 +22,16 @@ class ReqserSnippetStorefrontService
     /**
      * Return the storefront-effective snippet map per snippet set.
      *
-     * Mirrors what Shopware's storefront serves: SnippetService::getStorefrontSnippets()
-     * applies the system-default locale as fallback, includes the sales channel's theme
-     * snippet files and overlays DB overrides. Unlike the admin getList route, file-only
-     * snippets that exist only in a fallback-locale file (e.g. a de-DE plugin file rendered
-     * under a de-CH snippet set) resolve to their fallback value instead of an empty blank.
-     *
      * @param array<int, string> $snippetSetIds
      * @param array<int, string>|null $translationKeys When provided, restrict the result to these keys.
+     * @param string|null $sales_channel_id Optional storefront sales channel for theme scoping.
      * @return array<string, array<string, string>> snippetSetId => (translationKey => value)
      */
-    public function getStorefrontSnippetsForSets(array $snippetSetIds, array|null $translationKeys = null): array
-    {
+    public function getStorefrontSnippetsForSets(
+        array $snippetSetIds,
+        array|null $translationKeys = null,
+        string|null $sales_channel_id = null
+    ): array {
         $fallback_locale = $this->getSystemDefaultLocale();
         $key_filter = ($translationKeys !== null) ? array_flip($translationKeys) : null;
 
@@ -43,18 +41,24 @@ class ReqserSnippetStorefrontService
                 continue;
             }
 
+            if ($sales_channel_id !== null && !$this->salesChannelUsesSnippetSet($sales_channel_id, $snippet_set_id)) {
+                throw new \InvalidArgumentException(
+                    'salesChannelId is not linked to snippet set ' . $snippet_set_id
+                );
+            }
+
             $locale = $this->getSnippetSetIso($snippet_set_id);
             if ($locale === null) {
                 continue;
             }
 
-            $sales_channel_id = $this->getSalesChannelIdForSnippetSet($snippet_set_id);
+            $effective_sales_channel_id = $sales_channel_id ?? $this->resolveSalesChannelIdForSnippetSet($snippet_set_id);
 
             $snippets = $this->snippetService->getStorefrontSnippets(
                 new MessageCatalogue($locale),
                 $snippet_set_id,
                 $fallback_locale,
-                $sales_channel_id
+                $effective_sales_channel_id
             );
 
             if ($key_filter !== null) {
@@ -77,14 +81,45 @@ class ReqserSnippetStorefrontService
         return $iso === false ? null : (string) $iso;
     }
 
-    private function getSalesChannelIdForSnippetSet(string $snippet_set_id): string|null
+    private function resolveSalesChannelIdForSnippetSet(string $snippet_set_id): string|null
     {
         $sales_channel_id = $this->connection->fetchOne(
-            'SELECT LOWER(HEX(sales_channel_id)) FROM sales_channel_domain WHERE snippet_set_id = :id LIMIT 1',
-            ['id' => Uuid::fromHexToBytes($snippet_set_id)]
+            'SELECT LOWER(HEX(scd.sales_channel_id))
+             FROM sales_channel_domain scd
+             INNER JOIN sales_channel sc ON sc.id = scd.sales_channel_id
+             WHERE scd.snippet_set_id = :snippetSetId
+               AND sc.type_id = :storefrontTypeId
+               AND sc.active = 1
+               AND scd.url NOT LIKE :headlessUrlPattern
+             ORDER BY
+               CASE WHEN scd.url LIKE :httpsPattern THEN 0 ELSE 1 END,
+               LENGTH(scd.url) ASC
+             LIMIT 1',
+            [
+                'snippetSetId' => Uuid::fromHexToBytes($snippet_set_id),
+                'storefrontTypeId' => Uuid::fromHexToBytes(Defaults::SALES_CHANNEL_TYPE_STOREFRONT),
+                'headlessUrlPattern' => 'default.headless%',
+                'httpsPattern' => 'https://%',
+            ]
         );
 
         return $sales_channel_id === false ? null : (string) $sales_channel_id;
+    }
+
+    private function salesChannelUsesSnippetSet(string $sales_channel_id, string $snippet_set_id): bool
+    {
+        $linked = $this->connection->fetchOne(
+            'SELECT 1 FROM sales_channel_domain
+             WHERE sales_channel_id = :salesChannelId
+               AND snippet_set_id = :snippetSetId
+             LIMIT 1',
+            [
+                'salesChannelId' => Uuid::fromHexToBytes($sales_channel_id),
+                'snippetSetId' => Uuid::fromHexToBytes($snippet_set_id),
+            ]
+        );
+
+        return $linked !== false;
     }
 
     private function getSystemDefaultLocale(): string
