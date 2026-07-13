@@ -165,6 +165,7 @@
             <argument type="service" id="sales_channel.repository"/>
             <argument type="service" id="Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory"/>
             <argument type="service" id="logger"/>
+            <argument type="service" id="Shopware\Core\Content\Cms\DataResolver\CmsSlotsDataResolver"/>
         </service>
 
         <service id="Reqser\Plugin\Service\ReqserThemeConfigService">

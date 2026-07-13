@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.35/1.7.35/1.6.35/1.5.35 07.2026
+- `cms/render-element`: hydrate slot data via Shopware resolvers,  unrenderable elements return HTTP 200 with `renderable:false`
+
 ## 2.0.34/1.7.34/1.6.34/1.5.34 06.2026
 - `snippets/storefront`: optional `salesChannelId` request parameter for theme-scoped resolution
 
