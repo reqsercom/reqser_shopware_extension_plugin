@@ -6,6 +6,7 @@ use Psr\Log\LoggerInterface;
 use Reqser\Plugin\Core\Api\Attribute\ReqserApiAuth;
 use Reqser\Plugin\Service\ReqserCustomFieldUsageService;
 use Reqser\Plugin\Service\ReqserDatabaseService;
+use Shopware\Core\Content\Media\MediaDefinition;
 use Shopware\Core\Framework\Api\Response\ResponseFactoryInterface;
 use Shopware\Core\Framework\Api\Sync\SyncBehavior;
 use Shopware\Core\Framework\Api\Sync\SyncOperation;
@@ -16,6 +17,8 @@ use Shopware\Core\Framework\DataAbstractionLayer\Exception\SearchRequestExceptio
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\TranslatedField;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\MultiFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\RequestCriteriaBuilder;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -314,6 +317,8 @@ class ReqserDatabaseApiController extends AbstractController
                 $context
             );
 
+            $this->applyMediaVisibilityRestriction($criteria, $definition->getEntityName());
+
             $result = $context->scope(Context::SYSTEM_SCOPE, function (Context $context) use ($repository, $criteria) {
                 return $repository->search($criteria, $context);
             });
@@ -390,6 +395,8 @@ class ReqserDatabaseApiController extends AbstractController
                 $definition,
                 $context
             );
+
+            $this->applyMediaVisibilityRestriction($criteria, $definition->getEntityName());
 
             $result = $context->scope(Context::SYSTEM_SCOPE, function (Context $context) use ($repository, $criteria) {
                 return $repository->search($criteria, $context);
@@ -647,5 +654,30 @@ class ReqserDatabaseApiController extends AbstractController
     private function urlToSnakeCase(string $name): string
     {
         return str_replace('-', '_', $name);
+    }
+
+    /**
+     * Apply the media visibility restriction to the criteria for the media entity.
+     *
+     * @param Criteria $criteria
+     * @param string $entityName
+     * @return void
+     * @see \Shopware\Core\Content\Media\Subscriber\MediaVisibilityRestrictionSubscriber
+     */
+    private function applyMediaVisibilityRestriction(Criteria $criteria, string $entityName): void
+    {
+        if ($entityName !== MediaDefinition::ENTITY_NAME) {
+            return;
+        }
+
+        $criteria->addFilter(
+            new MultiFilter('OR', [
+                new EqualsFilter('private', false),
+                new MultiFilter('AND', [
+                    new EqualsFilter('private', true),
+                    new EqualsFilter('mediaFolder.defaultFolder.entity', 'product_download'),
+                ]),
+            ])
+        );
     }
 }
