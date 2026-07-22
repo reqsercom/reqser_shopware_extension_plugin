@@ -236,6 +236,18 @@ class ReqserCustomFieldUsageService
             }
         }
 
+        // Bracket access on customFields itself: entity["customFields"]["KEY"],
+        // entity.translated["customFields"]["KEY"], or entity["translated"]["customFields"]["KEY"]
+        if (preg_match_all('/(\.translated|\[[\'"]translated[\'"]\])?\s*\[[\'"]customFields[\'"]\]\s*\[[\'"](\w+)[\'"]\]/', $content, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $key = $match[2];
+                $isTranslated = isset($match[1]) && $match[1] !== '';
+
+                $keyData[$key]['accessPatterns'][$isTranslated ? 'translated' : 'direct'] = true;
+                $keyData[$key]['references'][$match[0]] = true;
+            }
+        }
+
         // Convert to clean arrays
         $result = [];
         foreach ($keyData as $key => $data) {
@@ -404,6 +416,21 @@ class ReqserCustomFieldUsageService
 
         // Bracket access: entity.customFields['KEY'] or entity.translated.customFields['KEY']
         if (preg_match_all('/(\w+(?:\.\w+)*)\.customFields\[[\'"](\w+)[\'"]\]/', $value, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $key = $match[2];
+                $path = $match[0];
+
+                if (!isset($found[$key])) {
+                    $found[$key] = [];
+                }
+                if (!in_array($path, $found[$key], true)) {
+                    $found[$key][] = $path;
+                }
+            }
+        }
+
+        // Bracket access on customFields itself: entity["customFields"]["KEY"] etc.
+        if (preg_match_all('/(\.translated|\[[\'"]translated[\'"]\])?\s*\[[\'"]customFields[\'"]\]\s*\[[\'"](\w+)[\'"]\]/', $value, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
                 $key = $match[2];
                 $path = $match[0];

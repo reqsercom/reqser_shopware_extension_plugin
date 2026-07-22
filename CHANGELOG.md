@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.36/1.7.36/1.6.36/1.5.36 07.2026
+- Custom fields usage: Twig and CMS scans now detect bracket access on `customFields` itself (e.g. `product.translated["customFields"]["KEY"]`, `product["customFields"]["KEY"]`)
+
 ## 2.0.35/1.7.35/1.6.35/1.5.35 07.2026
 - `cms/render-element`: hydrate slot data via Shopware resolvers,  unrenderable elements return HTTP 200 with `renderable:false`
 
