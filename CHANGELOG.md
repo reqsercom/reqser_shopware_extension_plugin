@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.37/1.7.37/1.6.37/1.5.37 07.2026
+- `translations/search` + `translations/list`: media entity now excludes private media (except the product_download folder)
+
 ## 2.0.36/1.7.36/1.6.36/1.5.36 07.2026
 - Custom fields usage: Twig and CMS scans now detect bracket access on `customFields` itself (e.g. `product.translated["customFields"]["KEY"]`, `product["customFields"]["KEY"]`)
 
