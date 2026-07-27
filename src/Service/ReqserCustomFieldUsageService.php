@@ -12,6 +12,12 @@ use Twig\Loader\FilesystemLoader;
  */
 class ReqserCustomFieldUsageService
 {
+    private const PATTERN_TRANSLATED = 'translated';
+    private const PATTERN_PAYLOAD = 'payload';
+    private const PATTERN_DIRECT = 'direct';
+    private const PATTERN_ADMIN = 'admin';
+    private const ADMINISTRATION_PATH_MARKER = '/Resources/app/administration/';
+
     private Connection $connection;
     private FilesystemLoader $loader;
     private ReqserJsonFieldDetectionService $jsonFieldDetectionService;
@@ -151,8 +157,9 @@ class ReqserCustomFieldUsageService
     }
 
     /**
-     * Scan all .html.twig files for customFields references, classifying each as
-     * "translated" or "direct" access.
+     * Scan all .html.twig files for customFields references, classifying each reference as
+     * "translated", "payload" or "direct" access, and marking administration templates
+     * with the additional file-level "admin" pattern.
      *
      * @param array<string> $dirs
      * @return array<string, array<string, array{accessPatterns: array<string, true>, references: array<string, true>}>>
@@ -171,6 +178,7 @@ class ReqserCustomFieldUsageService
         foreach ($finder as $file) {
             $content = $file->getContents();
             $fileName = $file->getRelativePathname();
+            $isAdministration = $this->isAdministrationTemplate($file->getRealPath() ?: $file->getPathname());
 
             $keyData = $this->extractCustomFieldKeysFromTwig($content);
 
@@ -187,6 +195,9 @@ class ReqserCustomFieldUsageService
                 foreach ($data['references'] as $ref) {
                     $usageMap[$key][$fileName]['references'][$ref] = true;
                 }
+                if ($isAdministration) {
+                    $usageMap[$key][$fileName]['accessPatterns'][self::PATTERN_ADMIN] = true;
+                }
             }
         }
 
@@ -194,7 +205,7 @@ class ReqserCustomFieldUsageService
     }
 
     /**
-     * Extract custom field key names, access patterns ("translated" / "direct"),
+     * Extract custom field key names, access patterns ("translated" / "payload" / "direct"),
      * and full Twig expressions from template source.
      *
      * @return array<string, array{accessPatterns: array<string>, references: array<string>}>
@@ -203,26 +214,24 @@ class ReqserCustomFieldUsageService
     {
         $keyData = [];
 
-        // Dot access: entity.customFields.KEY or entity.translated.customFields.KEY
+        // Dot access: entity.customFields.KEY, entity.translated.customFields.KEY
+        // or lineItem.payload.customFields.KEY
         if (preg_match_all('/(\w+(?:\.\w+)*)\.customFields\.(\w+)/', $content, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
                 $key = $match[2];
-                $prefix = $match[1];
-                $isTranslated = str_ends_with($prefix, '.translated') || $prefix === 'translated';
 
-                $keyData[$key]['accessPatterns'][$isTranslated ? 'translated' : 'direct'] = true;
+                $keyData[$key]['accessPatterns'][$this->classifyAccessPrefix($match[1])] = true;
                 $keyData[$key]['references'][$match[0]] = true;
             }
         }
 
-        // Bracket access with entity prefix: entity.customFields['KEY'] or entity.translated.customFields['KEY']
+        // Bracket access with entity prefix: entity.customFields['KEY'], entity.translated.customFields['KEY']
+        // or lineItem.payload.customFields['KEY']
         if (preg_match_all('/(\w+(?:\.\w+)*)\.customFields\[[\'"](\w+)[\'"]\]/', $content, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
                 $key = $match[2];
-                $prefix = $match[1];
-                $isTranslated = str_ends_with($prefix, '.translated') || $prefix === 'translated';
 
-                $keyData[$key]['accessPatterns'][$isTranslated ? 'translated' : 'direct'] = true;
+                $keyData[$key]['accessPatterns'][$this->classifyAccessPrefix($match[1])] = true;
                 $keyData[$key]['references'][$match[0]] = true;
             }
         }
@@ -231,19 +240,19 @@ class ReqserCustomFieldUsageService
         if (preg_match_all('/(?<![\w.])customFields\[[\'"](\w+)[\'"]\]/', $content, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
                 $key = $match[1];
-                $keyData[$key]['accessPatterns']['direct'] = true;
+                $keyData[$key]['accessPatterns'][self::PATTERN_DIRECT] = true;
                 $keyData[$key]['references'][$match[0]] = true;
             }
         }
 
         // Bracket access on customFields itself: entity["customFields"]["KEY"],
-        // entity.translated["customFields"]["KEY"], or entity["translated"]["customFields"]["KEY"]
-        if (preg_match_all('/(\.translated|\[[\'"]translated[\'"]\])?\s*\[[\'"]customFields[\'"]\]\s*\[[\'"](\w+)[\'"]\]/', $content, $matches, PREG_SET_ORDER)) {
+        // entity.translated["customFields"]["KEY"], entity["translated"]["customFields"]["KEY"],
+        // or the same shapes with a payload marker
+        if (preg_match_all('/(\.translated|\[[\'"]translated[\'"]\]|\.payload|\[[\'"]payload[\'"]\])?\s*\[[\'"]customFields[\'"]\]\s*\[[\'"](\w+)[\'"]\]/', $content, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
                 $key = $match[2];
-                $isTranslated = isset($match[1]) && $match[1] !== '';
 
-                $keyData[$key]['accessPatterns'][$isTranslated ? 'translated' : 'direct'] = true;
+                $keyData[$key]['accessPatterns'][$this->classifyBracketMarker($match[1] ?? '')] = true;
                 $keyData[$key]['references'][$match[0]] = true;
             }
         }
@@ -258,6 +267,46 @@ class ReqserCustomFieldUsageService
         }
 
         return $result;
+    }
+
+    /**
+     * Classify the expression part that precedes ".customFields".
+     *
+     * A payload prefix is fallback-safe: Shopware fills the cart line item payload from
+     * getTranslation('customFields'), and the order line item payload is a persisted copy
+     * of that already language-resolved value.
+     */
+    private function classifyAccessPrefix(string $prefix): string
+    {
+        if ($prefix === 'translated' || str_ends_with($prefix, '.translated')) {
+            return self::PATTERN_TRANSLATED;
+        }
+
+        if ($prefix === 'payload' || str_ends_with($prefix, '.payload')) {
+            return self::PATTERN_PAYLOAD;
+        }
+
+        return self::PATTERN_DIRECT;
+    }
+
+    /**
+     * Classify the optional marker captured before a bracketed ["customFields"] access.
+     */
+    private function classifyBracketMarker(string $marker): string
+    {
+        if ($marker === '') {
+            return self::PATTERN_DIRECT;
+        }
+
+        return str_contains($marker, 'payload') ? self::PATTERN_PAYLOAD : self::PATTERN_TRANSLATED;
+    }
+
+    /**
+     * Whether the template lives inside an administration bundle path.
+     */
+    private function isAdministrationTemplate(string $absolutePath): bool
+    {
+        return str_contains(str_replace('\\', '/', $absolutePath), self::ADMINISTRATION_PATH_MARKER);
     }
 
     /**

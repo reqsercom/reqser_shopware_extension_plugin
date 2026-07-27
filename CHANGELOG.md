@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.38/1.7.38/1.6.38/1.5.38 07.2026
+- Custom fields usage: `accessPatterns` now distinguishes `payload` (line item payload access, already language-resolved) and marks templates under `Resources/app/administration/` with `admin`
+
 ## 2.0.37/1.7.37/1.6.37/1.5.37 07.2026
 - `translations/search` + `translations/list`: media entity now excludes private media (except the product_download folder)
 
