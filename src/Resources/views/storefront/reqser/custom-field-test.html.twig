@@ -10,7 +10,7 @@
     scanner can find the custom field key "reqser_custom_field_test_twig" inside it.
 
     The template exercises all access patterns so the endpoint can be
-    verified to return both "direct" and "translated" in accessPatterns,
+    verified to return "direct", "translated" and "payload" in accessPatterns,
     including bracket access on customFields itself.
 #}
 
@@ -38,4 +38,7 @@
 
     {# Direct bracket access on customFields (single quotes) #}
     {{ product['customFields']['reqser_custom_field_test_twig'] }}
+
+    {# Payload access — Shopware fills the line item payload from getTranslation('customFields') #}
+    {{ lineItem.payload.customFields.reqser_custom_field_test_twig }}
 {% endblock %}
