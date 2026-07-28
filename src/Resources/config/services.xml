@@ -173,6 +173,11 @@
             <argument type="service" id="kernel"/>
         </service>
 
+        <service id="Reqser\Plugin\Service\ReqserMediaUploadService">
+            <argument type="service" id="media.repository"/>
+            <argument type="service" id="Shopware\Core\Content\Media\File\FileSaver"/>
+        </service>
+
         <!-- Analytics Services -->
         <service id="Reqser\Plugin\Service\ReqserAnalyticsService">
             <argument type="service" id="Doctrine\DBAL\Connection"/>
@@ -232,6 +237,14 @@
 
         <service id="Reqser\Plugin\Core\Api\Controller\ReqserThemeApiController" public="true">
             <argument type="service" id="Reqser\Plugin\Service\ReqserThemeConfigService" />
+            <call method="setContainer">
+                <argument type="service" id="service_container" />
+            </call>
+        </service>
+
+        <service id="Reqser\Plugin\Core\Api\Controller\ReqserMediaApiController" public="true">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserMediaUploadService" />
+            <argument type="service" id="logger" />
             <call method="setContainer">
                 <argument type="service" id="service_container" />
             </call>
