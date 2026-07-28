@@ -169,12 +169,9 @@ class ReqserCustomFieldUsageService
 
         $usageMap = [];
 
-        $finder = new Finder();
-        $finder->files()->name('*.html.twig')->in($dirs);
-
-        foreach ($finder as $file) {
-            $content = $file->getContents();
-            $fileName = $file->getRelativePathname();
+        foreach ($this->collectTwigFilesByPhysicalFile($dirs) as $entry) {
+            $content = $entry['file']->getContents();
+            $fileName = $entry['name'];
 
             $keyData = $this->extractCustomFieldKeysFromTwig($content);
 
@@ -195,6 +192,57 @@ class ReqserCustomFieldUsageService
         }
 
         return $usageMap;
+    }
+
+    /**
+     * Collect every .html.twig file below the given directories, one entry per physical file.
+     *
+     * @param array<string> $dirs
+     * @return list<array{name: string, file: \Symfony\Component\Finder\SplFileInfo}>
+     */
+    private function collectTwigFilesByPhysicalFile(array $dirs): array
+    {
+        $finder = new Finder();
+        $finder->files()->name('*.html.twig')->in($dirs);
+
+        // Shopware registers overlapping loader roots per bundle (Resources and
+        // Resources/views), so one template is reachable under two relative names.
+        // Keying on the resolved path collapses those to a single entry.
+        $byPhysicalFile = [];
+
+        foreach ($finder as $file) {
+            $physicalPath = $file->getRealPath();
+            if ($physicalPath === false) {
+                $physicalPath = $file->getPathname();
+            }
+
+            $name = str_replace('\\', '/', $file->getRelativePathname());
+
+            if (
+                !isset($byPhysicalFile[$physicalPath])
+                || $this->isShorterName($name, $byPhysicalFile[$physicalPath]['name'])
+            ) {
+                $byPhysicalFile[$physicalPath] = ['name' => $name, 'file' => $file];
+            }
+        }
+
+        return array_values($byPhysicalFile);
+    }
+
+    /**
+     * Compare two relative names of the same file, shortest first and lexicographic on a tie.
+     *
+     * @param string $candidate
+     * @param string $current
+     * @return bool
+     */
+    private function isShorterName(string $candidate, string $current): bool
+    {
+        if (strlen($candidate) !== strlen($current)) {
+            return strlen($candidate) < strlen($current);
+        }
+
+        return strcmp($candidate, $current) < 0;
     }
 
     /**
