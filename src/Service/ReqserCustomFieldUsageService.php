@@ -15,8 +15,6 @@ class ReqserCustomFieldUsageService
     private const PATTERN_TRANSLATED = 'translated';
     private const PATTERN_PAYLOAD = 'payload';
     private const PATTERN_DIRECT = 'direct';
-    private const PATTERN_ADMIN = 'admin';
-    private const ADMINISTRATION_PATH_MARKER = '/Resources/app/administration/';
 
     private Connection $connection;
     private FilesystemLoader $loader;
@@ -158,8 +156,7 @@ class ReqserCustomFieldUsageService
 
     /**
      * Scan all .html.twig files for customFields references, classifying each reference as
-     * "translated", "payload" or "direct" access, and marking administration templates
-     * with the additional file-level "admin" pattern.
+     * "translated", "payload" or "direct" access.
      *
      * @param array<string> $dirs
      * @return array<string, array<string, array{accessPatterns: array<string, true>, references: array<string, true>}>>
@@ -178,7 +175,6 @@ class ReqserCustomFieldUsageService
         foreach ($finder as $file) {
             $content = $file->getContents();
             $fileName = $file->getRelativePathname();
-            $isAdministration = $this->isAdministrationTemplate($file->getRealPath() ?: $file->getPathname());
 
             $keyData = $this->extractCustomFieldKeysFromTwig($content);
 
@@ -194,9 +190,6 @@ class ReqserCustomFieldUsageService
                 }
                 foreach ($data['references'] as $ref) {
                     $usageMap[$key][$fileName]['references'][$ref] = true;
-                }
-                if ($isAdministration) {
-                    $usageMap[$key][$fileName]['accessPatterns'][self::PATTERN_ADMIN] = true;
                 }
             }
         }
@@ -299,14 +292,6 @@ class ReqserCustomFieldUsageService
         }
 
         return str_contains($marker, 'payload') ? self::PATTERN_PAYLOAD : self::PATTERN_TRANSLATED;
-    }
-
-    /**
-     * Whether the template lives inside an administration bundle path.
-     */
-    private function isAdministrationTemplate(string $absolutePath): bool
-    {
-        return str_contains(str_replace('\\', '/', $absolutePath), self::ADMINISTRATION_PATH_MARKER);
     }
 
     /**

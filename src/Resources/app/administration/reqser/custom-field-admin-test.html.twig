@@ -2,8 +2,8 @@
     Reqser Custom Field Admin Test Template
 
     This template exists solely to verify that the ReqserCustomFieldUsageService
-    marks templates below Resources/app/administration/ with the file-level
-    "admin" access pattern.
+    reports a template below Resources/app/administration/ with its real access
+    patterns and no extra marker — where a template lives is not reported.
 
     It is placed outside Resources/app/administration/src/ on purpose, so it does
     not create an administration build entry point and does not override any
@@ -11,7 +11,7 @@
 
     This file is never rendered — it only needs to exist on disk so the scanner
     can find the custom field key "reqser_custom_field_test_twig" inside it and
-    report the "admin" marker alongside the "direct" access pattern.
+    report the "direct" access pattern for it.
 #}
 
 {% block reqser_custom_field_admin_test %}
