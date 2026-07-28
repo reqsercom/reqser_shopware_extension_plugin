@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.39/1.7.39/1.6.39/1.5.39 07.2026
+- New `media/upload` route: adds support for translated images by storing an image variant as a media entity next to its source image
+- Only known image formats are accepted, and uploads are marked with a `reqser` author so they can be filtered in the media library
+
 ## 2.0.38/1.7.38/1.6.38/1.5.38 07.2026
 - Custom fields usage: `accessPatterns` now includes `payload` for line-item payload access
 - Custom fields usage: `twigFiles` no longer lists the same template twice via overlapping Twig roots

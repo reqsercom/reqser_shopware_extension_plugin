@@ -37,7 +37,7 @@ class ReqserMediaApiController extends AbstractController
     /**
      * Store the raw request body as a media entity named by the fileName parameter, in the media
      * folder of the referenced source media. An existing entity with that file name is replaced
-     * when it was uploaded by this route, and otherwise only when overwrite is requested.
+     * only when this route uploaded it; any other entity is left untouched.
      *
      * @param Request $request
      * @param Context $context
@@ -54,7 +54,6 @@ class ReqserMediaApiController extends AbstractController
             $sourceMediaId = (string) $request->query->get('sourceMediaId', '');
             $fileName = trim((string) $request->query->get('fileName', ''));
             $extension = strtolower(trim((string) $request->query->get('extension', '')));
-            $overwrite = $request->query->getBoolean('overwrite');
 
             if ($sourceMediaId === '' || $fileName === '' || $extension === '') {
                 return new JsonResponse([
@@ -109,10 +108,7 @@ class ReqserMediaApiController extends AbstractController
 
             $existingMedia = $this->mediaUploadService->findMediaByFileName($fileName, $context);
 
-            if ($existingMedia !== null
-                && !$overwrite
-                && !$this->mediaUploadService->isOwnedByReqser($existingMedia)
-            ) {
+            if ($existingMedia !== null && !$this->mediaUploadService->isOwnedByReqser($existingMedia)) {
                 return new JsonResponse([
                     'success' => false,
                     'error' => 'A media entity with this file name already exists and was not uploaded by '
