@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.39/1.7.39/1.6.39/1.5.39 07.2026
+- New `media/upload` route to support image translations
+
 ## 2.0.38/1.7.38/1.6.38/1.5.38 07.2026
 - Custom fields usage: `accessPatterns` now includes `payload` for line-item payload access
 - Custom fields usage: `twigFiles` no longer lists the same template twice via overlapping Twig roots
