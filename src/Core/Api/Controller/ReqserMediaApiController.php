@@ -5,6 +5,7 @@ namespace Reqser\Plugin\Core\Api\Controller;
 use Psr\Log\LoggerInterface;
 use Reqser\Plugin\Core\Api\Attribute\ReqserApiAuth;
 use Reqser\Plugin\Service\ReqserMediaUploadService;
+use Shopware\Core\Content\Media\MediaEntity;
 use Shopware\Core\Content\Media\MediaException;
 use Shopware\Core\Framework\Context;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -39,6 +40,10 @@ class ReqserMediaApiController extends AbstractController
      * folder of the referenced source media. An existing entity with that file name is replaced
      * only when this route uploaded it; any other entity is left untouched.
      *
+     * The optional targetMediaId names the entity to write onto. Supplying it keeps the media id
+     * stable when fileName differs from the name that entity currently carries, so references
+     * held elsewhere by id — CMS slot configs, custom fields — keep resolving after a rename.
+     *
      * @param Request $request
      * @param Context $context
      * @return JsonResponse
@@ -54,6 +59,7 @@ class ReqserMediaApiController extends AbstractController
             $sourceMediaId = (string) $request->query->get('sourceMediaId', '');
             $fileName = trim((string) $request->query->get('fileName', ''));
             $extension = strtolower(trim((string) $request->query->get('extension', '')));
+            $targetMediaId = trim((string) $request->query->get('targetMediaId', ''));
 
             if ($sourceMediaId === '' || $fileName === '' || $extension === '') {
                 return new JsonResponse([
@@ -106,22 +112,47 @@ class ReqserMediaApiController extends AbstractController
                 ], 404);
             }
 
-            $existingMedia = $this->mediaUploadService->findMediaByFileName($fileName, $context);
+            $existingMedia = null;
 
-            if ($existingMedia !== null && !$this->mediaUploadService->isOwnedByReqser($existingMedia)) {
-                return new JsonResponse([
-                    'success' => false,
-                    'error' => 'A media entity with this file name already exists and was not uploaded by '
-                        . ReqserMediaUploadService::AUTHOR,
-                    'data' => [
-                        'mediaId' => $existingMedia->getId(),
-                        'fileName' => $existingMedia->getFileName(),
-                        'extension' => $existingMedia->getFileExtension(),
-                        'url' => $existingMedia->getUrl(),
-                        'author' => null,
-                    ],
-                    'timestamp' => date('Y-m-d H:i:s'),
-                ], 409);
+            if ($targetMediaId !== '') {
+                $existingMedia = $this->mediaUploadService->findMediaById($targetMediaId, $context);
+
+                if ($existingMedia === null) {
+                    return new JsonResponse([
+                        'success' => false,
+                        'error' => 'Target media not found: ' . $targetMediaId,
+                    ], 404);
+                }
+
+                if (!$this->mediaUploadService->isOwnedByReqser($existingMedia)) {
+                    return $this->conflictResponse(
+                        $existingMedia,
+                        'The target media entity was not uploaded by ' . ReqserMediaUploadService::AUTHOR
+                    );
+                }
+            }
+
+            $nameHolder = $this->mediaUploadService->findMediaByFileName($fileName, $context);
+            $nameHeldByOther = $nameHolder !== null
+                && ($existingMedia === null || $nameHolder->getId() !== $existingMedia->getId());
+
+            if ($nameHeldByOther) {
+                if (!$this->mediaUploadService->isOwnedByReqser($nameHolder)) {
+                    return $this->conflictResponse(
+                        $nameHolder,
+                        'A media entity with this file name already exists and was not uploaded by '
+                            . ReqserMediaUploadService::AUTHOR
+                    );
+                }
+
+                if ($existingMedia !== null) {
+                    return $this->conflictResponse(
+                        $nameHolder,
+                        'Another media entity already carries this file name, the target cannot be renamed to it'
+                    );
+                }
+
+                $existingMedia = $nameHolder;
             }
 
             $result = $this->mediaUploadService->storeVariant(
@@ -165,5 +196,26 @@ class ReqserMediaApiController extends AbstractController
                 'line' => $e->getLine(),
             ], 500);
         }
+    }
+
+    /**
+     * @param MediaEntity $media
+     * @param string $error
+     * @return JsonResponse
+     */
+    private function conflictResponse(MediaEntity $media, string $error): JsonResponse
+    {
+        return new JsonResponse([
+            'success' => false,
+            'error' => $error,
+            'data' => [
+                'mediaId' => $media->getId(),
+                'fileName' => $media->getFileName(),
+                'extension' => $media->getFileExtension(),
+                'url' => $media->getUrl(),
+                'author' => null,
+            ],
+            'timestamp' => date('Y-m-d H:i:s'),
+        ], 409);
     }
 }

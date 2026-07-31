@@ -152,7 +152,8 @@ class ReqserMediaUploadService
     /**
      * Write the given binary into a media entity named $fileName, placed in the media folder of
      * $sourceMedia and inheriting its visibility. Reuses $existingMedia when supplied, otherwise
-     * creates a new entity.
+     * creates a new entity. Reusing an entity whose file name differs renames it in place, so its
+     * id — and every reference held to that id — survives.
      *
      * @param MediaEntity $sourceMedia
      * @param MediaEntity|null $existingMedia
@@ -174,6 +175,7 @@ class ReqserMediaUploadService
         Context $context
     ): array {
         $mediaId = $existingMedia !== null ? $existingMedia->getId() : Uuid::randomHex();
+        $previousFileName = $existingMedia !== null ? $existingMedia->getFileName() : null;
         $temporaryPath = $this->writeTemporaryFile($binary);
 
         try {
@@ -223,8 +225,29 @@ class ReqserMediaUploadService
             'mediaFolderId' => $sourceMedia->getMediaFolderId(),
             'private' => $sourceMedia->isPrivate(),
             'author' => self::AUTHOR,
-            'action' => $existingMedia !== null ? 'replaced' : 'created',
+            'previousFileName' => $previousFileName,
+            'action' => $this->resolveAction($existingMedia, $previousFileName, $fileName),
         ];
+    }
+
+    /**
+     * Report what the write did to the media entity.
+     *
+     * @param MediaEntity|null $existingMedia
+     * @param string|null $previousFileName
+     * @param string $fileName
+     * @return string
+     */
+    private function resolveAction(
+        ?MediaEntity $existingMedia,
+        ?string $previousFileName,
+        string $fileName
+    ): string {
+        if ($existingMedia === null) {
+            return 'created';
+        }
+
+        return $previousFileName !== null && $previousFileName !== $fileName ? 'renamed' : 'replaced';
     }
 
     /**
