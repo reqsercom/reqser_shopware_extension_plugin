@@ -6,7 +6,7 @@ use Shopware\Core\Content\Media\File\FileSaver;
 use Shopware\Core\Content\Media\File\MediaFile;
 use Shopware\Core\Content\Media\MediaEntity;
 use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -38,15 +38,15 @@ class ReqserMediaUploadService
         'gif' => IMAGETYPE_GIF,
     ];
 
-    private EntityRepository $mediaRepository;
+    private EntityRepositoryInterface $mediaRepository;
     private FileSaver $fileSaver;
 
     /**
-     * @param EntityRepository $mediaRepository
+     * @param EntityRepositoryInterface $mediaRepository
      * @param FileSaver $fileSaver
      */
     public function __construct(
-        EntityRepository $mediaRepository,
+        EntityRepositoryInterface $mediaRepository,
         FileSaver $fileSaver
     ) {
         $this->mediaRepository = $mediaRepository;
