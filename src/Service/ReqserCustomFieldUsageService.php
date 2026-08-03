@@ -12,6 +12,10 @@ use Twig\Loader\FilesystemLoader;
  */
 class ReqserCustomFieldUsageService
 {
+    private const PATTERN_TRANSLATED = 'translated';
+    private const PATTERN_PAYLOAD = 'payload';
+    private const PATTERN_DIRECT = 'direct';
+
     private Connection $connection;
     private FilesystemLoader $loader;
     private ReqserJsonFieldDetectionService $jsonFieldDetectionService;
@@ -151,8 +155,8 @@ class ReqserCustomFieldUsageService
     }
 
     /**
-     * Scan all .html.twig files for customFields references, classifying each as
-     * "translated" or "direct" access.
+     * Scan all .html.twig files for customFields references, classifying each reference as
+     * "translated", "payload" or "direct" access.
      *
      * @param array<string> $dirs
      * @return array<string, array<string, array{accessPatterns: array<string, true>, references: array<string, true>}>>
@@ -165,12 +169,9 @@ class ReqserCustomFieldUsageService
 
         $usageMap = [];
 
-        $finder = new Finder();
-        $finder->files()->name('*.html.twig')->in($dirs);
-
-        foreach ($finder as $file) {
-            $content = $file->getContents();
-            $fileName = $file->getRelativePathname();
+        foreach ($this->collectTwigFilesByPhysicalFile($dirs) as $entry) {
+            $content = $entry['file']->getContents();
+            $fileName = $entry['name'];
 
             $keyData = $this->extractCustomFieldKeysFromTwig($content);
 
@@ -194,7 +195,58 @@ class ReqserCustomFieldUsageService
     }
 
     /**
-     * Extract custom field key names, access patterns ("translated" / "direct"),
+     * Collect every .html.twig file below the given directories, one entry per physical file.
+     *
+     * @param array<string> $dirs
+     * @return list<array{name: string, file: \Symfony\Component\Finder\SplFileInfo}>
+     */
+    private function collectTwigFilesByPhysicalFile(array $dirs): array
+    {
+        $finder = new Finder();
+        $finder->files()->name('*.html.twig')->in($dirs);
+
+        // Shopware registers overlapping loader roots per bundle (Resources and
+        // Resources/views), so one template is reachable under two relative names.
+        // Keying on the resolved path collapses those to a single entry.
+        $byPhysicalFile = [];
+
+        foreach ($finder as $file) {
+            $physicalPath = $file->getRealPath();
+            if ($physicalPath === false) {
+                $physicalPath = $file->getPathname();
+            }
+
+            $name = str_replace('\\', '/', $file->getRelativePathname());
+
+            if (
+                !isset($byPhysicalFile[$physicalPath])
+                || $this->isShorterName($name, $byPhysicalFile[$physicalPath]['name'])
+            ) {
+                $byPhysicalFile[$physicalPath] = ['name' => $name, 'file' => $file];
+            }
+        }
+
+        return array_values($byPhysicalFile);
+    }
+
+    /**
+     * Compare two relative names of the same file, shortest first and lexicographic on a tie.
+     *
+     * @param string $candidate
+     * @param string $current
+     * @return bool
+     */
+    private function isShorterName(string $candidate, string $current): bool
+    {
+        if (strlen($candidate) !== strlen($current)) {
+            return strlen($candidate) < strlen($current);
+        }
+
+        return strcmp($candidate, $current) < 0;
+    }
+
+    /**
+     * Extract custom field key names, access patterns ("translated" / "payload" / "direct"),
      * and full Twig expressions from template source.
      *
      * @return array<string, array{accessPatterns: array<string>, references: array<string>}>
@@ -203,26 +255,24 @@ class ReqserCustomFieldUsageService
     {
         $keyData = [];
 
-        // Dot access: entity.customFields.KEY or entity.translated.customFields.KEY
+        // Dot access: entity.customFields.KEY, entity.translated.customFields.KEY
+        // or lineItem.payload.customFields.KEY
         if (preg_match_all('/(\w+(?:\.\w+)*)\.customFields\.(\w+)/', $content, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
                 $key = $match[2];
-                $prefix = $match[1];
-                $isTranslated = str_ends_with($prefix, '.translated') || $prefix === 'translated';
 
-                $keyData[$key]['accessPatterns'][$isTranslated ? 'translated' : 'direct'] = true;
+                $keyData[$key]['accessPatterns'][$this->classifyAccessPrefix($match[1])] = true;
                 $keyData[$key]['references'][$match[0]] = true;
             }
         }
 
-        // Bracket access with entity prefix: entity.customFields['KEY'] or entity.translated.customFields['KEY']
+        // Bracket access with entity prefix: entity.customFields['KEY'], entity.translated.customFields['KEY']
+        // or lineItem.payload.customFields['KEY']
         if (preg_match_all('/(\w+(?:\.\w+)*)\.customFields\[[\'"](\w+)[\'"]\]/', $content, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
                 $key = $match[2];
-                $prefix = $match[1];
-                $isTranslated = str_ends_with($prefix, '.translated') || $prefix === 'translated';
 
-                $keyData[$key]['accessPatterns'][$isTranslated ? 'translated' : 'direct'] = true;
+                $keyData[$key]['accessPatterns'][$this->classifyAccessPrefix($match[1])] = true;
                 $keyData[$key]['references'][$match[0]] = true;
             }
         }
@@ -231,7 +281,19 @@ class ReqserCustomFieldUsageService
         if (preg_match_all('/(?<![\w.])customFields\[[\'"](\w+)[\'"]\]/', $content, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
                 $key = $match[1];
-                $keyData[$key]['accessPatterns']['direct'] = true;
+                $keyData[$key]['accessPatterns'][self::PATTERN_DIRECT] = true;
+                $keyData[$key]['references'][$match[0]] = true;
+            }
+        }
+
+        // Bracket access on customFields itself: entity["customFields"]["KEY"],
+        // entity.translated["customFields"]["KEY"], entity["translated"]["customFields"]["KEY"],
+        // or the same shapes with a payload marker
+        if (preg_match_all('/(\.translated|\[[\'"]translated[\'"]\]|\.payload|\[[\'"]payload[\'"]\])?\s*\[[\'"]customFields[\'"]\]\s*\[[\'"](\w+)[\'"]\]/', $content, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $key = $match[2];
+
+                $keyData[$key]['accessPatterns'][$this->classifyBracketMarker($match[1] ?? '')] = true;
                 $keyData[$key]['references'][$match[0]] = true;
             }
         }
@@ -246,6 +308,38 @@ class ReqserCustomFieldUsageService
         }
 
         return $result;
+    }
+
+    /**
+     * Classify the expression part that precedes ".customFields".
+     *
+     * A payload prefix is fallback-safe: Shopware fills the cart line item payload from
+     * getTranslation('customFields'), and the order line item payload is a persisted copy
+     * of that already language-resolved value.
+     */
+    private function classifyAccessPrefix(string $prefix): string
+    {
+        if ($prefix === 'translated' || str_ends_with($prefix, '.translated')) {
+            return self::PATTERN_TRANSLATED;
+        }
+
+        if ($prefix === 'payload' || str_ends_with($prefix, '.payload')) {
+            return self::PATTERN_PAYLOAD;
+        }
+
+        return self::PATTERN_DIRECT;
+    }
+
+    /**
+     * Classify the optional marker captured before a bracketed ["customFields"] access.
+     */
+    private function classifyBracketMarker(string $marker): string
+    {
+        if ($marker === '') {
+            return self::PATTERN_DIRECT;
+        }
+
+        return str_contains($marker, 'payload') ? self::PATTERN_PAYLOAD : self::PATTERN_TRANSLATED;
     }
 
     /**
@@ -404,6 +498,21 @@ class ReqserCustomFieldUsageService
 
         // Bracket access: entity.customFields['KEY'] or entity.translated.customFields['KEY']
         if (preg_match_all('/(\w+(?:\.\w+)*)\.customFields\[[\'"](\w+)[\'"]\]/', $value, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $key = $match[2];
+                $path = $match[0];
+
+                if (!isset($found[$key])) {
+                    $found[$key] = [];
+                }
+                if (!in_array($path, $found[$key], true)) {
+                    $found[$key][] = $path;
+                }
+            }
+        }
+
+        // Bracket access on customFields itself: entity["customFields"]["KEY"] etc.
+        if (preg_match_all('/(\.translated|\[[\'"]translated[\'"]\])?\s*\[[\'"]customFields[\'"]\]\s*\[[\'"](\w+)[\'"]\]/', $value, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
                 $key = $match[2];
                 $path = $match[0];

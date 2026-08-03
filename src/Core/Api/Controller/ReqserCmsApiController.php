@@ -157,6 +157,18 @@ class ReqserCmsApiController extends AbstractController
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
 
+        } catch (\Reqser\Plugin\Exception\CmsElementRenderException $e) {
+            // Element cannot be rendered in isolation — degrade to a structured 200 so the caller skips it.
+            $previous = $e->getPrevious();
+            return new JsonResponse([
+                'success' => false,
+                'renderable' => false,
+                'error' => 'CMS element could not be rendered',
+                'message' => $e->getMessage(),
+                'elementType' => $e->getElementType(),
+                'exceptionType' => $previous !== null ? get_class($previous) : get_class($e),
+                'timestamp' => date('Y-m-d H:i:s'),
+            ], 200);
         } catch (\Throwable $e) {
             // Return error in API response
             return new JsonResponse([
