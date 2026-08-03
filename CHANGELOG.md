@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.0.39/1.7.39/1.6.39/1.5.39 07.2026
+- New `media/upload` route to support image translations
+
+## 2.0.38/1.7.38/1.6.38/1.5.38 07.2026
+- Custom fields usage: `accessPatterns` now includes `payload` for line-item payload access
+- Custom fields usage: `twigFiles` no longer lists the same template twice via overlapping Twig roots
+
+## 2.0.37/1.7.37/1.6.37/1.5.37 07.2026
+- `translations/search` + `translations/list`: media entity now excludes private media (except the product_download folder)
+
+## 2.0.36/1.7.36/1.6.36/1.5.36 07.2026
+- Custom fields usage: Twig and CMS scans now detect bracket access on `customFields` itself (e.g. `product.translated["customFields"]["KEY"]`, `product["customFields"]["KEY"]`)
+
+## 2.0.35/1.7.35/1.6.35/1.5.35 07.2026
+- `cms/render-element`: hydrate slot data via Shopware resolvers,  unrenderable elements return HTTP 200 with `renderable:false`
+
+## 2.0.34/1.7.34/1.6.34/1.5.34 06.2026
+- `snippets/storefront`: optional `salesChannelId` request parameter for theme-scoped resolution
+
+## 2.0.33/1.7.33/1.6.33/1.5.33 06.2026
+- New `snippets/storefront` route: returns the storefront-effective snippet values, so file-only snippets resolved via a fallback locale are no longer reported as empty
+
 ## 2.0.32/1.7.32/1.6.32/1.5.32 06.2026
 - `cms/twig-files`: fall back to reading the physical source file when a Twig ref cannot be resolved, so structural core templates are still captured
 

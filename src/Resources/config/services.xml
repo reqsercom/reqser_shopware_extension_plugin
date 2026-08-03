@@ -102,6 +102,11 @@
             <argument type="service" id="Shopware\Core\System\Snippet\SnippetService"/>
         </service>
 
+        <service id="Reqser\Plugin\Service\ReqserSnippetStorefrontService">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="Shopware\Core\System\Snippet\SnippetService"/>
+        </service>
+
         <service id="Reqser\Plugin\Service\ReqserJsonFieldDetectionService">
             <argument type="service" id="Doctrine\DBAL\Connection"/>
             <argument type="service" id="Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry"/>
@@ -132,11 +137,17 @@
             <argument type="service" id="sales_channel.repository"/>
             <argument type="service" id="Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory"/>
             <argument type="service" id="logger"/>
+            <argument type="service" id="Shopware\Core\Content\Cms\DataResolver\CmsSlotsDataResolver"/>
         </service>
 
         <service id="Reqser\Plugin\Service\ReqserThemeConfigService">
             <argument type="service" id="Doctrine\DBAL\Connection"/>
             <argument type="service" id="kernel"/>
+        </service>
+
+        <service id="Reqser\Plugin\Service\ReqserMediaUploadService">
+            <argument type="service" id="media.repository"/>
+            <argument type="service" id="Shopware\Core\Content\Media\File\FileSaver"/>
         </service>
 
         <!-- Analytics Services -->
@@ -154,6 +165,7 @@
         <!-- API Controllers -->
         <service id="Reqser\Plugin\Core\Api\Controller\ReqserSnippetListApiController" public="true">
             <argument type="service" id="Reqser\Plugin\Service\ReqserSnippetListService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserSnippetStorefrontService" />
             <call method="setContainer">
                 <argument type="service" id="service_container" />
             </call>
@@ -197,6 +209,14 @@
 
         <service id="Reqser\Plugin\Core\Api\Controller\ReqserThemeApiController" public="true">
             <argument type="service" id="Reqser\Plugin\Service\ReqserThemeConfigService" />
+            <call method="setContainer">
+                <argument type="service" id="service_container" />
+            </call>
+        </service>
+
+        <service id="Reqser\Plugin\Core\Api\Controller\ReqserMediaApiController" public="true">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserMediaUploadService" />
+            <argument type="service" id="logger" />
             <call method="setContainer">
                 <argument type="service" id="service_container" />
             </call>
