@@ -6,7 +6,6 @@ use Psr\Log\LoggerInterface;
 use Reqser\Plugin\Core\Api\Attribute\ReqserApiAuth;
 use Reqser\Plugin\Service\ReqserMediaUploadService;
 use Shopware\Core\Content\Media\MediaEntity;
-use Shopware\Core\Content\Media\MediaException;
 use Shopware\Core\Framework\Context;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -171,15 +170,23 @@ class ReqserMediaApiController extends AbstractController
                 'timestamp' => date('Y-m-d H:i:s'),
             ]);
 
-        } catch (MediaException $e) {
-            return new JsonResponse([
-                'success' => false,
-                'error' => 'Media could not be stored',
-                'message' => $e->getMessage(),
-                'exceptionType' => get_class($e),
-            ], 400);
-
         } catch (\Throwable $e) {
+            // MediaException exists only from Shopware 6.5+. On 6.4.x media domain
+            // failures still live under Content\Media\Exception\* — match both shapes
+            // by class-name prefix so this catch never autoloads a missing class.
+            $exceptionClass = get_class($e);
+            if (
+                $exceptionClass === 'Shopware\\Core\\Content\\Media\\MediaException'
+                || str_starts_with($exceptionClass, 'Shopware\\Core\\Content\\Media\\Exception\\')
+            ) {
+                return new JsonResponse([
+                    'success' => false,
+                    'error' => 'Media could not be stored',
+                    'message' => $e->getMessage(),
+                    'exceptionType' => $exceptionClass,
+                ], 400);
+            }
+
             $this->logger->error('Reqser API: media upload failed', [
                 'endpoint' => $request->getPathInfo(),
                 'method' => $request->getMethod(),
@@ -191,7 +198,7 @@ class ReqserMediaApiController extends AbstractController
                 'success' => false,
                 'error' => 'Error storing media',
                 'message' => $e->getMessage(),
-                'exceptionType' => get_class($e),
+                'exceptionType' => $exceptionClass,
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ], 500);
