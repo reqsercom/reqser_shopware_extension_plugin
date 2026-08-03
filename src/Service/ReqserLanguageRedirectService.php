@@ -31,6 +31,13 @@ class ReqserLanguageRedirectService
     private ?array $originalPageUrl = null;
     private ?array $domainMappings = null;
 
+    /**
+     * @param EntityRepository $domainRepository
+     * @param ReqserSessionService $sessionService
+     * @param ReqserCustomFieldService $customFieldService
+     * @param mixed $cache
+     * @param string $environment
+     */
     public function __construct(
         EntityRepository $domainRepository,
         ReqserSessionService $sessionService,
@@ -47,6 +54,13 @@ class ReqserLanguageRedirectService
 
     /**
      * Initialize and return redirect config from domain mappings
+     *
+     * @param mixed $session
+     * @param mixed $request
+     * @param mixed $currentDomain
+     * @param mixed $salesChannelDomains
+     * @param string $salesChannelId
+     * @return ?array
      */
     public function initialize($session, $request, $currentDomain, $salesChannelDomains, string $salesChannelId): ?array
     {
@@ -287,6 +301,9 @@ class ReqserLanguageRedirectService
     /**
      * Build redirect URL with preserved GET parameters from original request
      * Always preserves reqser_debug_mode, other parameters based on configuration
+     *
+     * @param string $baseUrl
+     * @return string
      */
     private function buildRedirectUrlWithParams(string $baseUrl): string
     {
@@ -490,6 +507,9 @@ class ReqserLanguageRedirectService
 
     /**
      * Get cache debug information for troubleshooting
+     *
+     * @param string $salesChannelId
+     * @return array
      */
     public function getCacheDebugInfo(string $salesChannelId): array
     {
@@ -580,6 +600,10 @@ class ReqserLanguageRedirectService
     /**
      * Get cached domain mappings with server-side caching
      * Returns multi-dimensional array with pre-processed domain mappings
+     *
+     * @param string $salesChannelId
+     * @param SalesChannelDomainCollection $salesChannelDomains
+     * @return array
      */
     public function getCachedDomainMappings(string $salesChannelId, SalesChannelDomainCollection $salesChannelDomains): array
     {
@@ -614,6 +638,9 @@ class ReqserLanguageRedirectService
 
     /**
      * Build the optimized domain mappings structure
+     *
+     * @param SalesChannelDomainCollection $salesChannelDomains
+     * @return array
      */
     private function buildDomainMappings(SalesChannelDomainCollection $salesChannelDomains): array
     {
@@ -661,6 +688,9 @@ class ReqserLanguageRedirectService
     /**
      * Retrieve sales channel domains with ReqserRedirect custom fields by sales channel ID (cached method)
      * Caching is disabled in non-production environments for testing purposes
+     *
+     * @param string $salesChannelId
+     * @return SalesChannelDomainCollection
      */
     public function getSalesChannelDomainsById(string $salesChannelId): SalesChannelDomainCollection
     {
@@ -707,6 +737,9 @@ class ReqserLanguageRedirectService
 
     /**
      * Query domains from database by sales channel ID
+     *
+     * @param string $salesChannelId
+     * @return SalesChannelDomainCollection
      */
     private function queryDomainsByChannelId(string $salesChannelId): SalesChannelDomainCollection
     {
