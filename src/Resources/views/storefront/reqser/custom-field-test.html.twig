@@ -7,22 +7,38 @@
     Shopware core Storefront or Administration template.
 
     This file is never rendered — it only needs to exist on disk so the
-    scanner can find the custom field key "reqser_custom_field_test" inside it.
+    scanner can find the custom field key "reqser_custom_field_test_twig" inside it.
 
-    The template exercises all four access patterns so the endpoint can be
-    verified to return both "direct" and "translated" in accessPatterns.
+    The template exercises all access patterns so the endpoint can be
+    verified to return "direct", "translated" and "payload" in accessPatterns,
+    including bracket access on customFields itself.
 #}
 
-{% block reqser_custom_field_test %}
+{% block reqser_custom_field_test_twig %}
     {# Direct dot access #}
-    {{ product.customFields.reqser_custom_field_test }}
+    {{ product.customFields.reqser_custom_field_test_twig }}
 
     {# Translated dot access #}
-    {{ product.translated.customFields.reqser_custom_field_test }}
+    {{ product.translated.customFields.reqser_custom_field_test_twig }}
 
     {# Direct bracket access #}
-    {{ product.customFields['reqser_custom_field_test'] }}
+    {{ product.customFields['reqser_custom_field_test_twig'] }}
 
     {# Translated bracket access #}
-    {{ product.translated.customFields['reqser_custom_field_test'] }}
+    {{ product.translated.customFields['reqser_custom_field_test_twig'] }}
+
+    {# Translated bracket access on customFields (dot-translated) #}
+    {{ product.translated["customFields"]["reqser_custom_field_test_twig"] }}
+
+    {# Translated bracket access on customFields (fully bracketed) #}
+    {{ product["translated"]["customFields"]["reqser_custom_field_test_twig"] }}
+
+    {# Direct bracket access on customFields (double quotes) #}
+    {{ product["customFields"]["reqser_custom_field_test_twig"] }}
+
+    {# Direct bracket access on customFields (single quotes) #}
+    {{ product['customFields']['reqser_custom_field_test_twig'] }}
+
+    {# Payload access — Shopware fills the line item payload from getTranslation('customFields') #}
+    {{ lineItem.payload.customFields.reqser_custom_field_test_twig }}
 {% endblock %}

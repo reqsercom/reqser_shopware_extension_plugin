@@ -1,5 +1,65 @@
 # Changelog
 
+## 2.0.39/1.7.39/1.6.39/1.5.39 07.2026
+- New `media/upload` route to support image translations
+
+## 2.0.38/1.7.38/1.6.38/1.5.38 07.2026
+- Custom fields usage: `accessPatterns` now includes `payload` for line-item payload access
+- Custom fields usage: `twigFiles` no longer lists the same template twice via overlapping Twig roots
+
+## 2.0.37/1.7.37/1.6.37/1.5.37 07.2026
+- `translations/search` + `translations/list`: media entity now excludes private media (except the product_download folder)
+
+## 2.0.36/1.7.36/1.6.36/1.5.36 07.2026
+- Custom fields usage: Twig and CMS scans now detect bracket access on `customFields` itself (e.g. `product.translated["customFields"]["KEY"]`, `product["customFields"]["KEY"]`)
+
+## 2.0.35/1.7.35/1.6.35/1.5.35 07.2026
+- `cms/render-element`: hydrate slot data via Shopware resolvers,  unrenderable elements return HTTP 200 with `renderable:false`
+
+## 2.0.34/1.7.34/1.6.34/1.5.34 06.2026
+- `snippets/storefront`: optional `salesChannelId` request parameter for theme-scoped resolution
+
+## 2.0.33/1.7.33/1.6.33/1.5.33 06.2026
+- New `snippets/storefront` route: returns the storefront-effective snippet values, so file-only snippets resolved via a fallback locale are no longer reported as empty
+
+## 2.0.32/1.7.32/1.6.32/1.5.32 06.2026
+- `cms/twig-files`: fall back to reading the physical source file when a Twig ref cannot be resolved, so structural core templates are still captured
+
+## 2.0.31/1.7.31/1.6.31/1.5.31 05.2026
+- Custom fields usage: CMS scan also detects `source: "static"` Twig references (e.g. `{{ category.customFields.category_text }}`)
+- `cms/twig-files`: scan `Resources/app/storefront/dist` templates when Shopware registers the loader path as `Resources/views/../app/storefront/dist`
+
+## 2.0.30/1.7.30/1.6.30/1.5.30 05.2026
+- `cms/twig-files`: improved storefront template discovery; unresolved refs in `data._warnings`
+
+## 2.0.29/1.7.29/1.6.29/1.5.29 05.2026
+- `plugin:update` completes smoothly on first upgrade by registering `ReqserNotificiationRemovalHandler` when the container needs it
+
+## 2.0.28/1.7.28/1.6.28/1.5.28 05.2026
+- `cms/twig-files`: walks `sw_extends` parent chain — each entry carries `templateKey`, `role` (`effective`/`ancestor`), `extendsTemplate`, `extendsTemplateRef`; ancestors that were silently invisible (parents that an active template overrides) now surface alongside their child
+
+## 2.0.27/1.7.27/1.6.27/1.5.27 05.2026
+- Custom fields usage route also detects CMS references
+
+## 2.0.26/1.7.26/1.6.26/1.5.26 05.2026
+- Fix `cms/render-element` 500 errors by providing a `SalesChannelContext` to Twig
+- `cms/twig-files`: discover templates from every active bundle (custom/static-plugins/, vendor/, apps), `source` now returns the bundle name
+
+## 2.0.25/1.7.25/1.6.25/1.5.25 04.2026
+- Fail-safe debug routes with partial results via `data._warnings`
+- Theme config: PHP-side sort to avoid MySQL sort_buffer_size errors
+
+## 2.0.24/1.7.24/1.6.24/1.5.24 04.2026
+- Theme config debug route includes raw theme.json source files
+
+## 2.0.23/1.7.23/1.6.23/1.5.23 04.2026
+- Entitiy debug route
+- Storefront Twig files debug route
+- Removed deprecated ReqserWebhookService
+
+## 2.0.22/1.7.22/1.6.22/1.5.22 04.2026
+- Remove language switcher flag override logic
+
 ## 2.0.21/1.7.21/1.6.21/1.5.21 04.2026
 - Fix DI compatibility with third-party SyncService decorators
 

@@ -18,36 +18,61 @@ class ReqserPlugin extends Plugin
 {
     public const APP_NAME = 'ReqserApp';
 
+    /**
+     * @param InstallContext $installContext
+     * @return void
+     */
     public function install(InstallContext $installContext): void
     {
         parent::install($installContext);
         $this->scheduleTask();
     }
 
+    /**
+     * @param UpdateContext $updateContext
+     * @return void
+     */
     public function update(UpdateContext $updateContext): void
     {
         parent::update($updateContext);
         $this->scheduleTask();
-        if ($this->shouldRunTask('update')) {
-            $this->runTask();
-        }
     }
 
+    /**
+     * @param UpdateContext $updateContext
+     * @return void
+     */
+    public function postUpdate(UpdateContext $updateContext): void
+    {
+        parent::postUpdate($updateContext);
+        $this->runTaskIfAvailable();
+    }
+
+    /**
+     * @param ActivateContext $activateContext
+     * @return void
+     */
     public function activate(ActivateContext $activateContext): void
     {
         parent::activate($activateContext);
         $this->scheduleTask();
-        if ($this->shouldRunTask('activate')) {
-            $this->runTask();
-        }
+        $this->runTaskIfAvailable();
     }
 
+    /**
+     * @param DeactivateContext $deactivateContext
+     * @return void
+     */
     public function deactivate(DeactivateContext $deactivateContext): void
     {
         parent::deactivate($deactivateContext);
         $this->removeTask();
     }
 
+    /**
+     * @param UninstallContext $uninstallContext
+     * @return void
+     */
     public function uninstall(UninstallContext $uninstallContext): void
     {
         parent::uninstall($uninstallContext);
@@ -102,17 +127,16 @@ class ReqserPlugin extends Plugin
         );
     }
 
-    private function runTask(): void
+    /** Run notification cleanup when the handler is registered. */
+    private function runTaskIfAvailable(): void
     {
+        if (!$this->container->has(ReqserNotificiationRemovalHandler::class)) {
+            return;
+        }
+
         /** @var ReqserNotificiationRemovalHandler $handler */
         $handler = $this->container->get(ReqserNotificiationRemovalHandler::class);
         $handler->run();
-    }
-
-    private function shouldRunTask(string $type = 'update'): bool
-    {
-        // Always return true to run notification removal task on update/activate
-        return true;
     }
 
 }

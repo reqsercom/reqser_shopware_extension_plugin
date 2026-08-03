@@ -2,21 +2,15 @@
 
 namespace Reqser\Plugin\Service;
 
-use Reqser\Plugin\Service\ReqserWebhookService;
-
 class ReqserCustomFieldService
 {
     private const CUSTOM_FIELD_PREFIX = 'ReqserRedirect';
-    
-    private $webhookService;
-
-    public function __construct(ReqserWebhookService $webhookService)
-    {
-        $this->webhookService = $webhookService;
-    }
 
     /**
      * Universal function to retrieve data from ReqserRedirect custom fields
+     *
+     * @param ?array $customFields
+     * @param string $fieldName
      */
     public function getValue(?array $customFields, string $fieldName)
     {
@@ -25,6 +19,10 @@ class ReqserCustomFieldService
 
     /**
      * Check if a ReqserRedirect custom field is set and true
+     *
+     * @param ?array $customFields
+     * @param string $fieldName
+     * @return bool
      */
     public function getBool(?array $customFields, string $fieldName): bool
     {
@@ -33,6 +31,10 @@ class ReqserCustomFieldService
 
     /**
      * Get string value from custom field
+     *
+     * @param ?array $customFields
+     * @param string $fieldName
+     * @return ?string
      */
     public function getString(?array $customFields, string $fieldName): ?string
     {
@@ -42,6 +44,10 @@ class ReqserCustomFieldService
 
     /**
      * Get integer value from custom field
+     *
+     * @param ?array $customFields
+     * @param string $fieldName
+     * @return ?int
      */
     public function getInt(?array $customFields, string $fieldName): ?int
     {
@@ -51,6 +57,10 @@ class ReqserCustomFieldService
 
     /**
      * Get array value from custom field
+     *
+     * @param ?array $customFields
+     * @param string $fieldName
+     * @return ?array
      */
     public function getArray(?array $customFields, string $fieldName): ?array
     {
@@ -60,6 +70,9 @@ class ReqserCustomFieldService
 
     /**
      * Get all ReqserRedirect custom fields
+     *
+     * @param ?array $customFields
+     * @return ?array
      */
     public function getAllFields(?array $customFields): ?array
     {
@@ -71,6 +84,9 @@ class ReqserCustomFieldService
     /**
      * Get simplified redirect-into configuration for domains that only need basic validation
      * Only returns: active, redirectInto, and languageCode
+     *
+     * @param ?array $customFields
+     * @return array
      */
     public function getRedirectIntoConfiguration(?array $customFields): array
     {
@@ -83,6 +99,9 @@ class ReqserCustomFieldService
 
     /**
      * Get redirect configuration summary
+     *
+     * @param ?array $customFields
+     * @return array
      */
     public function getRedirectConfiguration(?array $customFields): array
     {
