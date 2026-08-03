@@ -135,6 +135,10 @@ class ReqserCustomFieldUsageService
     /**
      * Collect all unique template directories from Shopware's Twig FilesystemLoader.
      *
+     * Also includes each bundle's `Resources/` directory when only `Resources/views`
+     * is registered on the loader (Shopware 6.4), so templates under
+     * `Resources/app/administration/` are scanned too.
+     *
      * @return array<string>
      */
     private function getTemplateDirs(): array
@@ -148,6 +152,19 @@ class ReqserCustomFieldUsageService
                 if (is_dir($path)) {
                     $dirs[$path] = true;
                 }
+            }
+        }
+
+        // Shopware 6.4 registers only Resources/views; 6.5.8+/6.6+ also register Resources.
+        foreach (array_keys($dirs) as $path) {
+            $normalized = rtrim(str_replace('\\', '/', $path), '/');
+            if (substr($normalized, -strlen('/Resources/views')) !== '/Resources/views') {
+                continue;
+            }
+
+            $resources = dirname($path);
+            if (is_dir($resources)) {
+                $dirs[$resources] = true;
             }
         }
 

@@ -52,8 +52,14 @@ class ReqserThemeConfigService
         }
 
         try {
+            // `theme.theme_json` exists only on newer Shopware cores (populated from
+            // theme.json). Older cores (e.g. 6.4) lack the column — select NULL there.
+            $themeJsonSelect = $this->themeTableHasColumn('theme_json')
+                ? 'theme_json AS themeJson'
+                : 'NULL AS themeJson';
+
             $rows = $this->connection->fetchAllAssociative(
-                'SELECT
+                "SELECT
                     LOWER(HEX(id))               AS id,
                     technical_name               AS technicalName,
                     name                         AS name,
@@ -61,10 +67,10 @@ class ReqserThemeConfigService
                     LOWER(HEX(parent_theme_id))  AS parentThemeId,
                     base_config                  AS baseConfig,
                     config_values                AS configValues,
-                    theme_json                   AS themeJson,
+                    {$themeJsonSelect},
                     created_at                   AS createdAt,
                     updated_at                   AS updatedAt
-                 FROM theme'
+                 FROM theme"
             );
 
             // Sort in PHP rather than via SQL `ORDER BY technical_name, id`.
@@ -273,5 +279,29 @@ class ReqserThemeConfigService
         }
 
         return $value;
+    }
+
+    /**
+     * Whether the connected database's `theme` table has the given column.
+     */
+    private function themeTableHasColumn(string $column): bool
+    {
+        try {
+            $count = $this->connection->fetchOne(
+                'SELECT COUNT(*)
+                 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = :table_name
+                   AND COLUMN_NAME = :column_name',
+                [
+                    'table_name' => 'theme',
+                    'column_name' => $column,
+                ]
+            );
+
+            return (int) $count > 0;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

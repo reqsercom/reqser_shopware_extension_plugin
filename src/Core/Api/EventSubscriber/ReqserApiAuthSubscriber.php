@@ -69,7 +69,8 @@ class ReqserApiAuthSubscriber implements EventSubscriberInterface
                 'method'   => $request->getMethod(),
             ]);
 
-            $event->setController(static fn() => new JsonResponse([
+            // Must bind $this: RouteScopeListener reads getClosureThis() after this runs.
+            $event->setController(fn () => new JsonResponse([
                 'success' => false,
                 'error'   => 'Context unavailable',
                 'message' => 'Shopware Context could not be resolved for this request',
@@ -80,7 +81,8 @@ class ReqserApiAuthSubscriber implements EventSubscriberInterface
         $result = $this->authService->validateAuthentication($request, $context);
 
         if ($result !== true) {
-            $event->setController(static fn() => $result);
+            // Must bind $this: RouteScopeListener reads getClosureThis() after this runs.
+            $event->setController(fn () => $result);
         }
     }
 }

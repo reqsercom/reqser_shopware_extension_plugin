@@ -228,8 +228,8 @@ class ReqserCmsTwigFileService
         $ref_to_paths = [];
 
         foreach ($this->loader->getNamespaces() as $namespace) {
-            foreach ($this->loader->getPaths($namespace) as $loader_path) {
-                foreach ($this->collectTemplateRefsFromLoaderPath($namespace, $this->canonicalizeLoaderRoot($loader_path)) as $absolute_path => $candidate_refs) {
+            foreach ($this->expandLoaderRootsWithDistSiblings($this->loader->getPaths($namespace)) as $loader_root) {
+                foreach ($this->collectTemplateRefsFromLoaderPath($namespace, $loader_root) as $absolute_path => $candidate_refs) {
                     $file_key = realpath($absolute_path);
                     if ($file_key === false) {
                         $file_key = $absolute_path;
@@ -252,6 +252,46 @@ class ReqserCmsTwigFileService
         }
 
         return $result;
+    }
+
+    /**
+     * Include each bundle's `Resources/app/storefront/dist` when the Twig loader
+     * only exposes `Resources/views` (Shopware 6.4) or `Resources` without dist.
+     *
+     * @param list<string> $loader_paths
+     * @return list<string>
+     */
+    private function expandLoaderRootsWithDistSiblings(array $loader_paths): array
+    {
+        $roots = [];
+
+        foreach ($loader_paths as $loader_path) {
+            $canonical = $this->canonicalizeLoaderRoot($loader_path);
+            if ($canonical === '' || !is_dir($canonical)) {
+                continue;
+            }
+
+            $roots[$canonical] = true;
+
+            $normalized = rtrim(str_replace('\\', '/', $canonical), '/');
+            $dist = null;
+            if (substr($normalized, -strlen('/Resources/views')) === '/Resources/views') {
+                $dist = dirname($normalized) . '/app/storefront/dist';
+            } elseif (substr($normalized, -strlen('/Resources')) === '/Resources') {
+                $dist = $normalized . '/app/storefront/dist';
+            }
+
+            if ($dist === null || !is_dir($dist)) {
+                continue;
+            }
+
+            $dist_canonical = $this->canonicalizeLoaderRoot($dist);
+            if ($dist_canonical !== '' && is_dir($dist_canonical)) {
+                $roots[$dist_canonical] = true;
+            }
+        }
+
+        return array_keys($roots);
     }
 
     /**
