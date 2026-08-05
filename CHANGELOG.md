@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.40/1.7.40/1.6.40/1.5.40 08.2026
+- `database/translation-tables`: skips tables of deactivated or uninstalled plugins
+
 ## 2.0.39/1.7.39/1.6.39/1.5.39 07.2026
 - New `media/upload` route to support image translations
 
