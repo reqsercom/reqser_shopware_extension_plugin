@@ -53,6 +53,10 @@ class ReqserLanguageDetectionController extends StorefrontController
 
     /**
      * @Route(path="/reqser/language-detection/check", name="frontend.reqser.language_detection.check", defaults={"XmlHttpRequest"=true}, methods={"GET"})
+     *
+     * @param Request $request
+     * @param SalesChannelContext $salesChannelContext
+     * @return JsonResponse
      */
     public function checkLanguage(Request $request, SalesChannelContext $salesChannelContext): JsonResponse
     {

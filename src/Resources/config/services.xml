@@ -24,6 +24,12 @@
             <tag name="kernel.event_subscriber" />
         </service>
 
+        <service id="Reqser\Plugin\Subscriber\ReqserLanguageDetectionScriptSubscriber"
+                class="Reqser\Plugin\Subscriber\ReqserLanguageDetectionScriptSubscriber">
+            <argument type="service" id="router" />
+            <tag name="kernel.event_subscriber" />
+        </service>
+
         <service id="Reqser\Plugin\Subscriber\ReqserProductReviewSubscriber"
                 class="Reqser\Plugin\Subscriber\ReqserProductReviewSubscriber">
             <argument type="service" id="request_stack" />
