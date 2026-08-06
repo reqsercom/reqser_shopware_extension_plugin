@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.41/1.7.41/1.6.41/1.5.41 08.2026
+- Language redirect: supports more templates
+- Language redirect: starts after the page has finished loading
+
 ## 2.0.40/1.7.40/1.6.40/1.5.40 08.2026
 - `database/translation-tables`: skips tables of deactivated or uninstalled plugins
 
