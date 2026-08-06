@@ -67,7 +67,9 @@ class ReqserDatabaseApiController extends AbstractController
     }
 
     /**
-     * API endpoint to get all database tables ending with _translation
+     * API endpoint to get the database tables ending with _translation whose entity definitions
+     * are registered in the data abstraction layer.
+     * Tables without a registered definition are reported separately under 'unregisteredTables'.
      *
      * @param Request $request
      * @param Context $context
@@ -81,13 +83,15 @@ class ReqserDatabaseApiController extends AbstractController
     public function getTranslationTables(Request $request, Context $context): JsonResponse
     {
         try {
-            $tables = $this->databaseService->getTranslationTables();
+            $tableState = $this->databaseService->getTranslationTablesByDefinitionState();
+            $tables = $tableState['registered'];
 
             return new JsonResponse([
                 'success' => true,
                 'data' => [
                     'tables' => $tables,
-                    'count' => count($tables)
+                    'count' => count($tables),
+                    'unregisteredTables' => $tableState['unregistered']
                 ],
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
