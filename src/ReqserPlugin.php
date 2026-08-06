@@ -138,4 +138,5 @@ class ReqserPlugin extends Plugin
         $handler = $this->container->get(ReqserNotificiationRemovalHandler::class);
         $handler->run();
     }
+
 }

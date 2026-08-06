@@ -16,17 +16,14 @@ class ReqserSnippetListService
     }
 
     /**
-     * @param list<string> $snippetSetIds
+     * @param array $snippetSetIds
      * @param int $page
      * @param int $limit
      * @param Context $context
-     * @param array<string, mixed> $filters
-     * @param array<string, mixed> $sort
-     * @param list<string>|null $translationKeys When non-null, passed as native Shopware
-     *                                           'translationKey' filter so filtering happens
-     *                                           before pagination inside SnippetService::getList()
-     *
-     * @return array{total:int, data: array<string, list<array<string, mixed>>>}
+     * @param array $filters
+     * @param array $sort
+     * @param array|null $translationKeys
+     * @return array
      */
     public function getListForSnippetSets(
         array $snippetSetIds,
@@ -43,14 +40,8 @@ class ReqserSnippetListService
 
         $result = $this->snippetService->getList($page, $limit, $context, $filters, $sort);
 
-        $translationKeySet = $translationKeys !== null ? array_flip($translationKeys) : null;
-
         $filteredData = [];
         foreach ($result['data'] as $translationKey => $snippets) {
-            if ($translationKeySet !== null && !isset($translationKeySet[$translationKey])) {
-                continue;
-            }
-
             $matched = array_values(array_filter($snippets, static function (array $snippet) use ($snippetSetIds): bool {
                 return isset($snippet['setId']) && \in_array($snippet['setId'], $snippetSetIds, true);
             }));
