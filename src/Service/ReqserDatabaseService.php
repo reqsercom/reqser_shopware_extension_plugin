@@ -179,6 +179,35 @@ class ReqserDatabaseService
     }
 
     /**
+     * Split the translation tables into those whose DAL entity definitions are registered
+     * and those that only exist as physical tables.
+     *
+     * A table counts as registered when both its own entity and its parent entity are
+     * known to the data abstraction layer, which is what every entity-based route requires.
+     *
+     * @return array{registered: array<int, string>, unregistered: array<int, string>}
+     * @throws \RuntimeException If database query fails
+     */
+    public function getTranslationTablesByDefinitionState(): array
+    {
+        $registered = [];
+        $unregistered = [];
+
+        foreach ($this->getTranslationTables() as $tableName) {
+            $parentEntity = substr($tableName, 0, -\strlen('_translation'));
+
+            if ($this->definitionRegistry->has($tableName) && $this->definitionRegistry->has($parentEntity)) {
+                $registered[] = $tableName;
+                continue;
+            }
+
+            $unregistered[] = $tableName;
+        }
+
+        return ['registered' => $registered, 'unregistered' => $unregistered];
+    }
+
+    /**
      * Validate that a table name is a legitimate translation table.
      * Checks the suffix is '_translation' AND the table exists in the database.
      *
