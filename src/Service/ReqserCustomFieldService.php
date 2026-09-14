@@ -4,29 +4,32 @@ namespace Reqser\Plugin\Service;
 
 class ReqserCustomFieldService
 {
-    private const CUSTOM_FIELD_PREFIX = 'ReqserRedirect';
+    public const CUSTOM_FIELD_PREFIX = 'ReqserRedirect';
+    public const SALES_AGENT_PREFIX = 'ReqserSalesAgent';
 
     /**
-     * Universal function to retrieve data from ReqserRedirect custom fields
+     * Universal function to retrieve data from a Reqser custom field group
      *
      * @param ?array $customFields
      * @param string $fieldName
+     * @param string $prefix
      */
-    public function getValue(?array $customFields, string $fieldName)
+    public function getValue(?array $customFields, string $fieldName, string $prefix = self::CUSTOM_FIELD_PREFIX)
     {
-        return $customFields[self::CUSTOM_FIELD_PREFIX][$fieldName] ?? null;
+        return $customFields[$prefix][$fieldName] ?? null;
     }
 
     /**
-     * Check if a ReqserRedirect custom field is set and true
+     * Check if a Reqser custom field is set and true
      *
      * @param ?array $customFields
      * @param string $fieldName
+     * @param string $prefix
      * @return bool
      */
-    public function getBool(?array $customFields, string $fieldName): bool
+    public function getBool(?array $customFields, string $fieldName, string $prefix = self::CUSTOM_FIELD_PREFIX): bool
     {
-        return $this->getValue($customFields, $fieldName) === true;
+        return $this->getValue($customFields, $fieldName, $prefix) === true;
     }
 
     /**
@@ -34,11 +37,12 @@ class ReqserCustomFieldService
      *
      * @param ?array $customFields
      * @param string $fieldName
+     * @param string $prefix
      * @return ?string
      */
-    public function getString(?array $customFields, string $fieldName): ?string
+    public function getString(?array $customFields, string $fieldName, string $prefix = self::CUSTOM_FIELD_PREFIX): ?string
     {
-        $value = $this->getValue($customFields, $fieldName);
+        $value = $this->getValue($customFields, $fieldName, $prefix);
         return is_string($value) ? $value : null;
     }
 
@@ -47,11 +51,12 @@ class ReqserCustomFieldService
      *
      * @param ?array $customFields
      * @param string $fieldName
+     * @param string $prefix
      * @return ?int
      */
-    public function getInt(?array $customFields, string $fieldName): ?int
+    public function getInt(?array $customFields, string $fieldName, string $prefix = self::CUSTOM_FIELD_PREFIX): ?int
     {
-        $value = $this->getValue($customFields, $fieldName);
+        $value = $this->getValue($customFields, $fieldName, $prefix);
         return is_numeric($value) ? (int)$value : null;
     }
 
@@ -60,23 +65,25 @@ class ReqserCustomFieldService
      *
      * @param ?array $customFields
      * @param string $fieldName
+     * @param string $prefix
      * @return ?array
      */
-    public function getArray(?array $customFields, string $fieldName): ?array
+    public function getArray(?array $customFields, string $fieldName, string $prefix = self::CUSTOM_FIELD_PREFIX): ?array
     {
-        $value = $this->getValue($customFields, $fieldName);
+        $value = $this->getValue($customFields, $fieldName, $prefix);
         return is_array($value) ? $value : null;
     }
 
     /**
-     * Get all ReqserRedirect custom fields
+     * Get all custom fields of a Reqser group
      *
      * @param ?array $customFields
+     * @param string $prefix
      * @return ?array
      */
-    public function getAllFields(?array $customFields): ?array
+    public function getAllFields(?array $customFields, string $prefix = self::CUSTOM_FIELD_PREFIX): ?array
     {
-        return $customFields[self::CUSTOM_FIELD_PREFIX] ?? null;
+        return $customFields[$prefix] ?? null;
     }
 
 

@@ -92,6 +92,37 @@
             <argument>%kernel.environment%</argument>
         </service>
 
+        <service id="Reqser\Plugin\Service\ReqserSalesAgentService"
+                class="Reqser\Plugin\Service\ReqserSalesAgentService">
+            <argument type="service" id="sales_channel_domain.repository" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserAppService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserCustomFieldService" />
+            <argument type="service" id="cache.app" />
+            <argument>%kernel.environment%</argument>
+        </service>
+
+        <service id="Reqser\Plugin\Service\ReqserSalesAgentTokenService"
+                class="Reqser\Plugin\Service\ReqserSalesAgentTokenService">
+            <argument type="service" id="Doctrine\DBAL\Connection" />
+            <argument type="service" id="logger" />
+        </service>
+
+        <service id="Reqser\Plugin\Subscriber\ReqserSalesAgentWidgetSubscriber"
+                class="Reqser\Plugin\Subscriber\ReqserSalesAgentWidgetSubscriber">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserSalesAgentService" />
+            <argument type="service" id="router" />
+            <tag name="kernel.event_subscriber" />
+        </service>
+
+        <service id="Reqser\Plugin\Storefront\Controller\ReqserSalesAgentTokenController" public="true">
+            <argument type="service" id="Reqser\Plugin\Service\ReqserSalesAgentService" />
+            <argument type="service" id="Reqser\Plugin\Service\ReqserSalesAgentTokenService" />
+            <argument type="service" id="logger" />
+            <call method="setContainer">
+                <argument type="service" id="service_container" />
+            </call>
+        </service>
+
         <service id="Reqser\Plugin\Subscriber\ReqserPluginVersionCheckSubscriber"
                 class="Reqser\Plugin\Subscriber\ReqserPluginVersionCheckSubscriber">
             <argument type="service" id="Reqser\Plugin\Service\ReqserVersionService" />
