@@ -10,13 +10,34 @@ use Twig\Error\LoaderError;
 use Twig\Loader\FilesystemLoader;
 
 /**
- * Discovers every active storefront Twig template plus the sw_extends parent chain for each.
+ * Reads every active Twig template registered on the Twig loader plus the
+ * sw_extends parent chain for each. Never writes or deletes shop files.
  */
 class ReqserCmsTwigFileService
 {
     private const MAX_INHERITANCE_DEPTH = 10;
 
     private const MAX_UNRESOLVED_REF_WARNINGS = 50;
+
+    /**
+     * Default discovery cap. A Twig loader root is bounded by construction,
+     * but the response is uploaded file by file on the receiving side, so an
+     * unusual installation must degrade into a truncation warning rather
+     * than an unbounded payload. Callers that saw `twig_files_truncated`
+     * can raise this via the `maxFiles` query parameter, up to
+     * {@see self::ABSOLUTE_MAX_TEMPLATE_FILES}.
+     */
+    public const DEFAULT_MAX_TEMPLATE_FILES = 2000;
+
+    /**
+     * Hard ceiling for `maxFiles`. Prevents a single request from asking
+     * the shop for an unbounded walk.
+     */
+    public const ABSOLUTE_MAX_TEMPLATE_FILES = 10000;
+
+    public const SCOPE_STOREFRONT = 'storefront';
+
+    public const SCOPE_VIEWS = 'views';
 
     private const EXTENDS_TAG_REGEX = '/\{%-?\s*(sw_extends|extends)\s+[\'"]([^\'"]+)[\'"]/';
 
@@ -40,7 +61,12 @@ class ReqserCmsTwigFileService
     }
 
     /**
-     * Return every active storefront .html.twig template plus sw_extends ancestors.
+     * Return every active .html.twig template plus sw_extends ancestors.
+     *
+     * Default `$scope` is storefront-only. `views` walks each bundle's
+     * whole Resources/views tree (plugin-private sw_include targets,
+     * documents, mail). Administration Vue under Resources/app is never
+     * a Twig loader path.
      *
      * @return array{
      *     twigFiles: array<int, array{
@@ -55,17 +81,29 @@ class ReqserCmsTwigFileService
      *     }>,
      *     warnings: list<string>
      * }
+     *
+     * @param int $max_files
+     * @param string $scope
+     * @return array
      */
-    public function getAllActiveTwigFiles(): array
-    {
+    public function getAllActiveTwigFiles(
+        int $max_files = self::DEFAULT_MAX_TEMPLATE_FILES,
+        string $scope = self::SCOPE_STOREFRONT
+    ): array {
+        $max_files = $this->resolveMaxFiles($max_files);
+        $scope = $this->resolveScope($scope);
         $warnings = [];
         $result = [];
 
         try {
+            // In-memory only. TemplateFinder::reset() drops the cached
+            // namespace hierarchy; it does not touch files. The next find()
+            // may rebind Twig's compile cache under var/cache — Shopware's
+            // own cache, never vendor/shopware source.
             $this->templateFinder->reset();
 
             $bundlesByPath = $this->buildBundlePathMap();
-            $refMap = $this->discoverAllStorefrontTemplateRefs();
+            $refMap = $this->discoverAllTemplateRefs($warnings, $max_files, $scope);
             $refs = array_keys($refMap);
 
             $entries = [];
@@ -211,30 +249,45 @@ class ReqserCmsTwigFileService
     }
 
     /**
-     * Discover storefront template refs from paths registered on
+     * Discover template refs from paths registered on
      * twig.loader.native_filesystem (TwigLoaderConfigCompilerPass).
      *
-     * Emits both @Storefront/storefront/... candidates (for overrides) and
-     * @BundleName/... loader-native refs (for compiled dist-only templates).
+     * Emits @Storefront/storefront/... candidates (for theme-aware override
+     * resolution) and @BundleName/... loader-native refs (for everything else:
+     * compiled dist-only templates, document and mail templates, and the
+     * plugin-private trees a storefront template sw_includes).
      *
      * Each ref is mapped to the absolute physical file path(s) that produced
      * it, so {@see loadTemplateFromDiscoveredFile()} can read the source
      * directly when TemplateFinder fails to resolve the ref.
      *
-     * @return array<string, list<string>> ref => absolute file paths
+     * @param list<string> $warnings
+     * @param int $max_files
+     * @param string $scope
+     * @return array<string, list<string>>
      */
-    private function discoverAllStorefrontTemplateRefs(): array
+    private function discoverAllTemplateRefs(array &$warnings, int $max_files, string $scope): array
     {
         $ref_to_paths = [];
+        $seen_files = [];
+        $truncated = false;
 
         foreach ($this->loader->getNamespaces() as $namespace) {
             foreach ($this->loader->getPaths($namespace) as $loader_path) {
-                foreach ($this->collectTemplateRefsFromLoaderPath($namespace, $this->canonicalizeLoaderRoot($loader_path)) as $absolute_path => $candidate_refs) {
+                foreach ($this->collectTemplateRefsFromLoaderPath($namespace, $this->canonicalizeLoaderRoot($loader_path), $scope) as $absolute_path => $candidate_refs) {
                     $file_key = realpath($absolute_path);
                     if ($file_key === false) {
                         $file_key = $absolute_path;
                     } else {
                         $file_key = $this->normalizePath($file_key);
+                    }
+
+                    if (!isset($seen_files[$file_key])) {
+                        if (count($seen_files) >= $max_files) {
+                            $truncated = true;
+                            continue;
+                        }
+                        $seen_files[$file_key] = true;
                     }
 
                     foreach ($candidate_refs as $ref) {
@@ -246,6 +299,10 @@ class ReqserCmsTwigFileService
             }
         }
 
+        if ($truncated) {
+            $warnings[] = 'twig_files_truncated: discovery stopped at ' . $max_files . ' files';
+        }
+
         $result = [];
         foreach ($ref_to_paths as $ref => $path_set) {
             $result[$ref] = array_keys($path_set);
@@ -255,17 +312,67 @@ class ReqserCmsTwigFileService
     }
 
     /**
+     * Clamp a requested discovery cap to [1, ABSOLUTE_MAX], defaulting to
+     * DEFAULT_MAX when the value is missing or not a positive integer.
+     *
+     * @param mixed $requested
+     * @return int
+     */
+    public function resolveMaxFiles(mixed $requested): int
+    {
+        if ($requested === null || $requested === '') {
+            return self::DEFAULT_MAX_TEMPLATE_FILES;
+        }
+
+        if (!is_numeric($requested)) {
+            return self::DEFAULT_MAX_TEMPLATE_FILES;
+        }
+
+        $max_files = (int) $requested;
+        if ($max_files < 1) {
+            return self::DEFAULT_MAX_TEMPLATE_FILES;
+        }
+
+        return min($max_files, self::ABSOLUTE_MAX_TEMPLATE_FILES);
+    }
+
+    /**
+     * Resolve the discovery scope. Default is storefront; `views`, `full`
+     * and `all` widen the walk to each bundle's whole Resources/views tree.
+     *
+     * @param mixed $requested
+     * @return string
+     */
+    public function resolveScope(mixed $requested): string
+    {
+        if (!is_string($requested) || $requested === '') {
+            return self::SCOPE_STOREFRONT;
+        }
+
+        $scope = strtolower(trim($requested));
+        if ($scope === self::SCOPE_VIEWS || $scope === 'full' || $scope === 'all') {
+            return self::SCOPE_VIEWS;
+        }
+
+        return self::SCOPE_STOREFRONT;
+    }
+
+    /**
+     * @param string $namespace
+     * @param string $loader_root
+     * @param string $scope
      * @return array<string, list<string>> absolutePath => template refs
      */
-    private function collectTemplateRefsFromLoaderPath(string $namespace, string $loader_root): array
+    private function collectTemplateRefsFromLoaderPath(string $namespace, string $loader_root, string $scope): array
     {
         $templates = [];
         $loader_root_norm = $this->canonicalizeLoaderRoot($loader_root);
 
-        foreach ($this->resolveStorefrontScanRoots($loader_root_norm) as $scan_root) {
+        foreach ($this->resolveScanRoots($loader_root_norm, $scope) as $scan_root) {
             try {
                 $finder = new Finder();
                 $finder->files()->name('*.html.twig')->in($scan_root);
+                // List only. Do not enable followLinks — this walk is read-only.
             } catch (\Throwable) {
                 continue;
             }
@@ -293,7 +400,33 @@ class ReqserCmsTwigFileService
                         $refs[] = '@Storefront/storefront/' . substr($relative_from_loader, strlen('storefront/'));
                     }
                 } else {
-                    $refs[] = '@Storefront/storefront/' . $relative_from_scan;
+                    $storefront_relative = $this->storefrontRelativeRef(
+                        $full_path,
+                        $relative_from_scan,
+                        $relative_from_loader
+                    );
+
+                    if ($storefront_relative !== null) {
+                        // Canonical storefront ref, so TemplateFinder returns the
+                        // winning theme/plugin override rather than whichever
+                        // physical copy the walk reached first. Also covers
+                        // storefront-shaped trees that do not live under
+                        // Resources/views (the 2.0.32 physical-file fallback).
+                        $refs[] = '@Storefront/' . $storefront_relative;
+                    } elseif ($namespace !== FilesystemLoader::MAIN_NAMESPACE) {
+                        // Everything outside storefront/ is addressable only
+                        // through its own bundle namespace: documents/, email/,
+                        // and the plugin-private trees a storefront template
+                        // pulls in with sw_include.
+                        $refs[] = '@' . $namespace . '/' . $relative_from_loader;
+                    }
+                }
+
+                if ($refs === []) {
+                    // Unaddressable: outside storefront/ and with no bundle
+                    // namespace to reach it through. Skip rather than let it
+                    // consume the file budget.
+                    continue;
                 }
 
                 $templates[$full_path] = array_values(array_unique(array_merge($templates[$full_path] ?? [], $refs)));
@@ -323,11 +456,19 @@ class ReqserCmsTwigFileService
     }
 
     /**
-     * Map a TwigLoaderConfigCompilerPass loader root to the storefront scan root(s).
+     * Map a TwigLoaderConfigCompilerPass loader root to the scan root(s).
      *
+     * Default `storefront` stays inside each bundle's storefront tree.
+     * `views` walks the whole Resources/views tree so sw_include targets
+     * and document/mail templates are discoverable. The administration is
+     * unaffected: its Vue templates sit under Resources/app, which is never
+     * registered as a Twig path.
+     *
+     * @param string $loader_root
+     * @param string $scope
      * @return list<string>
      */
-    private function resolveStorefrontScanRoots(string $loader_root): array
+    private function resolveScanRoots(string $loader_root, string $scope): array
     {
         if ($loader_root === '' || !is_dir($loader_root)) {
             return [];
@@ -338,24 +479,97 @@ class ReqserCmsTwigFileService
         }
 
         if (preg_match('#/Resources/views$#', $loader_root) === 1) {
-            $storefront = $loader_root . '/storefront';
-            return is_dir($storefront) ? [$storefront] : [];
+            return $this->restrictToStorefrontIfRequested($loader_root, $scope);
         }
 
         if (preg_match('#/Resources$#', $loader_root) === 1) {
-            $views_storefront = $loader_root . '/views/storefront';
-            return is_dir($views_storefront) ? [$views_storefront] : [];
+            $views = $loader_root . '/views';
+            return is_dir($views) ? $this->restrictToStorefrontIfRequested($views, $scope) : [];
         }
 
-        $roots = [];
-        foreach (['/storefront', '/views/storefront'] as $suffix) {
-            $candidate = $loader_root . $suffix;
-            if (is_dir($candidate)) {
-                $roots[] = $candidate;
-            }
+        $views = $loader_root . '/views';
+        $candidate = is_dir($views) ? $views : $loader_root;
+
+        return $this->restrictToStorefrontIfRequested($candidate, $scope);
+    }
+
+    /**
+     * Narrow a views-shaped root to its storefront/ child when the caller
+     * asked for the storefront-only walk.
+     *
+     * @param string $candidate_root
+     * @param string $scope
+     * @return list<string>
+     */
+    private function restrictToStorefrontIfRequested(string $candidate_root, string $scope): array
+    {
+        if ($scope !== self::SCOPE_STOREFRONT) {
+            return [$candidate_root];
         }
 
-        return $roots;
+        $storefront = $candidate_root . '/storefront';
+        if (is_dir($storefront)) {
+            return [$storefront];
+        }
+
+        if (str_ends_with($this->normalizePath($candidate_root), '/storefront')) {
+            return [$candidate_root];
+        }
+
+        return [];
+    }
+
+    /**
+     * Return the path of a template relative to its bundle's Resources/views
+     * root, or null when it does not live under one (compiled dist copies).
+     *
+     * @return string|null
+     */
+    private function viewsRelativePath(string $normalized_path): string|null
+    {
+        $marker = '/Resources/views/';
+        $position = strrpos($normalized_path, $marker);
+
+        if ($position === false) {
+            return null;
+        }
+
+        $relative = substr($normalized_path, $position + strlen($marker));
+
+        return $relative === '' ? null : $relative;
+    }
+
+    /**
+     * Return the storefront-relative path used to build an @Storefront/ ref,
+     * or null when the file is not storefront-shaped.
+     *
+     * Prefer the Resources/views-relative path when it starts with
+     * storefront/. Fall back to the scan-root or loader-root relative path
+     * so a storefront-shaped tree that does not sit under Resources/views
+     * still gets the canonical @Storefront/ ref — that is the 2.0.32
+     * physical-file fallback contract.
+     *
+     * @return string|null
+     */
+    private function storefrontRelativeRef(
+        string $normalized_path,
+        string $relative_from_scan,
+        string $relative_from_loader
+    ): string|null {
+        $views_relative = $this->viewsRelativePath($normalized_path);
+        if ($views_relative !== null && str_starts_with($views_relative, 'storefront/')) {
+            return $views_relative;
+        }
+
+        if (str_starts_with($relative_from_scan, 'storefront/')) {
+            return $relative_from_scan;
+        }
+
+        if (str_starts_with($relative_from_loader, 'storefront/')) {
+            return $relative_from_loader;
+        }
+
+        return null;
     }
 
     /**
@@ -443,8 +657,8 @@ class ReqserCmsTwigFileService
             return null;
         }
 
-        $content = @file_get_contents($path);
-        if ($content === false) {
+        $content = $this->readFileContents($path);
+        if ($content === null) {
             return null;
         }
 
@@ -466,6 +680,24 @@ class ReqserCmsTwigFileService
             'templateKey' => $this->buildTemplateKey($bundleSource, $directory, $fileName),
             '_resolvedName' => '',
         ];
+    }
+
+    /**
+     * Read a discovered template from disk when TemplateFinder cannot
+     * resolve the ref. Never writes or deletes.
+     *
+     * @param string $path
+     * @return string|null
+     */
+    private function readFileContents(string $path): string|null
+    {
+        if ($path === '' || !is_file($path) || !is_readable($path)) {
+            return null;
+        }
+
+        $content = @file_get_contents($path);
+
+        return $content === false ? null : $content;
     }
 
     /**

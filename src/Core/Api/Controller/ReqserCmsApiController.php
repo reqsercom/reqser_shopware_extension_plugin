@@ -40,7 +40,11 @@ class ReqserCmsApiController extends AbstractController
     }
 
     /**
-     * API endpoint to get active storefront Twig template files.
+     * Return the active storefront Twig templates. GET, read-only.
+     *
+     * Optional `maxFiles` raises the discovery cap (default 2000, hard
+     * ceiling 10000). Optional `scope=views` walks the whole
+     * Resources/views tree; the default is storefront only.
      *
      * @param Request $request
      * @param Context $context
@@ -54,7 +58,9 @@ class ReqserCmsApiController extends AbstractController
     public function getTwigFiles(Request $request, Context $context): JsonResponse
     {
         try {
-            $dump = $this->cmsTwigFileService->getAllActiveTwigFiles();
+            $max_files = $this->cmsTwigFileService->resolveMaxFiles($request->query->get('maxFiles'));
+            $scope = $this->cmsTwigFileService->resolveScope($request->query->get('scope'));
+            $dump = $this->cmsTwigFileService->getAllActiveTwigFiles($max_files, $scope);
             $twigFiles = $dump['twigFiles'] ?? [];
             $warnings = $dump['warnings'] ?? [];
 

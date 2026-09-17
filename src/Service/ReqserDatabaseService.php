@@ -6,6 +6,8 @@ use Doctrine\DBAL\Connection;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\StorageAware;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\TranslatedField;
 
 /**
@@ -38,7 +40,14 @@ class ReqserDatabaseService
 
     /**
      * Dump every DAL entity definition registered in the installation.
-     * Includes translation-entity linkage, translatable field list, and the source bundle/plugin name.
+     * Includes translation-entity linkage, the full field list, the translatable
+     * field list, and the source bundle/plugin name.
+     *
+     * The full field list is what makes a non-translated column on a parent
+     * entity visible — a `languageId` FkField on a form or content entity pins
+     * that record to one language, which looks from the translation side like a
+     * translation that silently stopped applying. `translatableFields` alone can
+     * never show it, because such a field is by definition not translatable.
      *
      * Fail-safe contract (plugin 2.0.25+):
      *   - The outer `getDefinitions()` call and the foreach are wrapped
@@ -57,7 +66,15 @@ class ReqserDatabaseService
      *         sourcePath: string,
      *         hasTranslation: bool,
      *         translationEntity: string|null,
-     *         translatableFields: array<int, string>
+     *         translatableFields: array<int, string>,
+     *         fields: array<int, array{
+     *             propertyName: string,
+     *             storageName: string|null,
+     *             type: string,
+     *             translated: bool,
+     *             flags: array<int, string>,
+     *             referenceEntity: string|null
+     *         }>
      *     }>,
      *     warnings: list<string>
      * }
@@ -118,10 +135,16 @@ class ReqserDatabaseService
                     }
 
                     $translatableFields = [];
+                    $fields = [];
                     try {
                         foreach ($definition->getFields() as $field) {
                             if ($field instanceof TranslatedField) {
                                 $translatableFields[] = $field->getPropertyName();
+                            }
+
+                            $described = $this->describeField($field);
+                            if ($described !== null) {
+                                $fields[] = $described;
                             }
                         }
                     } catch (\Throwable) {
@@ -136,6 +159,7 @@ class ReqserDatabaseService
                         'hasTranslation' => $translationEntity !== null,
                         'translationEntity' => $translationEntity,
                         'translatableFields' => $translatableFields,
+                        'fields' => $fields,
                     ];
                 } catch (\Throwable) {
                     // Never let a single broken definition break the dump.
@@ -149,6 +173,94 @@ class ReqserDatabaseService
         }
 
         return ['entities' => $out, 'warnings' => $warnings];
+    }
+
+    /**
+     * Describe one DAL field: property and storage name, field type, flags, and
+     * the entity an association or foreign key points at.
+     *
+     * Every accessor is probed defensively. The plugin runs across Shopware 6.4
+     * to 6.7, where the reference accessors on association and FK fields changed
+     * shape, and one unfamiliar third-party field must not cost the whole dump.
+     *
+     * @return array{
+     *     propertyName: string,
+     *     storageName: string|null,
+     *     type: string,
+     *     translated: bool,
+     *     flags: array<int, string>,
+     *     referenceEntity: string|null
+     * }|null
+     */
+    private function describeField(Field $field): ?array
+    {
+        try {
+            $propertyName = $field->getPropertyName();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $storageName = null;
+        if ($field instanceof StorageAware) {
+            try {
+                $storageName = $field->getStorageName();
+            } catch (\Throwable) {
+                $storageName = null;
+            }
+        }
+
+        $flags = [];
+        try {
+            foreach ($field->getFlags() as $flag) {
+                $flags[] = (new \ReflectionClass($flag))->getShortName();
+            }
+        } catch (\Throwable) {
+            $flags = [];
+        }
+
+        return [
+            'propertyName' => $propertyName,
+            'storageName' => $storageName,
+            'type' => (new \ReflectionClass($field))->getShortName(),
+            'translated' => $field instanceof TranslatedField,
+            'flags' => $flags,
+            'referenceEntity' => $this->resolveReferenceEntity($field),
+        ];
+    }
+
+    /**
+     * Resolve the entity an association or FK field points at. Returns null
+     * when the field has no reference or the target cannot be resolved.
+     *
+     * Both accessors are tried independently: getReferenceDefinition() (FkField
+     * and AssociationField) compiles the target definition and can throw on a
+     * half-registered third-party entity, in which case getReferenceClass()
+     * (AssociationField only) still yields the class name to look up.
+     */
+    private function resolveReferenceEntity(Field $field): ?string
+    {
+        foreach (['getReferenceDefinition', 'getReferenceClass'] as $accessor) {
+            if (!method_exists($field, $accessor)) {
+                continue;
+            }
+
+            try {
+                $reference = $field->{$accessor}();
+
+                if ($reference instanceof EntityDefinition) {
+                    return $reference->getEntityName();
+                }
+
+                if (is_string($reference) && $reference !== '') {
+                    return $this->definitionRegistry->getByClassOrEntityName($reference)->getEntityName();
+                }
+            } catch (\Throwable) {
+                // No reference is a perfectly good answer for this field.
+                continue;
+            }
+        }
+
+        return null;
     }
 
     /**

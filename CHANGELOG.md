@@ -1,9 +1,8 @@
 # Changelog
 
 ## 2.0.42/1.7.42/1.6.42/1.5.42 09.2026
-- Sales agent: storefront widget capability, off unless the sales channel domain enables it
-- New `frontend.reqser.sales_agent.token` route: hands the visitor a short-lived token signed with the app secret
-- Action relay: the widget may only ask for add-to-cart, in-shop navigation and a design probe
+- Sales Agent introduced
+- Updated Twig files debug route
 
 ## 2.0.41/1.7.41/1.6.41/1.5.41 08.2026
 - Language redirect: supports more templates and configurations
