@@ -165,10 +165,7 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
     // for neither.
     function build() {
         panel = styled('div',
-            'position:fixed;bottom:96px;right:24px;z-index:2147483000;'
-            + 'width:min(420px, calc(100vw - 32px));height:min(640px, calc(100vh - 140px));'
-            + 'border-radius:16px;overflow:hidden;display:none;background:#fff;'
-            + 'box-shadow:0 24px 60px rgba(15,23,42,.28);'
+            compactPanelCss()
         );
         panel.setAttribute('data-reqser-sales-agent-panel', '1');
 
@@ -179,7 +176,7 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
             + 'box-shadow:0 12px 30px rgba(15,23,42,.35);'
         );
         launcher.type = 'button';
-        launcher.setAttribute('aria-label', 'Sales Agent');
+        launcher.setAttribute('aria-label', 'Sales Chat');
         launcher.textContent = '\u2726';
         launcher.addEventListener('click', function () {
             toggle(!isOpen);
@@ -189,6 +186,32 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
         document.body.appendChild(launcher);
     }
 
+    function compactPanelCss() {
+        return 'position:fixed;bottom:96px;right:24px;z-index:2147483000;'
+            + 'width:min(420px, calc(100vw - 32px));height:min(640px, calc(100vh - 140px));'
+            + 'border-radius:16px;overflow:hidden;display:none;background:#fff;'
+            + 'box-shadow:0 24px 60px rgba(15,23,42,.28);';
+    }
+
+    function applyPanel(mode) {
+        if (!panel) {
+            return;
+        }
+
+        if (mode === 'expanded') {
+            panel.style.width = 'min(960px, calc(100vw - 32px))';
+            panel.style.height = 'min(calc(100vh - 32px), 900px)';
+            panel.style.bottom = '16px';
+            panel.style.right = '16px';
+            return;
+        }
+
+        panel.style.width = 'min(420px, calc(100vw - 32px))';
+        panel.style.height = 'min(640px, calc(100vh - 140px))';
+        panel.style.bottom = '96px';
+        panel.style.right = '24px';
+    }
+
     function toggle(next) {
         isOpen = !!next;
         panel.style.display = isOpen ? 'block' : 'none';
@@ -196,6 +219,8 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
 
         if (isOpen) {
             ensureFrame();
+        } else {
+            applyPanel('compact');
         }
     }
 
@@ -221,7 +246,7 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
             }
 
             frame = document.createElement('iframe');
-            frame.title = 'Reqser Sales Agent';
+            frame.title = 'Sales Chat';
             frame.style.cssText = 'width:100%;height:100%;border:0;display:block;';
             frame.src = WIDGET_URL
                 + (WIDGET_URL.indexOf('?') === -1 ? '?' : '&')
@@ -518,6 +543,9 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
                 break;
             case 'open':
                 toggle(true);
+                break;
+            case 'setPanel':
+                applyPanel(msg.mode);
                 break;
             case 'close':
                 toggle(false);
