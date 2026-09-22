@@ -1,0 +1,62 @@
+{#
+    Reqser Dynamic Custom Field Test Template
+
+    Sibling of custom-field-test.html.twig for the dynamic-index case: the custom
+    field NAME is not written in the template at all, it is read from a system-config
+    value at runtime.
+
+    Structural mirror of website 299 (GoitDefaultTheme,
+    component/product/card/box-standard.html.twig): the container alias sits at template
+    top level, the config binding sits inside a block, and the read is wrapped in an
+    "is defined" guard. There the alias is productCustomFields, bound to
+    product.translated.customFields, and the index is subTitleField, bound to
+    config('GoitDefaultTheme.config.subTitle') — which resolves to the custom field
+    custom_text_sub_title.
+
+    That shape is described here in prose rather than quoted, on purpose: the scanner is
+    regex-based and does not strip Twig comments, so a quoted example inside this header
+    would register as a real alias and a real config binding.
+
+    This file is never rendered — it only needs to exist on disk so the scanner can
+    resolve the bound config keys and report the custom fields they point at.
+
+    The keys used here are seeded by the Reqser test suite, not by config.xml:
+      ReqserPlugin.config.reqserCustomFieldTestDynamicKey  → global + one sales channel
+      ReqserPlugin.config.reqserCustomFieldTestUnsetKey    → deliberately never set
+#}
+
+{# Aliased containers at top level, exactly as the real theme declares them #}
+{% set testCustomFields = category.customFields %}
+{% set testTranslatedCustomFields = category.translated.customFields %}
+
+{% block reqser_custom_field_dynamic_test %}
+    {% set dynamicKeyField = config('ReqserPlugin.config.reqserCustomFieldTestDynamicKey') %}
+
+    {# Aliased container, direct read — guarded like the real template #}
+    {% if testCustomFields[dynamicKeyField] is defined %}
+        {{ testCustomFields[dynamicKeyField] }}
+    {% endif %}
+
+    {# Aliased container, translated read #}
+    {{ testTranslatedCustomFields[dynamicKeyField] }}
+
+    {# Direct container, bound variable #}
+    {{ category.customFields[dynamicKeyField] }}
+
+    {# Inline config() in the index #}
+    {{ category.translated.customFields[config('ReqserPlugin.config.reqserCustomFieldTestDynamicKey')] }}
+
+    {# Literal |default harvested because the setting is never written #}
+    {% set defaultedField = config('ReqserPlugin.config.reqserCustomFieldTestUnsetKey')|default('reqser_custom_field_test_dynamic_default') %}
+    {{ category.customFields[defaultedField] }}
+
+    {# Bracket-string container twin, mirroring the literal scan's fourth pass #}
+    {{ category["customFields"][defaultedField] }}
+
+    {# Negative anchor: the same bound variable indexing a map that is NOT a customFields
+       container. Drop the alias-membership gate and this read starts being attributed to
+       the resolved field name. The map holds no custom field name on purpose, so no literal
+       pass can ever match this line either. #}
+    {% set notACustomFieldsMap = { 'someOtherKey': 'noise' } %}
+    {{ notACustomFieldsMap[dynamicKeyField] }}
+{% endblock %}

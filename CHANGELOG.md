@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.42/1.7.42/1.6.42/1.5.42 09.2026
+- Custom fields usage: Twig scan resolves keys read through a config-bound index (e.g. `{% set f = config('Theme.config.subTitle') %}{{ product.customFields[f] }}`); `accessPatterns` marks these `dynamic`
+
 ## 2.0.41/1.7.41/1.6.41/1.5.41 08.2026
 - Language redirect: supports more templates and configurations
 

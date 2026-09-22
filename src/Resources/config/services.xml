@@ -159,10 +159,16 @@
             <argument type="service" id="Shopware\Core\Framework\Adapter\Twig\TemplateFinder"/>
         </service>
 
+        <service id="Reqser\Plugin\Service\ReqserSystemConfigValueResolver">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+        </service>
+
         <service id="Reqser\Plugin\Service\ReqserCustomFieldUsageService">
             <argument type="service" id="Doctrine\DBAL\Connection"/>
             <argument type="service" id="twig.loader.native_filesystem"/>
             <argument type="service" id="Reqser\Plugin\Service\ReqserJsonFieldDetectionService"/>
+            <argument type="service" id="Reqser\Plugin\Service\ReqserSystemConfigValueResolver"/>
         </service>
 
         <service id="Reqser\Plugin\Service\ReqserCmsRenderService">
