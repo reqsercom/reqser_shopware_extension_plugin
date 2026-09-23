@@ -15,19 +15,23 @@ class ReqserCustomFieldUsageService
     private const PATTERN_TRANSLATED = 'translated';
     private const PATTERN_PAYLOAD = 'payload';
     private const PATTERN_DIRECT = 'direct';
+    private const PATTERN_DYNAMIC = 'dynamic';
 
     private Connection $connection;
     private FilesystemLoader $loader;
     private ReqserJsonFieldDetectionService $jsonFieldDetectionService;
+    private ReqserSystemConfigValueResolver $configValueResolver;
 
     public function __construct(
         Connection $connection,
         FilesystemLoader $loader,
-        ReqserJsonFieldDetectionService $jsonFieldDetectionService
+        ReqserJsonFieldDetectionService $jsonFieldDetectionService,
+        ReqserSystemConfigValueResolver $configValueResolver
     ) {
         $this->connection = $connection;
         $this->loader = $loader;
         $this->jsonFieldDetectionService = $jsonFieldDetectionService;
+        $this->configValueResolver = $configValueResolver;
     }
 
     /**
@@ -49,7 +53,7 @@ class ReqserCustomFieldUsageService
     {
         $registeredFields = $this->getRegisteredCustomFields();
         $templateDirs = $this->getTemplateDirs();
-        $twigUsageMap = $this->scanTwigFiles($templateDirs);
+        $twigUsageMap = $this->scanTwigFiles($templateDirs, array_keys($registeredFields));
         $cmsUsageMap = $this->scanCmsTablesForCustomFieldReferences();
 
         $fields = [];
@@ -176,39 +180,64 @@ class ReqserCustomFieldUsageService
      * "translated", "payload" or "direct" access.
      *
      * @param array<string> $dirs
+     * @param array<string> $registeredFieldNames
      * @return array<string, array<string, array{accessPatterns: array<string, true>, references: array<string, true>}>>
      */
-    private function scanTwigFiles(array $dirs): array
+    private function scanTwigFiles(array $dirs, array $registeredFieldNames): array
     {
         if (empty($dirs)) {
             return [];
         }
 
+        $registeredLookup = array_fill_keys($registeredFieldNames, true);
         $usageMap = [];
 
         foreach ($this->collectTwigFilesByPhysicalFile($dirs) as $entry) {
             $content = $entry['file']->getContents();
             $fileName = $entry['name'];
 
-            $keyData = $this->extractCustomFieldKeysFromTwig($content);
+            $this->mergeKeyDataIntoUsageMap(
+                $this->extractCustomFieldKeysFromTwig($content),
+                $fileName,
+                $usageMap
+            );
 
-            foreach ($keyData as $key => $data) {
-                if (!isset($usageMap[$key][$fileName])) {
-                    $usageMap[$key][$fileName] = [
-                        'accessPatterns' => [],
-                        'references' => [],
-                    ];
-                }
-                foreach ($data['accessPatterns'] as $pattern) {
-                    $usageMap[$key][$fileName]['accessPatterns'][$pattern] = true;
-                }
-                foreach ($data['references'] as $ref) {
-                    $usageMap[$key][$fileName]['references'][$ref] = true;
-                }
+            // Dynamic keys cost six extra regex passes plus a config lookup, so skip every
+            // file that cannot possibly hold both halves of the indirection.
+            if (str_contains($content, 'customFields') && str_contains($content, 'config(')) {
+                $this->mergeKeyDataIntoUsageMap(
+                    $this->extractDynamicCustomFieldKeysFromTwig($content, $registeredLookup),
+                    $fileName,
+                    $usageMap
+                );
             }
         }
 
         return $usageMap;
+    }
+
+    /**
+     * Union one file's extracted key data into the cross-file usage map.
+     *
+     * @param array<string, array{accessPatterns: array<string>, references: array<string>}> $keyData
+     * @param array<string, array<string, array{accessPatterns: array<string, true>, references: array<string, true>}>> $usageMap
+     */
+    private function mergeKeyDataIntoUsageMap(array $keyData, string $fileName, array &$usageMap): void
+    {
+        foreach ($keyData as $key => $data) {
+            if (!isset($usageMap[$key][$fileName])) {
+                $usageMap[$key][$fileName] = [
+                    'accessPatterns' => [],
+                    'references' => [],
+                ];
+            }
+            foreach ($data['accessPatterns'] as $pattern) {
+                $usageMap[$key][$fileName]['accessPatterns'][$pattern] = true;
+            }
+            foreach ($data['references'] as $ref) {
+                $usageMap[$key][$fileName]['references'][$ref] = true;
+            }
+        }
     }
 
     /**
@@ -325,6 +354,202 @@ class ReqserCustomFieldUsageService
         }
 
         return $result;
+    }
+
+    /**
+     * Extract custom field keys that a template reads through a runtime index bound to a
+     * system-config value, e.g. {% set f = config('Theme.config.subTitle') %}{{ p.customFields[f] }}.
+     *
+     * @param array<string, true> $registeredLookup
+     * @return array<string, array{accessPatterns: array<string>, references: array<string>}>
+     */
+    private function extractDynamicCustomFieldKeysFromTwig(string $content, array $registeredLookup): array
+    {
+        $keyData = [];
+
+        $configBindings = $this->collectConfigBindings($content);
+        $containerAliases = $this->collectContainerAliases($content);
+
+        if (!empty($configBindings) && !empty($containerAliases)) {
+            // Aliased container indexed by a bound variable: {{ alias[field] }}
+            if (preg_match_all('/(\w+)\s*\[\s*(\w+)\s*\]/', $content, $matches, PREG_SET_ORDER)) {
+                foreach ($matches as $match) {
+                    $alias = $match[1];
+                    $variable = $match[2];
+
+                    if (!isset($containerAliases[$alias], $configBindings[$variable])) {
+                        continue;
+                    }
+
+                    $this->recordDynamicHit(
+                        $configBindings[$variable],
+                        $containerAliases[$alias]['pattern'],
+                        [
+                            $containerAliases[$alias]['reference'],
+                            $configBindings[$variable]['reference'],
+                            $match[0],
+                        ],
+                        $registeredLookup,
+                        $keyData
+                    );
+                }
+            }
+        }
+
+        if (!empty($configBindings)) {
+            // Direct container indexed by a bound variable: {{ entity.customFields[field] }}
+            if (preg_match_all('/([\w.]+)\.customFields\s*\[\s*(\w+)\s*\]/', $content, $matches, PREG_SET_ORDER)) {
+                foreach ($matches as $match) {
+                    $variable = $match[2];
+                    if (!isset($configBindings[$variable])) {
+                        continue;
+                    }
+
+                    $this->recordDynamicHit(
+                        $configBindings[$variable],
+                        $this->classifyAccessPrefix($match[1]),
+                        [$configBindings[$variable]['reference'], $match[0]],
+                        $registeredLookup,
+                        $keyData
+                    );
+                }
+            }
+
+            // Bracket-string container twin: {{ entity["customFields"][field] }}
+            if (preg_match_all('/(\.translated|\[[\'"]translated[\'"]\]|\.payload|\[[\'"]payload[\'"]\])?\s*\[[\'"]customFields[\'"]\]\s*\[\s*(\w+)\s*\]/', $content, $matches, PREG_SET_ORDER)) {
+                foreach ($matches as $match) {
+                    $variable = $match[2];
+                    if (!isset($configBindings[$variable])) {
+                        continue;
+                    }
+
+                    $this->recordDynamicHit(
+                        $configBindings[$variable],
+                        $this->classifyBracketMarker($match[1] ?? ''),
+                        [$configBindings[$variable]['reference'], $match[0]],
+                        $registeredLookup,
+                        $keyData
+                    );
+                }
+            }
+        }
+
+        // Inline config() in the index: {{ entity.translated.customFields[config('Key')] }}
+        if (preg_match_all('/([\w.]+)\.customFields\s*\[\s*config\(\s*[\'"]([^\'"]+)[\'"]\s*\)\s*\]/', $content, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $this->recordDynamicHit(
+                    ['configKey' => $match[2], 'default' => null, 'reference' => $match[0]],
+                    $this->classifyAccessPrefix($match[1]),
+                    [$match[0]],
+                    $registeredLookup,
+                    $keyData
+                );
+            }
+        }
+
+        $result = [];
+        foreach ($keyData as $key => $data) {
+            $result[$key] = [
+                'accessPatterns' => array_keys($data['accessPatterns']),
+                'references' => array_keys($data['references']),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Collect {% set VAR = config('KEY') %} bindings, including an optional literal
+     * |default('...') that Shopware falls back to when the setting is unset.
+     *
+     * @return array<string, array{configKey: string, default: string|null, reference: string}>
+     */
+    private function collectConfigBindings(string $content): array
+    {
+        $bindings = [];
+
+        if (!preg_match_all(
+            '/\{%-?\s*set\s+(\w+)\s*=\s*config\(\s*[\'"]([^\'"]+)[\'"]\s*\)(?:\s*\|\s*default\(\s*[\'"]([^\'"]+)[\'"]\s*\))?/',
+            $content,
+            $matches,
+            PREG_SET_ORDER
+        )) {
+            return $bindings;
+        }
+
+        foreach ($matches as $match) {
+            $default = $match[3] ?? '';
+
+            $bindings[$match[1]] = [
+                'configKey' => $match[2],
+                'default' => $default !== '' ? $default : null,
+                'reference' => trim($match[0]),
+            ];
+        }
+
+        return $bindings;
+    }
+
+    /**
+     * Collect {% set ALIAS = entity.customFields %} bindings so a later alias[field] read
+     * can be attributed to the container it actually points at.
+     *
+     * @return array<string, array{pattern: string, reference: string}>
+     */
+    private function collectContainerAliases(string $content): array
+    {
+        $aliases = [];
+
+        if (!preg_match_all('/\{%-?\s*set\s+(\w+)\s*=\s*([\w.]+)\.customFields\s*-?%\}/', $content, $matches, PREG_SET_ORDER)) {
+            return $aliases;
+        }
+
+        foreach ($matches as $match) {
+            $aliases[$match[1]] = [
+                'pattern' => $this->classifyAccessPrefix($match[2]),
+                'reference' => trim($match[0]),
+            ];
+        }
+
+        return $aliases;
+    }
+
+    /**
+     * Resolve one config binding to registered custom field names and record the hit.
+     *
+     * Every dynamic pass funnels through here so the registered-field guard and the
+     * "dynamic" marker are applied in exactly one place.
+     *
+     * @param array{configKey: string, default: string|null, reference: string} $binding
+     * @param array<string> $references
+     * @param array<string, true> $registeredLookup
+     * @param array<string, array{accessPatterns: array<string, true>, references: array<string, true>}> $keyData
+     */
+    private function recordDynamicHit(
+        array $binding,
+        string $pattern,
+        array $references,
+        array $registeredLookup,
+        array &$keyData
+    ): void {
+        $candidates = $this->configValueResolver->resolve($binding['configKey']);
+
+        if (empty($candidates) && $binding['default'] !== null) {
+            $candidates = [$binding['default']];
+        }
+
+        foreach ($candidates as $candidate) {
+            if (!isset($registeredLookup[$candidate])) {
+                continue;
+            }
+
+            $keyData[$candidate]['accessPatterns'][$pattern] = true;
+            $keyData[$candidate]['accessPatterns'][self::PATTERN_DYNAMIC] = true;
+
+            foreach ($references as $reference) {
+                $keyData[$candidate]['references'][$reference] = true;
+            }
+        }
     }
 
     /**
