@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.43/1.7.43/1.6.43/1.5.43 09.2026
+- `media/upload` also accepts PDF documents (verified by file signature) to support PDF translations
+
 ## 2.0.42/1.7.42/1.6.42/1.5.42 09.2026
 - Custom fields usage: Twig scan resolves keys read through a config-bound index (e.g. `{% set f = config('Theme.config.subTitle') %}{{ product.customFields[f] }}`); `accessPatterns` marks these `dynamic`
 

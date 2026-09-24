@@ -26,9 +26,9 @@ class ReqserMediaUploadService
     private const CUSTOM_FIELD_UPLOADED_AT = 'reqser_media_uploaded_at';
 
     /**
-     * Raster image formats accepted on this write path, mapped to the image types their binary
-     * must decode as. Vector and document formats are absent on purpose: SVG is XML and can
-     * carry executable script, and no other container is verifiable by image signature.
+     * Formats accepted on this write path, mapped to the image types their binary must decode as.
+     * PDF is the one non-image and is verified by its file signature instead. SVG is absent on
+     * purpose: it is XML and can carry executable script.
      */
     private const ALLOWED_EXTENSIONS = [
         'jpg' => IMAGETYPE_JPEG,
@@ -36,6 +36,7 @@ class ReqserMediaUploadService
         'png' => IMAGETYPE_PNG,
         'webp' => IMAGETYPE_WEBP,
         'gif' => IMAGETYPE_GIF,
+        'pdf' => 'application/pdf',
     ];
 
     private EntityRepository $mediaRepository;
@@ -94,6 +95,10 @@ class ReqserMediaUploadService
     {
         if (!isset(self::ALLOWED_EXTENSIONS[$extension])) {
             return null;
+        }
+
+        if ($extension === 'pdf') {
+            return strncmp($binary, '%PDF-', 5) === 0 ? self::ALLOWED_EXTENSIONS['pdf'] : null;
         }
 
         $imageInfo = @getimagesizefromstring($binary);
