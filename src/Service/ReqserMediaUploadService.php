@@ -12,7 +12,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
- * Stores an image binary as a media entity under a caller-provided file name, next to a source media entity.
+ * Stores an image or PDF binary as a media entity under a caller-provided file name, next to a source media entity.
  */
 class ReqserMediaUploadService
 {
@@ -27,8 +27,7 @@ class ReqserMediaUploadService
 
     /**
      * Raster image formats accepted on this write path, mapped to the image types their binary
-     * must decode as. Vector and document formats are absent on purpose: SVG is XML and can
-     * carry executable script, and no other container is verifiable by image signature.
+     * must decode as. SVG is absent on purpose: it is XML and can carry executable script.
      */
     private const ALLOWED_EXTENSIONS = [
         'jpg' => IMAGETYPE_JPEG,
@@ -37,6 +36,14 @@ class ReqserMediaUploadService
         'webp' => IMAGETYPE_WEBP,
         'gif' => IMAGETYPE_GIF,
     ];
+
+    /**
+     * Translated PDF documents. PHP core has no PDF decoder, so the proof is the file signature:
+     * a script or an HTML page served from the public media folder does not start with it.
+     */
+    private const PDF_EXTENSION = 'pdf';
+    private const PDF_SIGNATURE = '%PDF-';
+    private const PDF_MIME_TYPE = 'application/pdf';
 
     private EntityRepositoryInterface $mediaRepository;
     private FileSaver $fileSaver;
@@ -60,7 +67,7 @@ class ReqserMediaUploadService
      */
     public static function allowedExtensions(): array
     {
-        return array_keys(self::ALLOWED_EXTENSIONS);
+        return [...array_keys(self::ALLOWED_EXTENSIONS), self::PDF_EXTENSION];
     }
 
     /**
@@ -82,9 +89,9 @@ class ReqserMediaUploadService
     }
 
     /**
-     * Return the mime type to store for the given binary, or null when the binary does not decode
-     * as an image of the given extension. The extension and any request content type are treated as
-     * untrusted input: the format is taken from the binary signature, not from what the caller claims.
+     * Return the mime type to store for the given binary, or null when the binary is not a file of
+     * the given extension. The extension and any request content type are treated as untrusted
+     * input: the format is taken from the binary signature, not from what the caller claims.
      *
      * @param string $binary
      * @param string $extension
@@ -92,6 +99,10 @@ class ReqserMediaUploadService
      */
     public function resolveVerifiedMimeType(string $binary, string $extension): ?string
     {
+        if ($extension === self::PDF_EXTENSION) {
+            return str_starts_with($binary, self::PDF_SIGNATURE) ? self::PDF_MIME_TYPE : null;
+        }
+
         if (!isset(self::ALLOWED_EXTENSIONS[$extension])) {
             return null;
         }
