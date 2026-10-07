@@ -1,8 +1,10 @@
 # Changelog
 
 ## 2.0.44/1.7.44/1.6.44/1.5.44 10.2026
-- Language flags: streamlined loading of flag images
 - `media/upload`: also accepts PDF documents
+
+## 2.0.43/1.7.43/1.6.43/1.5.43 10.2026
+- Language flags: streamlined loading of flag images
 
 ## 2.0.42/1.7.42/1.6.42/1.5.42 09.2026
 - Custom fields usage: Twig scan resolves keys read through a config-bound index (e.g. `{% set f = config('Theme.config.subTitle') %}{{ product.customFields[f] }}`); `accessPatterns` marks these `dynamic`
