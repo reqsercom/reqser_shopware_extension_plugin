@@ -6,6 +6,7 @@ use Shopware\Core\Content\Media\File\FileSaver;
 use Shopware\Core\Content\Media\File\MediaFile;
 use Shopware\Core\Content\Media\MediaEntity;
 use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
@@ -45,15 +46,22 @@ class ReqserMediaUploadService
     private const PDF_SIGNATURE = '%PDF-';
     private const PDF_MIME_TYPE = 'application/pdf';
 
-    private EntityRepositoryInterface $mediaRepository;
+    /**
+     * Shopware 6.4 injects MediaRepositoryDecorator, which implements the interface and does not
+     * extend EntityRepository. Shopware 6.5.7 injects EntityRepository, which no longer implements
+     * the interface. The 1.6 line covers both.
+     *
+     * @var EntityRepositoryInterface|EntityRepository
+     */
+    private EntityRepositoryInterface|EntityRepository $mediaRepository;
     private FileSaver $fileSaver;
 
     /**
-     * @param EntityRepositoryInterface $mediaRepository
+     * @param EntityRepositoryInterface|EntityRepository $mediaRepository
      * @param FileSaver $fileSaver
      */
     public function __construct(
-        EntityRepositoryInterface $mediaRepository,
+        EntityRepositoryInterface|EntityRepository $mediaRepository,
         FileSaver $fileSaver
     ) {
         $this->mediaRepository = $mediaRepository;
