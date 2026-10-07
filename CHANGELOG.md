@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2.0.44/1.7.44/1.6.44/1.5.44 10.2026
+- Language flags: streamlined loading of flag images
 - `media/upload`: also accepts PDF documents
 
 ## 2.0.42/1.7.42/1.6.42/1.5.42 09.2026
