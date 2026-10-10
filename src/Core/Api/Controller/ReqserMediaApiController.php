@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 
 /**
- * Admin API controller for storing an image binary as a media entity alongside an existing one.
+ * Admin API controller for storing an image or PDF binary as a media entity alongside an existing one.
  */
 #[Route(defaults: ['_routeScope' => ['api']])]
 #[ReqserApiAuth]
@@ -81,14 +81,14 @@ class ReqserMediaApiController extends AbstractController
             if ($binary === '') {
                 return new JsonResponse([
                     'success' => false,
-                    'error' => 'Request body is empty, expected the raw image binary',
+                    'error' => 'Request body is empty, expected the raw file binary',
                 ], 400);
             }
 
             $mimeType = $this->mediaUploadService->resolveVerifiedMimeType($binary, $extension);
 
             if ($mimeType === null) {
-                $this->logger->warning('Reqser API: media upload rejected, body is not a valid image', [
+                $this->logger->warning('Reqser API: media upload rejected, body does not match the declared extension', [
                     'endpoint' => $request->getPathInfo(),
                     'method' => $request->getMethod(),
                     'extension' => $extension,
@@ -98,7 +98,7 @@ class ReqserMediaApiController extends AbstractController
 
                 return new JsonResponse([
                     'success' => false,
-                    'error' => 'Request body is not a valid ' . $extension . ' image',
+                    'error' => 'Request body is not a valid ' . $extension . ' file',
                 ], 400);
             }
 
