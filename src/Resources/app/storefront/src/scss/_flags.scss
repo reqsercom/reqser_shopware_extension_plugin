@@ -1,8 +1,5 @@
 /**
- * Language Flags with SwagLanguagePack Fallback
- * 
- * This file provides flag styles that work as a fallback when SwagLanguagePack is not installed.
- * If SwagLanguagePack is installed, its flags take precedence.
+ * Language flag styles for storefronts without SwagLanguagePack; when installed, its own rule for the same selector applies.
  */
 
 // Complete list of country codes for comprehensive flag support
@@ -25,9 +22,7 @@ $countryCodes: ad, ae, af, ag, ai, al, am, ao, aq, ar, as, at, au, aw, ax, az, b
     // Generate classes for each country code
     @each $countryCode in $countryCodes {
         &.country-#{$countryCode} {
-            // Browser will try SwagLanguagePack first, then fall back to Reqser Plugin
-            background-image: url("/bundles/swaglanguagepack/static/flags/#{$countryCode}.svg"), 
-                              url("/bundles/reqserplugin/static/flags/#{$countryCode}.svg");
+            background-image: url("/bundles/reqserplugin/static/flags/#{$countryCode}.svg");
         }
     }
 }

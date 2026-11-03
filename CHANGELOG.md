@@ -1,8 +1,15 @@
 # Changelog
 
-## 2.0.42/1.7.42/1.6.42/1.5.42 09.2026
+## 2.0.44/1.7.44/1.6.44/1.5.44 10.2026
+- `media/upload`: also accepts PDF documents
 - Sales Agent introduced
 - Updated Twig files debug route
+
+## 2.0.43/1.7.43/1.6.43/1.5.43 10.2026
+- Language flags: streamlined loading of flag images
+
+## 2.0.42/1.7.42/1.6.42/1.5.42 09.2026
+- Custom fields usage: Twig scan resolves keys read through a config-bound index (e.g. `{% set f = config('Theme.config.subTitle') %}{{ product.customFields[f] }}`); `accessPatterns` marks these `dynamic`
 
 ## 2.0.41/1.7.41/1.6.41/1.5.41 08.2026
 - Language redirect: supports more templates and configurations
