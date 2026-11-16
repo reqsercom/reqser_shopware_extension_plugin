@@ -163,7 +163,9 @@ class ReqserDatabaseApiController extends AbstractController
                     'data' => [
                         'tableName' => $tableName,
                         'schema' => $tableSchema,
-                        'translatableRows' => $translatableRows
+                        'translatableRows' => $translatableRows,
+                        'writeProtectedRows' => $result['writeProtectedRows'],
+                        'writeProtectedScopes' => $result['writeProtectedScopes'],
                     ]
                 ]);
             }
