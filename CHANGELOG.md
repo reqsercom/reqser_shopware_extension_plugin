@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.0.45/1.7.45/1.6.45/1.5.45 11.2026
+- `translation-tables/{table}`: reports `writeProtectedRows` and `writeProtectedScopes` for fields carrying the DAL `WriteProtected` flag; the column route adds `rowDetails.writeProtected`
+
 ## 2.0.44/1.7.44/1.6.44/1.5.44 10.2026
 - `media/upload`: also accepts PDF documents
 
