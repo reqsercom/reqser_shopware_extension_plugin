@@ -19,6 +19,7 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
     private const SCRIPT_ATTRIBUTE = 'data-reqser-sales-agent';
     private const BODY_CLOSING_TAG = '</body>';
     private const WIDGET_PATH = '/sales-agent/widget';
+    private const SEARCH_WIDGET_PATH = '/sales-search/widget';
 
     private $salesAgentService;
     private RouterInterface $router;
@@ -88,6 +89,7 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
             $response->setContent(
                 substr($content, 0, $position) . $this->buildScriptTag($config) . substr($content, $position)
             );
+            $this->allowReqserFrame($response, (string) $config['widgetOrigin']);
 
             if ($response->headers->has('Content-Length')) {
                 $response->headers->set('Content-Length', (string) strlen((string) $response->getContent()));
@@ -105,6 +107,7 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
     {
         $replacements = [
             '__WIDGET_URL__' => $this->encode($config['widgetOrigin'] . self::WIDGET_PATH),
+            '__SEARCH_WIDGET_URL__' => $this->encode($config['widgetOrigin'] . self::SEARCH_WIDGET_PATH),
             '__WIDGET_ORIGIN__' => $this->encode($config['widgetOrigin']),
             '__TOKEN_URL__' => $this->encode(
                 $this->router->generate(self::TOKEN_ROUTE, [], UrlGeneratorInterface::ABSOLUTE_PATH)
@@ -112,11 +115,50 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
             '__ADD_TO_CART_URL__' => $this->encode(
                 $this->router->generate(self::ADD_TO_CART_ROUTE, [], UrlGeneratorInterface::ABSOLUTE_PATH)
             ),
+            '__SEARCH_PATH__' => $this->encode($this->searchPath()),
         ];
 
         return '<script ' . self::SCRIPT_ATTRIBUTE . '="1">'
             . strtr($this->bridgeScript(), $replacements)
             . '</script>';
+    }
+
+    /**
+     * Reqser frames the shop for the merchant preview. Everyone else stays out.
+     */
+    private function allowReqserFrame(\Symfony\Component\HttpFoundation\Response $response, string $widget_origin): void
+    {
+        $widget_origin = rtrim($widget_origin, '/');
+
+        if ($widget_origin === '') {
+            return;
+        }
+
+        $response->headers->remove('X-Frame-Options');
+        $directive = "frame-ancestors 'self' " . $widget_origin;
+        $csp = (string) $response->headers->get('Content-Security-Policy');
+
+        if ($csp === '') {
+            $response->headers->set('Content-Security-Policy', $directive);
+            return;
+        }
+
+        if (!str_contains($csp, 'frame-ancestors')) {
+            $response->headers->set('Content-Security-Policy', rtrim($csp, '; ') . '; ' . $directive);
+        }
+    }
+
+    /**
+     * The storefront search route, so a theme can restyle the box and we still
+     * recognise the form. Empty when this shop has no such route.
+     */
+    private function searchPath(): string
+    {
+        try {
+            return $this->router->generate('frontend.search.page', [], UrlGeneratorInterface::ABSOLUTE_PATH);
+        } catch (\Throwable $e) {
+            return '';
+        }
     }
 
     /**
@@ -143,16 +185,31 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
     window.__reqserSalesAgent = true;
 
     var WIDGET_URL = __WIDGET_URL__;
+    var SEARCH_WIDGET_URL = __SEARCH_WIDGET_URL__;
     var WIDGET_ORIGIN = __WIDGET_ORIGIN__;
     var TOKEN_URL = __TOKEN_URL__;
     var ADD_TO_CART_URL = __ADD_TO_CART_URL__;
+    var SEARCH_PATH = __SEARCH_PATH__;
     var CHANNEL = 'reqser-sales-agent';
 
     var panel = null;
+    var backdrop = null;
     var frame = null;
     var launcher = null;
     var isOpen = false;
+    var chatMode = 'compact';
     var framePending = false;
+    var visitorToken = null;
+    var searchPaths = {};
+
+    // A shop search opens the search view in its own frame. The chat never
+    // sees it, and closing one leaves the other as it was.
+    var searchPanel = null;
+    var searchFrame = null;
+    var searchFramePending = false;
+    var searchFrameReady = false;
+    var searchOpen = false;
+    var queuedSearch = null;
 
     function styled(tag, css) {
         var node = document.createElement(tag);
@@ -182,7 +239,15 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
             toggle(!isOpen);
         });
 
+        searchPanel = styled('div',
+            'position:fixed;top:4vh;left:4vw;z-index:2147483001;'
+            + 'width:92vw;height:92vh;border-radius:16px;overflow:hidden;display:none;background:#fff;'
+            + 'box-shadow:0 24px 60px rgba(15,23,42,.28);'
+        );
+        searchPanel.setAttribute('data-reqser-sales-search-panel', '1');
+
         document.body.appendChild(panel);
+        document.body.appendChild(searchPanel);
         document.body.appendChild(launcher);
     }
 
@@ -193,10 +258,57 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
             + 'box-shadow:0 24px 60px rgba(15,23,42,.28);';
     }
 
+    function ensureBackdrop() {
+        if (backdrop) {
+            return backdrop;
+        }
+
+        backdrop = styled('div',
+            'position:fixed;inset:0;z-index:2147482999;display:none;'
+            + 'background:rgba(15,23,42,.35);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);'
+        );
+        backdrop.addEventListener('click', function () {
+            if (searchOpen) {
+                showSearch(false);
+            }
+        });
+        document.body.appendChild(backdrop);
+
+        return backdrop;
+    }
+
+    function syncBackdrop() {
+        if (!backdrop) {
+            return;
+        }
+        backdrop.style.display = searchOpen || (isOpen && chatMode === 'fullscreen') ? 'block' : 'none';
+    }
+
     function applyPanel(mode) {
         if (!panel) {
             return;
         }
+
+        chatMode = mode === 'fullscreen' || mode === 'expanded' ? mode : 'compact';
+
+        if (mode === 'fullscreen') {
+            ensureBackdrop();
+            syncBackdrop();
+            panel.style.top = '10vh';
+            panel.style.right = 'auto';
+            panel.style.bottom = 'auto';
+            panel.style.left = '10vw';
+            panel.style.width = '80vw';
+            panel.style.height = '80vh';
+            panel.style.borderRadius = '16px';
+            return;
+        }
+
+        syncBackdrop();
+
+        panel.style.top = 'auto';
+        panel.style.left = 'auto';
+        panel.style.borderRadius = '16px';
 
         if (mode === 'expanded') {
             panel.style.width = 'min(960px, calc(100vw - 32px))';
@@ -225,14 +337,10 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
     }
 
     // The token travels in the fragment so it stays out of the Referer header
-    // and out of Reqser's own access log.
-    function ensureFrame() {
-        if (frame !== null || framePending) {
-            return;
-        }
-        framePending = true;
-
-        fetch(TOKEN_URL, {
+    // and out of Reqser's own access log. Each frame asks for its own, so a
+    // search opened long after the chat does not start with an expired one.
+    function framedWithToken(url, title, container) {
+        return fetch(TOKEN_URL, {
             credentials: 'same-origin',
             headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
         }).then(function (response) {
@@ -245,17 +353,51 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
                 throw new Error('token request returned no token');
             }
 
-            frame = document.createElement('iframe');
-            frame.title = 'Sales Chat';
-            frame.style.cssText = 'width:100%;height:100%;border:0;display:block;';
-            frame.src = WIDGET_URL
-                + (WIDGET_URL.indexOf('?') === -1 ? '?' : '&')
+            visitorToken = data.token;
+            var node = document.createElement('iframe');
+            node.title = title;
+            node.style.cssText = 'width:100%;height:100%;border:0;display:block;';
+            node.src = url
+                + (url.indexOf('?') === -1 ? '?' : '&')
                 + 'shopOrigin=' + encodeURIComponent(window.location.origin)
                 + '#token=' + encodeURIComponent(data.token);
-            panel.appendChild(frame);
+            container.appendChild(node);
+
+            return node;
+        });
+    }
+
+    function ensureFrame() {
+        if (frame !== null || framePending) {
+            return;
+        }
+        framePending = true;
+
+        framedWithToken(WIDGET_URL, 'Sales Chat', panel).then(function (node) {
+            frame = node;
         }).catch(function () {
             framePending = false;
         });
+    }
+
+    function ensureSearchFrame() {
+        if (searchFrame !== null || searchFramePending) {
+            return;
+        }
+        searchFramePending = true;
+
+        framedWithToken(SEARCH_WIDGET_URL, 'Search', searchPanel).then(function (node) {
+            searchFrame = node;
+        }).catch(function () {
+            searchFramePending = false;
+        });
+    }
+
+    function showSearch(visible) {
+        searchOpen = !!visible;
+        searchPanel.style.display = searchOpen ? 'block' : 'none';
+        ensureBackdrop();
+        syncBackdrop();
     }
 
     // The launcher is the only part of the agent that lives on the shop page
@@ -282,9 +424,10 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
 
     // The iframe is on a foreign origin, so every reply names that origin
     // explicitly instead of '*'. A wildcard would leak cart state to whatever
-    // document happens to occupy the frame.
-    function reply(type, payload, requestId) {
-        if (!frame || !frame.contentWindow) {
+    // document happens to occupy the frame. A reply goes back to the frame
+    // that asked, chat or search.
+    function reply(target, type, payload, requestId) {
+        if (!target || !target.contentWindow) {
             return;
         }
 
@@ -293,16 +436,16 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
             message[key] = payload[key];
         });
 
-        frame.contentWindow.postMessage(message, WIDGET_ORIGIN);
+        target.contentWindow.postMessage(message, WIDGET_ORIGIN);
     }
 
-    function addToCart(msg) {
+    function addToCart(target, msg) {
         var productId = typeof msg.productId === 'string' ? msg.productId : null;
         var quantity = parseInt(msg.quantity, 10);
         quantity = isFinite(quantity) && quantity > 0 ? quantity : 1;
 
         if (!productId) {
-            reply('addToCartResult', { ok: false, error: 'missing productId' }, msg.requestId);
+            reply(target, 'addToCartResult', { ok: false, error: 'missing productId' }, msg.requestId);
             return;
         }
 
@@ -325,9 +468,9 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
             }
 
             refreshCartWidget();
-            reply('addToCartResult', { ok: true, productId: productId, quantity: quantity }, msg.requestId);
+            reply(target, 'addToCartResult', { ok: true, productId: productId, quantity: quantity }, msg.requestId);
         }).catch(function (error) {
-            reply('addToCartResult', { ok: false, error: String(error.message || error) }, msg.requestId);
+            reply(target, 'addToCartResult', { ok: false, error: String(error.message || error) }, msg.requestId);
         });
     }
 
@@ -503,11 +646,84 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
         });
     }
 
+    function answerFromReqser(target, msg) {
+        if (!visitorToken) {
+            reply(target, 'search', { error: 'unauthorized' }, msg.requestId);
+            return;
+        }
+
+        fetch(WIDGET_ORIGIN + '/api/sales-agent/answer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({
+                token: visitorToken,
+                origin: msg.origin === 'search' ? 'search' : 'chat',
+                text: msg.text || msg.query || '',
+                query: msg.query || '',
+                filters: msg.filters || {},
+                limit: msg.limit || 6,
+                thread_id: msg.thread_id || null
+            })
+        }).then(function (response) {
+            if (!response.ok) {
+                throw new Error('answer failed');
+            }
+            return response.json();
+        }).then(function (data) {
+            reply(target, 'search', {
+                products: data.products || [],
+                sentence: data.sentence || '',
+                thread_id: data.thread_id || null
+            }, msg.requestId);
+        }).catch(function () {
+            reply(target, 'search', { error: 'answer failed' }, msg.requestId);
+        });
+    }
+
+    function goTo(msg) {
+        if (typeof msg.url === 'string' && msg.url.indexOf('/') === 0 && msg.url.indexOf('//') !== 0) {
+            window.location.assign(msg.url);
+        }
+    }
+
+    // The search view may read the page, the cart and the answer route, and
+    // close itself. It has no say over the chat panel or the launcher.
+    function handleSearchMessage(msg) {
+        switch (msg.type) {
+            case 'ready':
+                searchFrameReady = true;
+                reply(searchFrame, 'hostContext', {
+                    shopOrigin: window.location.origin,
+                    page: window.location.pathname,
+                    product: pageProduct()
+                }, msg.requestId);
+                if (queuedSearch) {
+                    postShopSearch(queuedSearch);
+                }
+                break;
+            case 'addToCart':
+                addToCart(searchFrame, msg);
+                break;
+            case 'goTo':
+                goTo(msg);
+                break;
+            case 'search':
+                answerFromReqser(searchFrame, msg);
+                break;
+            case 'close':
+                showSearch(false);
+                break;
+        }
+    }
+
     window.addEventListener('message', function (event) {
         if (event.origin !== WIDGET_ORIGIN) {
             return;
         }
-        if (!frame || event.source !== frame.contentWindow) {
+
+        var fromChat = frame !== null && event.source === frame.contentWindow;
+        var fromSearch = searchFrame !== null && event.source === searchFrame.contentWindow;
+        if (!fromChat && !fromSearch) {
             return;
         }
 
@@ -516,30 +732,33 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
             return;
         }
 
+        if (fromSearch) {
+            handleSearchMessage(msg);
+            return;
+        }
+
         // Every branch is a named capability. There is deliberately no generic
         // "call this route" case: the set of things the widget may ask the shop
         // to do is fixed here, in the shop's own code.
         switch (msg.type) {
             case 'ready':
-                reply('hostContext', {
+                reply(frame, 'hostContext', {
                     shopOrigin: window.location.origin,
                     page: window.location.pathname,
                     product: pageProduct()
                 }, msg.requestId);
                 break;
             case 'designProbe':
-                reply('designProbe', { facts: designProbe() }, msg.requestId);
+                reply(frame, 'designProbe', { facts: designProbe() }, msg.requestId);
                 break;
             case 'applyLauncher':
                 applyLauncher(msg.style);
                 break;
             case 'addToCart':
-                addToCart(msg);
+                addToCart(frame, msg);
                 break;
             case 'goTo':
-                if (typeof msg.url === 'string' && msg.url.indexOf('/') === 0 && msg.url.indexOf('//') !== 0) {
-                    window.location.assign(msg.url);
-                }
+                goTo(msg);
                 break;
             case 'open':
                 toggle(true);
@@ -547,16 +766,219 @@ class ReqserSalesAgentWidgetSubscriber implements EventSubscriberInterface
             case 'setPanel':
                 applyPanel(msg.mode);
                 break;
+            case 'search':
+                answerFromReqser(frame, msg);
+                break;
             case 'close':
                 toggle(false);
                 break;
         }
     });
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', build);
-    } else {
+    function normalizePath(path) {
+        if (!path) {
+            return '';
+        }
+        try {
+            if (path.indexOf('http://') === 0 || path.indexOf('https://') === 0) {
+                path = new URL(path).pathname;
+            }
+        } catch (e) {
+            return '';
+        }
+        if (path.length > 1 && path.charAt(path.length - 1) === '/') {
+            path = path.slice(0, -1);
+        }
+        return path;
+    }
+
+    function rememberSearchPath(path) {
+        path = normalizePath(path);
+        if (path) {
+            searchPaths[path] = true;
+        }
+    }
+
+    function formActionPath(form) {
+        var action = form.getAttribute('action');
+        if (!action) {
+            return '';
+        }
+        try {
+            return new URL(action, window.location.href).pathname;
+        } catch (e) {
+            return '';
+        }
+    }
+
+    // A theme may rename every class. The search is the GET form that posts to
+    // the shop's search route, or the form the theme already marked as its
+    // search widget. A single search field on a GET form covers a template
+    // that kept the field and dropped the marker.
+    function isShopSearchForm(form) {
+        if (!form || form.nodeName !== 'FORM') {
+            return false;
+        }
+        if ((panel && panel.contains(form)) || (searchPanel && searchPanel.contains(form))) {
+            return false;
+        }
+        if (form.getAttribute('data-search-widget') === 'true' || form.getAttribute('data-search-form') === 'true') {
+            return true;
+        }
+        var method = (form.getAttribute('method') || 'get').toLowerCase();
+        if (method !== 'get') {
+            return false;
+        }
+        if (!form.querySelector('input[name="search"]')) {
+            return false;
+        }
+        if (SEARCH_PATH && normalizePath(formActionPath(form)) === normalizePath(SEARCH_PATH)) {
+            return true;
+        }
+        return form.querySelectorAll('input[type="text"], input[type="search"], textarea').length === 1;
+    }
+
+    function searchTerm(form) {
+        var field = form.querySelector('input[name="search"]') || form.querySelector('input[type="search"]');
+        return field ? String(field.value || '').trim() : '';
+    }
+
+    function postShopSearch(term) {
+        if (!searchFrame || !searchFrame.contentWindow) {
+            return;
+        }
+        searchFrame.contentWindow.postMessage({
+            channel: CHANNEL,
+            type: 'shopSearch',
+            text: term
+        }, WIDGET_ORIGIN);
+        queuedSearch = null;
+    }
+
+    // Shopware's SearchWidget renders its dropdown into `.js-search-result`,
+    // and a theme can rename that hook through the plugin options. Drop the
+    // node the live instance actually uses, and again if a suggest request
+    // that already left the browser arrives after we took the search.
+    function closeNativeSuggest() {
+        var selectors = ['.js-search-result'];
+
+        if (window.PluginManager && typeof window.PluginManager.getPluginInstances === 'function') {
+            (window.PluginManager.getPluginInstances('SearchWidget') || []).forEach(function (instance) {
+                if (!instance) {
+                    return;
+                }
+                var selector = instance.options && instance.options.searchWidgetResultSelector;
+                if (typeof selector === 'string' && selectors.indexOf(selector) === -1) {
+                    selectors.push(selector);
+                }
+                if (!instance.__reqserSuggestWatched && instance.$emitter && typeof instance.$emitter.subscribe === 'function') {
+                    instance.__reqserSuggestWatched = true;
+                    instance.$emitter.subscribe('afterSuggest', closeNativeSuggest);
+                }
+            });
+        }
+
+        selectors.forEach(function (selector) {
+            document.querySelectorAll(selector).forEach(function (node) {
+                node.remove();
+            });
+        });
+    }
+
+    // The shop search is the page, so the search view covers the shop at once
+    // and the results fill it when they arrive. The chat stays where it was:
+    // it is for a question typed into the launcher.
+    function openShopSearch(term) {
+        term = (term || '').trim();
+        if (!term) {
+            return;
+        }
+        queuedSearch = term;
+        showSearch(true);
+        ensureSearchFrame();
+        closeNativeSuggest();
+        if (searchFrameReady) {
+            postShopSearch(term);
+        }
+    }
+
+    function collectSearchForms() {
+        var forms = document.querySelectorAll('form');
+        for (var i = 0; i < forms.length; i++) {
+            if (isShopSearchForm(forms[i])) {
+                rememberSearchPath(formActionPath(forms[i]));
+            }
+        }
+    }
+
+    document.addEventListener('submit', function (event) {
+        var form = event.target;
+        if (!isShopSearchForm(form)) {
+            return;
+        }
+        var term = searchTerm(form);
+        if (!term) {
+            return;
+        }
+        rememberSearchPath(formActionPath(form));
+        event.preventDefault();
+        event.stopPropagation();
+        openShopSearch(term);
+    }, true);
+
+    document.addEventListener('click', function (event) {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+            return;
+        }
+        var node = event.target;
+        if (!node || !node.closest) {
+            return;
+        }
+        var link = node.closest('a[href]');
+        if (!link || (panel && panel.contains(link)) || (searchPanel && searchPanel.contains(link))) {
+            return;
+        }
+        var url;
+        try {
+            url = new URL(link.href, window.location.href);
+        } catch (e) {
+            return;
+        }
+        if (url.origin !== window.location.origin || !searchPaths[normalizePath(url.pathname)]) {
+            return;
+        }
+        var term = (url.searchParams.get('search') || '').trim();
+        if (!term) {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        openShopSearch(term);
+    }, true);
+
+    if (SEARCH_PATH) {
+        rememberSearchPath(SEARCH_PATH);
+    }
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && searchOpen) {
+            showSearch(false);
+        }
+    });
+
+    function start() {
         build();
+        collectSearchForms();
+        var preset = new URLSearchParams(window.location.search).get('reqser_sales');
+        if (preset) {
+            openShopSearch(preset);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start);
+    } else {
+        start();
     }
 })();
 JS;
