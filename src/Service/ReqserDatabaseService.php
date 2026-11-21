@@ -7,6 +7,7 @@ use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\WriteProtected;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\StorageAware;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\TranslatedField;
 
@@ -359,10 +360,48 @@ class ReqserDatabaseService
         // Get translatable field names for this specific table
         $translatableFields = $this->getTranslatableFieldsForTable($tableName);
         
+        $writeProtectedScopes = $this->getWriteProtectedFieldsForTable($tableName);
+
         return [
             'schema' => $allColumns,
-            'translatableRows' => $translatableFields
+            'translatableRows' => $translatableFields,
+            'writeProtectedRows' => array_keys($writeProtectedScopes),
+            'writeProtectedScopes' => $writeProtectedScopes,
         ];
+    }
+
+    /**
+     * Storage names of the DAL fields on a translation table that carry the WriteProtected flag.
+     *
+     * The value is the list of scopes allowed to write the field (empty when none).
+     * Never throws: an unreadable definition yields an empty map.
+     *
+     * @param string $tableName
+     * @return array<string, array<int, string>>
+     */
+    private function getWriteProtectedFieldsForTable(string $tableName): array
+    {
+        $writeProtected = [];
+
+        try {
+            $definition = $this->definitionRegistry->getByEntityName($tableName);
+
+            foreach ($definition->getFields() as $field) {
+                $flag = $field->getFlag(WriteProtected::class);
+                if (!$flag instanceof WriteProtected || !$field instanceof StorageAware) {
+                    continue;
+                }
+
+                $writeProtected[$field->getStorageName()] = array_values($flag->getAllowedScopes());
+            }
+        } catch (\Throwable $e) {
+            $this->logger->warning('Reqser: could not read WriteProtected fields', [
+                'table' => $tableName,
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        return $writeProtected;
     }
 
     /**
@@ -384,6 +423,7 @@ class ReqserDatabaseService
         $isJson = $this->jsonFieldDetectionService->isJsonColumn($tableName, $columnName, $type);
 
         $rowDetails['isJson'] = $isJson;
+        $rowDetails['writeProtected'] = array_key_exists($columnName, $this->getWriteProtectedFieldsForTable($tableName));
 
         if ($isJson) {
             // Dynamically detect if this is a CMS element column using Shopware's entity definitions

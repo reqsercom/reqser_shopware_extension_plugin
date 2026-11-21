@@ -1,9 +1,14 @@
 # Changelog
 
+## 2.0.46/1.7.46/1.6.46/1.5.46 11.2026
+- Sales agent: storefront widget and visitor token route, off unless the sales channel domain enables it
+- Twig files debug route: entity dump includes the full field list
+
+## 2.0.45/1.7.45/1.6.45/1.5.45 11.2026
+- `translation-tables/{table}`: reports `writeProtectedRows` and `writeProtectedScopes` for fields carrying the DAL `WriteProtected` flag; the column route adds `rowDetails.writeProtected`
+
 ## 2.0.44/1.7.44/1.6.44/1.5.44 10.2026
 - `media/upload`: also accepts PDF documents
-- Sales Agent introduced
-- Updated Twig files debug route
 
 ## 2.0.43/1.7.43/1.6.43/1.5.43 10.2026
 - Language flags: streamlined loading of flag images
